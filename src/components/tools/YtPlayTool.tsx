@@ -210,6 +210,24 @@ function generateCadenceLyrics(plainText: string, songDuration: number): SyncedL
   });
 }
 
+// Helper to guarantee YouTube IFrame API script is in the DOM
+const loadYouTubeIframeScript = () => {
+  if (typeof window === "undefined") return;
+  if (window.YT && typeof window.YT.Player === "function") return;
+  if (document.getElementById("youtube-iframe-api-script")) return;
+
+  const tag = document.createElement("script");
+  tag.id = "youtube-iframe-api-script";
+  tag.src = "https://www.youtube.com/iframe_api";
+  tag.async = true;
+  const firstScriptTag = document.getElementsByTagName("script")[0];
+  if (firstScriptTag && firstScriptTag.parentNode) {
+    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+  } else {
+    document.head.appendChild(tag);
+  }
+};
+
 export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
   // Navigation & UI mode states
   const [showLyricsSheet, setShowLyricsSheet] = useState(false);
@@ -257,6 +275,21 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
     isRepeatRef.current = isRepeat;
   }, [isRepeat]);
 
+  // Safeguard: Reset buffering state after 3.5s so buttons never get stuck spinning
+  useEffect(() => {
+    if (isBuffering) {
+      const t = setTimeout(() => {
+        setIsBuffering(false);
+      }, 3500);
+      return () => clearTimeout(t);
+    }
+  }, [isBuffering]);
+
+  // Preload YouTube IFrame API script on component mount
+  useEffect(() => {
+    loadYouTubeIframeScript();
+  }, []);
+
   // Track parsed song & artist
   const parsedTrack = useMemo(() => {
     if (!currentTrack) {
@@ -276,22 +309,20 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
   const setupYouTubePlayer = useCallback((videoId: string) => {
     if (!videoId) return;
 
+    loadYouTubeIframeScript();
+
     const onPlayerReady = (event: any) => {
       ytPlayerRef.current = event.target;
+      setIsBuffering(false);
       try {
         event.target.setVolume(isMuted ? 0 : volume * 100);
         const d = event.target.getDuration();
         if (d > 0) setDuration(d);
 
-        // If user tapped play before player was ready or on track switch
-        if (pendingPlayRef.current || isPlaying) {
-          event.target.playVideo();
-          setIsPlaying(true);
-        } else {
-          // Attempt auto-start
-          event.target.playVideo();
-          setIsPlaying(true);
-        }
+        // Direct play initiation
+        event.target.playVideo();
+        setIsPlaying(true);
+        pendingPlayRef.current = false;
       } catch (err) {
         console.warn("Autoplay notice:", err);
       }
@@ -351,13 +382,12 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
     // If player already exists and is valid, load video into the existing player instance
     if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
       try {
-        // Official YouTube API: loadVideoById(videoId: string, startSeconds: number)
         ytPlayerRef.current.loadVideoById(videoId, 0);
         if (typeof ytPlayerRef.current.playVideo === "function") {
           ytPlayerRef.current.playVideo();
         }
         setIsPlaying(true);
-        setIsBuffering(true);
+        setIsBuffering(false);
         pendingPlayRef.current = false;
         return;
       } catch (e) {
@@ -376,6 +406,8 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
 
         const player = new window.YT.Player(playerElement, {
           videoId,
+          width: "100%",
+          height: "100%",
           playerVars: {
             autoplay: 1,
             controls: 1,
@@ -385,7 +417,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
             modestbranding: 1,
             playsinline: 1,
             enablejsapi: 1,
-            origin: window.location.origin,
+            origin: typeof window !== "undefined" ? window.location.origin : "",
           },
           events: {
             onReady: onPlayerReady,
@@ -397,6 +429,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
         ytPlayerRef.current = player;
       } catch (err) {
         console.error("Error creating YouTube player:", err);
+        setIsBuffering(false);
       }
     };
 
@@ -412,6 +445,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
           createPlayer();
         } else if (attempts > 50) {
           clearInterval(checkInterval);
+          setIsBuffering(false);
         }
       }, 100);
 
@@ -474,7 +508,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
       if (currentTrack?.id) {
         pendingPlayRef.current = true;
         setIsPlaying(true);
-        setIsBuffering(true);
+        setIsBuffering(false);
         setupYouTubePlayer(currentTrack.id);
       }
       return;
@@ -487,7 +521,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
       }
 
       // YouTube player states: 1 = PLAYING, 2 = PAUSED, 3 = BUFFERING, -1 = UNSTARTED, 0 = ENDED, 5 = CUED
-      if (playerState === 1 || playerState === 3 || isPlaying) {
+      if (playerState === 1 || isPlaying) {
         if (typeof ytPlayerRef.current.pauseVideo === "function") {
           ytPlayerRef.current.pauseVideo();
         }
@@ -1019,7 +1053,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
               className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] hover:scale-105 active:scale-95 transition cursor-pointer"
               title={isPlaying ? "Jeda" : "Putar"}
             >
-              {isBuffering ? (
+              {isBuffering && !isPlaying ? (
                 <Loader2 className="w-7 h-7 animate-spin text-black" />
               ) : isPlaying ? (
                 <Pause className="w-7 h-7 fill-current" />

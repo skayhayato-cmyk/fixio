@@ -614,31 +614,81 @@ app.get("/api/spotify-dl", async (req, res) => {
   }
 });
 
-// YT Play API Proxy
+// YT Play API Proxy with direct YouTube search fallback
 app.get("/api/ytplay", async (req, res) => {
+  const query = req.query.q as string;
+  if (!query) {
+    return res.status(400).json({ status: false, message: "Query lagu (q) diperlukan" });
+  }
+
+  // 1. Try NexaDev API
   try {
-    const query = req.query.q as string;
-    if (!query) {
-      return res.status(400).json({ status: false, message: "Query lagu (q) diperlukan" });
-    }
     const response = await axios.get(`https://api.nexadev.my.id/api/ytplay/?q=${encodeURIComponent(query)}`, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
       },
-      timeout: 30000,
+      timeout: 10000,
     });
-    if (response.data && typeof response.data === "object") {
+    if (response.data && typeof response.data === "object" && response.data.status && response.data.id) {
       return res.json(response.data);
     }
-    return res.status(502).json({ status: false, message: "Format respons dari server YouTube tidak sesuai." });
   } catch (error: any) {
-    console.warn("YT Play query failed:", extractErrorMessage(error, error.message));
-    return res.status(error?.response?.status || 502).json({
-      status: false,
-      message: extractErrorMessage(error, "Gagal mengambil data YT Play dari server"),
-    });
+    console.warn("NexaDev YT Play failed, trying direct YouTube search fallback...");
   }
+
+  // 2. Direct YouTube Search Fallback
+  try {
+    const ytSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    const ytRes = await axios.get(ytSearchUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+      timeout: 15000,
+    });
+
+    const html = ytRes.data;
+    if (typeof html === "string") {
+      const match = html.match(/ytInitialData\s*=\s*({.+?});<\/script>/);
+      if (match) {
+        const data = JSON.parse(match[1]);
+        const contents = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents;
+        const video = contents?.find((c: any) => c.videoRenderer)?.videoRenderer;
+        if (video && video.videoId) {
+          const rawDuration = video.lengthText?.simpleText || "3:30";
+          const durParts = rawDuration.split(":").map((p: string) => parseInt(p, 10));
+          let durSeconds = 210;
+          if (durParts.length === 2) {
+            durSeconds = (durParts[0] || 0) * 60 + (durParts[1] || 0);
+          } else if (durParts.length === 3) {
+            durSeconds = (durParts[0] || 0) * 3600 + (durParts[1] || 0) * 60 + (durParts[2] || 0);
+          }
+
+          const thumbnails = video.thumbnail?.thumbnails || [];
+          const bestThumb = thumbnails.length > 0 ? thumbnails[thumbnails.length - 1].url : `https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`;
+
+          return res.json({
+            status: true,
+            id: video.videoId,
+            title: video.title?.runs?.[0]?.text || query,
+            thumbnail: bestThumb,
+            duration: rawDuration,
+            duration_seconds: durSeconds,
+            channel: video.ownerText?.runs?.[0]?.text || "YouTube Music",
+            views: video.viewCountText?.simpleText || "1M views",
+          });
+        }
+      }
+    }
+  } catch (directErr: any) {
+    console.warn("Direct YouTube search fallback error:", extractErrorMessage(directErr, "YouTube search error"));
+  }
+
+  return res.status(404).json({
+    status: false,
+    message: "Gagal menemukan lagu di YouTube. Coba kata kunci lain.",
+  });
 });
 
 // Lyric API Proxy (Genius fallback)

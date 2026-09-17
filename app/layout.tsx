@@ -1,6 +1,5 @@
 import type React from "react";
 import type { Metadata, Viewport } from "next";
-import PwaInstallScript from "../src/components/PwaInstallScript";
 import "../src/index.css";
 
 export const viewport: Viewport = {
@@ -22,7 +21,6 @@ export default function RootLayout({
   return (
     <html lang="id" className="light" suppressHydrationWarning>
       <body className="antialiased selection:bg-neutral-900 selection:text-white dark:selection:bg-white dark:selection:text-black">
-        <PwaInstallScript />
         {children}
       </body>
     </html>
