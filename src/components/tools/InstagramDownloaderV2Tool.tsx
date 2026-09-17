@@ -275,7 +275,9 @@ export const InstagramDownloaderV2Tool: React.FC = () => {
                   </div>
                   <div className="bg-black rounded-xl flex items-center justify-center overflow-hidden relative shadow-inner">
                     <video
-                      ref={(el) => (videoRefs.current[idx] = el)}
+                      ref={(el) => {
+                        videoRefs.current[idx] = el;
+                      }}
                       src={getProxiedVideoUrl(vid.url)}
                       controls
                       playsInline
@@ -338,7 +340,9 @@ export const InstagramDownloaderV2Tool: React.FC = () => {
                   </div>
                   <div className="p-2 bg-slate-50 dark:bg-[#121214] rounded-xl border border-black/5 dark:border-white/10">
                     <audio
-                      ref={(el) => (audioRefs.current[idx] = el)}
+                      ref={(el) => {
+                        audioRefs.current[idx] = el;
+                      }}
                       controls
                       onPlay={() => handleAudioPlay(idx)}
                       className="w-full"
