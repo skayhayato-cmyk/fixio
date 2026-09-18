@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import { Settings as SettingsIcon, Download, ArrowRight, Sun, Moon, Monitor, Layers } from "lucide-react";
 import { Logo } from "./Logo";
 import { TypewriterText } from "./TypewriterText";
 import { AppSettings } from "../services/useAppSettings";
 import { PWAState } from "../services/usePWA";
+import { InstallGuideModal } from "./InstallGuideModal";
 
 interface InitialLandingProps {
   onOpenApp: () => void;
@@ -19,6 +20,19 @@ export const InitialLanding: React.FC<InitialLandingProps> = ({
   pwa,
 }) => {
   const { t, language, appearance, toggleAppearance, glassStyle, cycleGlassStyle } = settings;
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
+
+  const handleInstallClick = async () => {
+    if (pwa.isInstalled) return;
+    if (pwa.isInstallable) {
+      const accepted = await pwa.install();
+      if (!accepted) {
+        setShowInstallGuide(true);
+      }
+    } else {
+      setShowInstallGuide(true);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col justify-between items-center px-6 py-10 sm:py-14 max-w-lg mx-auto select-none">
@@ -89,16 +103,10 @@ export const InitialLanding: React.FC<InitialLandingProps> = ({
             <ArrowRight className="w-4 h-4 text-[#8e8e93] dark:text-[#98989d]" />
           </button>
 
-          {/* Install App (if installable and not yet installed) */}
-          {!pwa.isInstalled && (pwa.isInstallable || pwa.isIOS) && (
+          {/* Install App (if not yet installed) */}
+          {!pwa.isInstalled && (
             <button
-              onClick={() => {
-                if (pwa.isInstallable) {
-                  pwa.install();
-                } else {
-                  onOpenSettings();
-                }
-              }}
+              onClick={handleInstallClick}
               className="ios-btn-glass w-full py-3 px-6 rounded-2xl text-sm font-semibold text-[#007aff] dark:text-[#0a84ff] flex items-center justify-center gap-2 cursor-pointer active:scale-97 border border-black/5 dark:border-white/15"
             >
               <Download className="w-4 h-4" />
@@ -118,6 +126,16 @@ export const InitialLanding: React.FC<InitialLandingProps> = ({
           {t("settings")}
         </button>
       </div>
+
+      {/* Universal PWA Install Guide Modal */}
+      <InstallGuideModal
+        isOpen={showInstallGuide}
+        onClose={() => setShowInstallGuide(false)}
+        language={language}
+        isIOS={pwa.isIOS}
+        isInstallable={pwa.isInstallable}
+        onNativeInstall={pwa.install}
+      />
     </div>
   );
 };

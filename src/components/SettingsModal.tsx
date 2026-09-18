@@ -16,6 +16,7 @@ import { AppSettings, AppearanceMode, DisplayScale, LanguageCode, GlassStyle } f
 import { PWAState } from "../services/usePWA";
 import { Logo } from "./Logo";
 import { GlassStyleVisualPicker } from "./GlassStyleVisualPicker";
+import { InstallGuideModal } from "./InstallGuideModal";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -49,7 +50,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   } = settings;
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
 
   // Notification state
   const isNotificationSupported = typeof window !== "undefined" && "Notification" in window;
@@ -98,12 +99,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const handleInstallClick = () => {
+  const handleInstallClick = async () => {
     if (pwa.isInstalled) return;
     if (pwa.isInstallable) {
-      pwa.install();
-    } else if (pwa.isIOS) {
-      setShowIOSGuide(true);
+      const accepted = await pwa.install();
+      if (!accepted) {
+        setShowInstallGuide(true);
+      }
+    } else {
+      setShowInstallGuide(true);
     }
   };
 
@@ -491,29 +495,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
 
-        {/* iOS Safari Guide Modal */}
-        {showIOSGuide && (
-          <div className="absolute inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-ios-fade">
-            <div className="w-full max-w-xs bg-white dark:bg-[#121214] rounded-2xl p-5 border border-black/10 dark:border-white/15 shadow-xl space-y-3 text-center transition-colors">
-              <div className="w-10 h-10 rounded-2xl bg-[#007aff]/10 text-[#007aff] flex items-center justify-center mx-auto">
-                <Smartphone className="w-5 h-5" />
-              </div>
-              <h3 className="font-semibold text-black dark:text-white text-sm">
-                {t("iosInstallTitle")}
-              </h3>
-              <p className="text-xs text-[#8e8e93] dark:text-[#98989d] leading-relaxed text-left">
-                {t("iosInstallStep1")}<br />
-                {t("iosInstallStep2")}
-              </p>
-              <button
-                onClick={() => setShowIOSGuide(false)}
-                className="w-full py-2 bg-[#e5e5ea] dark:bg-[#1c1c1e] rounded-xl text-xs font-semibold text-black dark:text-white hover:opacity-90 active:scale-95 cursor-pointer border border-black/5 dark:border-white/10"
-              >
-                {t("close")}
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Universal PWA Installation Guide Modal */}
+        <InstallGuideModal
+          isOpen={showInstallGuide}
+          onClose={() => setShowInstallGuide(false)}
+          language={language}
+          isIOS={pwa.isIOS}
+          isInstallable={pwa.isInstallable}
+          onNativeInstall={pwa.install}
+        />
       </div>
     </div>
   );

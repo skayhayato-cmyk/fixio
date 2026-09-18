@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { Search, Settings as SettingsIcon, Download, X, Sun, Moon, Monitor, Sparkles, Layers } from "lucide-react";
 import { Logo } from "./Logo";
 import { AppSettings } from "../services/useAppSettings";
 import { PWAState } from "../services/usePWA";
+import { InstallGuideModal } from "./InstallGuideModal";
 
 interface NavbarProps {
   searchQuery: string;
@@ -21,7 +22,20 @@ export const Navbar: React.FC<NavbarProps> = ({
   settings,
   pwa,
 }) => {
-  const { t, appearance, toggleAppearance, iosUIUX, glassStyle, cycleGlassStyle } = settings;
+  const { t, language, appearance, toggleAppearance, iosUIUX, glassStyle, cycleGlassStyle } = settings;
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
+
+  const handleInstallClick = async () => {
+    if (pwa.isInstalled) return;
+    if (pwa.isInstallable) {
+      const accepted = await pwa.install();
+      if (!accepted) {
+        setShowInstallGuide(true);
+      }
+    } else {
+      setShowInstallGuide(true);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 ios-navbar-glass border-b border-black/5 dark:border-white/10 transition-colors">
@@ -83,16 +97,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
 
-          {/* Install Button if available */}
-          {!pwa.isInstalled && (pwa.isInstallable || pwa.isIOS) && (
+          {/* Install Button if not yet installed */}
+          {!pwa.isInstalled && (
             <button
-              onClick={() => {
-                if (pwa.isInstallable) {
-                  pwa.install();
-                } else {
-                  onOpenSettings();
-                }
-              }}
+              onClick={handleInstallClick}
               className="ios-btn-glass px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold text-[#007aff] dark:text-[#0a84ff] flex items-center gap-1.5 active:scale-95 cursor-pointer border border-black/5 dark:border-white/10"
             >
               <Download className="w-3 h-3" />
@@ -111,6 +119,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Universal PWA Install Guide Modal */}
+      <InstallGuideModal
+        isOpen={showInstallGuide}
+        onClose={() => setShowInstallGuide(false)}
+        language={language}
+        isIOS={pwa.isIOS}
+        isInstallable={pwa.isInstallable}
+        onNativeInstall={pwa.install}
+      />
     </header>
   );
 };

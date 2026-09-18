@@ -2,13 +2,13 @@
   "id": "/",
   "name": "Fixio",
   "short_name": "Fixio",
-  "description": "Minimal, fast, and elegant multi-utility tool hub.",
+  "description": "Fixio - Minimal, fast, and elegant iOS-inspired multi-utility tool hub.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "background_color": "#0f1015",
+  "theme_color": "#0f1015",
   "categories": ["utilities", "productivity"],
   "icons": [
     {
