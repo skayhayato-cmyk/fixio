@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { PhoneCall, Download, Loader2, AlertCircle, Sparkles, Clock, User, CheckCircle2 } from "lucide-react";
 import { ImageUploaderZone } from "../ImageUploaderZone";
-import { getProxiedImageUrl, triggerDownload } from "../../services/api";
+import { triggerDownload } from "../../services/api";
+import { generateFakeCall } from "../../services/nexaDevApi";
 import { renderFakeCallCanvas } from "../../services/canvasGenerators";
 
 export const FakeCallTool: React.FC = () => {
@@ -14,6 +15,20 @@ export const FakeCallTool: React.FC = () => {
   const [generatedImgSrc, setGeneratedImgSrc] = useState<string | null>(null);
   const [engineUsed, setEngineUsed] = useState<string | null>(null);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const currentObjectUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+        URL.revokeObjectURL(currentObjectUrlRef.current);
+      }
+    };
+  }, []);
+
   const handleGenerate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!name || !ppUrl) {
@@ -21,38 +36,38 @@ export const FakeCallTool: React.FC = () => {
       return;
     }
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     setError(null);
     setIsLoading(true);
+
+    if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+      URL.revokeObjectURL(currentObjectUrlRef.current);
+      currentObjectUrlRef.current = null;
+    }
     setGeneratedImgSrc(null);
     setEngineUsed(null);
 
-    const params = new URLSearchParams();
-    params.append("ppurl", ppUrl);
-    params.append("name", name);
-    params.append("duration", duration || "00.00");
-
-    const apiUrl = `https://apii.nexadev.my.id/fakecall?${params.toString()}`;
-
     try {
-      // Fetch binary image output directly from API endpoint
-      const proxyUrl = getProxiedImageUrl(apiUrl);
-      const res = await fetch(proxyUrl);
-      
-      if (!res.ok) {
-        throw new Error(`API merespon dengan status ${res.status}`);
-      }
-
-      const blob = await res.blob();
-      if (!blob.type.includes("image") && blob.size < 500) {
-        throw new Error("Respon dari API bukan file gambar valid.");
-      }
-
-      const blobUrl = URL.createObjectURL(blob);
-      setGeneratedImgSrc(blobUrl);
+      const result = await generateFakeCall(
+        {
+          ppurl: ppUrl,
+          name,
+          duration: duration || "00.00",
+        },
+        abortControllerRef.current.signal
+      );
+      currentObjectUrlRef.current = result.objectUrl;
+      setGeneratedImgSrc(result.objectUrl);
       setEngineUsed("NexaDev API (Direct Image Binary)");
     } catch (err: any) {
+      if (err.name === "CanceledError" || err.message === "Permintaan dibatalkan.") {
+        return;
+      }
       console.warn("API direct binary fetch issue, switching to fallback:", err);
-      // Fallback to high-fidelity canvas generator if connection fails
       try {
         const canvasDataUrl = await renderFakeCallCanvas(name, duration, ppUrl);
         setGeneratedImgSrc(canvasDataUrl);
@@ -185,7 +200,7 @@ export const FakeCallTool: React.FC = () => {
 
           <div className="p-6 bg-slate-900 rounded-2xl flex items-center justify-center overflow-hidden border border-slate-800">
             <img
-              src={generatedImgSrc.startsWith("data:") ? generatedImgSrc : getProxiedImageUrl(generatedImgSrc)}
+              src={generatedImgSrc}
               alt="Fake Call Result"
               className="max-h-[460px] w-auto rounded-2xl shadow-xl object-contain"
             />

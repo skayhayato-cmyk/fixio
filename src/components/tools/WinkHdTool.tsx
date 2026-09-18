@@ -1,9 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Sparkles, Loader2, AlertCircle, RefreshCw, Wand2, CheckCircle2 } from "lucide-react";
-import axios from "axios";
 import { ImageUploaderZone } from "../ImageUploaderZone";
 import { BeforeAfterSlider } from "../BeforeAfterSlider";
-import { getProxiedImageUrl } from "../../services/api";
+import { enhanceWinkHd } from "../../services/nexaDevApi";
 
 export const WinkHdTool: React.FC = () => {
   const [imageUrl, setImageUrl] = useState("");
@@ -11,7 +10,21 @@ export const WinkHdTool: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [enhancedDataUrl, setEnhancedDataUrl] = useState<string | null>(null);
-  const [rawResultUrl, setRawResultUrl] = useState<string | null>(null);
+  
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const currentObjectUrlRef = useRef<string | null>(null);
+
+  // Clean up object URLs on unmount or new run
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+        URL.revokeObjectURL(currentObjectUrlRef.current);
+      }
+    };
+  }, []);
 
   const handleEnhance = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -20,40 +33,29 @@ export const WinkHdTool: React.FC = () => {
       return;
     }
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     setError(null);
     setIsLoading(true);
+
+    if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+      URL.revokeObjectURL(currentObjectUrlRef.current);
+      currentObjectUrlRef.current = null;
+    }
     setEnhancedDataUrl(null);
-    setRawResultUrl(null);
 
     try {
-      const response = await axios.get("/api/wink-enhance", {
-        params: { url: imageUrl },
-        timeout: 90000,
-      });
-
-      if (response.data?.status && (response.data.dataUrl || response.data.resultUrl)) {
-        setEnhancedDataUrl(response.data.dataUrl || response.data.resultUrl);
-        setRawResultUrl(response.data.resultUrl || response.data.dataUrl);
-      } else {
-        setError(response.data?.message || "Gagal memproses peningkatan kualitas gambar");
-      }
+      const result = await enhanceWinkHd(imageUrl, abortControllerRef.current.signal);
+      currentObjectUrlRef.current = result.objectUrl;
+      setEnhancedDataUrl(result.objectUrl);
     } catch (err: any) {
-      console.warn("Dedicated enhance failed, attempting direct JSON proxy...", err.message);
-      try {
-        const directApiUrl = `https://api.nexadev.my.id/api/wink?url=${encodeURIComponent(imageUrl)}`;
-        const res = await axios.get("/api/proxy-json", { params: { url: directApiUrl } });
-        const resData = res.data;
-        const finalUrl = resData?.resultUrl || resData?.result || resData?.url;
-
-        if (finalUrl) {
-          setEnhancedDataUrl(getProxiedImageUrl(finalUrl));
-          setRawResultUrl(finalUrl);
-        } else {
-          setError(resData?.message || "Gagal meningkatkan kualitas foto. Pastikan format gambar valid.");
-        }
-      } catch (fallbackErr: any) {
-        setError(fallbackErr?.response?.data?.message || err?.response?.data?.message || "Terjadi kesalahan saat memproses gambar.");
+      if (err.name === "CanceledError" || err.message === "Permintaan dibatalkan.") {
+        return;
       }
+      setError(err.message || "Terjadi kesalahan saat memproses peningkatan resolusi gambar.");
     } finally {
       setIsLoading(false);
     }

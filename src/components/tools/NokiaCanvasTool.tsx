@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Smartphone, Download, Loader2, AlertCircle, Sparkles, Calendar, Clock, User, Type, CheckCircle2 } from "lucide-react";
-import { getProxiedImageUrl, triggerDownload } from "../../services/api";
+import { triggerDownload } from "../../services/api";
+import { generateNokiaCanvas } from "../../services/nexaDevApi";
 import { renderNokiaCanvas } from "../../services/canvasGenerators";
 
 export const NokiaCanvasTool: React.FC = () => {
@@ -15,6 +16,20 @@ export const NokiaCanvasTool: React.FC = () => {
   const [generatedImgSrc, setGeneratedImgSrc] = useState<string | null>(null);
   const [engineUsed, setEngineUsed] = useState<string | null>(null);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const currentObjectUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+        URL.revokeObjectURL(currentObjectUrlRef.current);
+      }
+    };
+  }, []);
+
   const handleGenerate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!text || !from) {
@@ -22,39 +37,40 @@ export const NokiaCanvasTool: React.FC = () => {
       return;
     }
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     setError(null);
     setIsLoading(true);
+
+    if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+      URL.revokeObjectURL(currentObjectUrlRef.current);
+      currentObjectUrlRef.current = null;
+    }
     setGeneratedImgSrc(null);
     setEngineUsed(null);
 
-    const params = new URLSearchParams();
-    params.append("text", text);
-    params.append("from", from);
-    params.append("date", date || "08/06/2026");
-    params.append("time", time || "12:00");
-    params.append("title", title || "nexa");
-
-    const apiUrl = `https://apii.nexadev.my.id/nokia?${params.toString()}`;
-
     try {
-      const proxyUrl = getProxiedImageUrl(apiUrl);
-      const res = await fetch(proxyUrl);
-      
-      if (!res.ok) {
-        throw new Error(`API merespon dengan status ${res.status}`);
-      }
-
-      const blob = await res.blob();
-      if (!blob.type.includes("image") && blob.size < 500) {
-        throw new Error("Respon dari API bukan gambar valid.");
-      }
-
-      const blobUrl = URL.createObjectURL(blob);
-      setGeneratedImgSrc(blobUrl);
+      const result = await generateNokiaCanvas(
+        {
+          text,
+          from,
+          date: date || "08/06/2026",
+          time: time || "12:00",
+          title: title || "nexa",
+        },
+        abortControllerRef.current.signal
+      );
+      currentObjectUrlRef.current = result.objectUrl;
+      setGeneratedImgSrc(result.objectUrl);
       setEngineUsed("NexaDev API (Direct Image Binary)");
     } catch (err: any) {
+      if (err.name === "CanceledError" || err.message === "Permintaan dibatalkan.") {
+        return;
+      }
       console.warn("API issue, using canvas fallback:", err);
-      // Fallback to high-fidelity canvas generator
       try {
         const canvasDataUrl = await renderNokiaCanvas(text, from, date, time);
         setGeneratedImgSrc(canvasDataUrl);
@@ -218,7 +234,7 @@ export const NokiaCanvasTool: React.FC = () => {
 
           <div className="p-6 bg-slate-900 rounded-2xl flex items-center justify-center overflow-hidden border border-slate-800">
             <img
-              src={generatedImgSrc.startsWith("data:") ? generatedImgSrc : getProxiedImageUrl(generatedImgSrc)}
+              src={generatedImgSrc}
               alt="Nokia Result"
               className="max-h-[420px] w-auto rounded-xl shadow-xl object-contain"
             />

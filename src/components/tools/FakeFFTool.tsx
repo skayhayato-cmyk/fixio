@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Flame, Download, Users, User, Loader2, AlertCircle, Sparkles, CheckCircle2 } from "lucide-react";
-import { getProxiedImageUrl, triggerDownload } from "../../services/api";
+import { triggerDownload } from "../../services/api";
+import { generateFakeFF } from "../../services/nexaDevApi";
 import { renderFakeFFDuoCanvas, renderFakeFFSoloCanvas } from "../../services/canvasGenerators";
 
 export const FakeFFTool: React.FC = () => {
@@ -14,49 +15,65 @@ export const FakeFFTool: React.FC = () => {
   const [generatedImgSrc, setGeneratedImgSrc] = useState<string | null>(null);
   const [engineUsed, setEngineUsed] = useState<string | null>(null);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const currentObjectUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+        URL.revokeObjectURL(currentObjectUrlRef.current);
+      }
+    };
+  }, []);
+
   const handleGenerate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setError(null);
+
+    if (mode === "duo" && (!nickname1 || !nickname2)) {
+      setError("Harap masukkan kedua nickname untuk mode Duo.");
+      return;
+    }
+    if (mode === "solo" && !soloNickname) {
+      setError("Harap masukkan nickname untuk mode Solo.");
+      return;
+    }
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     setIsLoading(true);
+
+    if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+      URL.revokeObjectURL(currentObjectUrlRef.current);
+      currentObjectUrlRef.current = null;
+    }
     setGeneratedImgSrc(null);
     setEngineUsed(null);
 
-    let apiUrl = "";
-    if (mode === "duo") {
-      if (!nickname1 || !nickname2) {
-        setError("Harap masukkan kedua nickname untuk mode Duo.");
-        setIsLoading(false);
-        return;
-      }
-      apiUrl = `https://apii.nexadev.my.id/fakeffduo?nickname1=${encodeURIComponent(nickname1)}&nickname2=${encodeURIComponent(nickname2)}`;
-    } else {
-      if (!soloNickname) {
-        setError("Harap masukkan nickname untuk mode Solo.");
-        setIsLoading(false);
-        return;
-      }
-      apiUrl = `https://apii.nexadev.my.id/fakeff?usn=${encodeURIComponent(soloNickname)}`;
-    }
-
     try {
-      const proxyUrl = getProxiedImageUrl(apiUrl);
-      const res = await fetch(proxyUrl);
-      
-      if (!res.ok) {
-        throw new Error(`API merespon dengan status ${res.status}`);
-      }
-
-      const blob = await res.blob();
-      if (!blob.type.includes("image") && blob.size < 500) {
-        throw new Error("Respon dari API bukan gambar valid.");
-      }
-
-      const blobUrl = URL.createObjectURL(blob);
-      setGeneratedImgSrc(blobUrl);
+      const result = await generateFakeFF(
+        {
+          mode,
+          usn: soloNickname,
+          nickname1,
+          nickname2,
+        },
+        abortControllerRef.current.signal
+      );
+      currentObjectUrlRef.current = result.objectUrl;
+      setGeneratedImgSrc(result.objectUrl);
       setEngineUsed("NexaDev API (Direct Image Binary)");
     } catch (err: any) {
+      if (err.name === "CanceledError" || err.message === "Permintaan dibatalkan.") {
+        return;
+      }
       console.warn("API issue, using canvas fallback:", err);
-      // Fallback to high-fidelity canvas generator
       try {
         let canvasDataUrl = "";
         if (mode === "duo") {
@@ -221,7 +238,7 @@ export const FakeFFTool: React.FC = () => {
 
           <div className="p-4 bg-slate-950 rounded-2xl flex items-center justify-center overflow-hidden border border-slate-900">
             <img
-              src={generatedImgSrc.startsWith("data:") ? generatedImgSrc : getProxiedImageUrl(generatedImgSrc)}
+              src={generatedImgSrc}
               alt="Fake FF Result"
               className="max-h-[440px] w-auto rounded-xl shadow-2xl object-contain"
             />

@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Scissors, Loader2, AlertCircle, RefreshCw, CheckCircle2 } from "lucide-react";
 import { ImageUploaderZone } from "../ImageUploaderZone";
 import { BeforeAfterSlider } from "../BeforeAfterSlider";
-import { getProxiedImageUrl } from "../../services/api";
+import { removeBackground } from "../../services/nexaDevApi";
 
 export const RemoveBgTool: React.FC = () => {
   const [imageUrl, setImageUrl] = useState("");
@@ -11,6 +11,20 @@ export const RemoveBgTool: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [processedUrl, setProcessedUrl] = useState<string | null>(null);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const currentObjectUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+        URL.revokeObjectURL(currentObjectUrlRef.current);
+      }
+    };
+  }, []);
+
   const handleRemoveBg = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!imageUrl) {
@@ -18,26 +32,30 @@ export const RemoveBgTool: React.FC = () => {
       return;
     }
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     setError(null);
     setIsLoading(true);
+
+    if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+      URL.revokeObjectURL(currentObjectUrlRef.current);
+      currentObjectUrlRef.current = null;
+    }
     setProcessedUrl(null);
 
     try {
-      const rawApiUrl = `https://api.nexadev.my.id/tools/remove/?url=${encodeURIComponent(imageUrl)}`;
-      const proxyUrl = getProxiedImageUrl(rawApiUrl);
-
-      const img = new Image();
-      img.onload = () => {
-        setProcessedUrl(rawApiUrl);
-        setIsLoading(false);
-      };
-      img.onerror = () => {
-        setError("Gagal menghapus latar belakang gambar. Pastikan gambar jelas.");
-        setIsLoading(false);
-      };
-      img.src = proxyUrl;
+      const result = await removeBackground(imageUrl, abortControllerRef.current.signal);
+      currentObjectUrlRef.current = result.objectUrl;
+      setProcessedUrl(result.objectUrl);
     } catch (err: any) {
-      setError(err.message || "Terjadi kesalahan saat memproses gambar.");
+      if (err.name === "CanceledError" || err.message === "Permintaan dibatalkan.") {
+        return;
+      }
+      setError(err.message || "Gagal menghapus latar belakang gambar. Pastikan gambar jelas.");
+    } finally {
       setIsLoading(false);
     }
   };
@@ -127,7 +145,7 @@ export const RemoveBgTool: React.FC = () => {
 
           <BeforeAfterSlider
             beforeUrl={originalLocalPreview || imageUrl}
-            afterUrl={getProxiedImageUrl(processedUrl)}
+            afterUrl={processedUrl}
             beforeLabel="Original Foto"
             afterLabel="Tanpa Background"
             transparentBackground={true}

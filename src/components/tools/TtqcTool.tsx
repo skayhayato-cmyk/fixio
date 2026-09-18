@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { MessageSquareQuote, Download, Loader2, AlertCircle, Sparkles, User } from "lucide-react";
 import { ImageUploaderZone } from "../ImageUploaderZone";
-import { getProxiedImageUrl, triggerDownload } from "../../services/api";
+import { triggerDownload } from "../../services/api";
+import { generateTtqc } from "../../services/nexaDevApi";
 
 export const TtqcTool: React.FC = () => {
   const [ppUrl, setPpUrl] = useState("https://clooud.my.id/uploder/uploads/fRkHHO.jpeg");
@@ -12,35 +13,60 @@ export const TtqcTool: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [generatedImgSrc, setGeneratedImgSrc] = useState<string | null>(null);
 
-  const handleGenerate = (e?: React.FormEvent) => {
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const currentObjectUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+        URL.revokeObjectURL(currentObjectUrlRef.current);
+      }
+    };
+  }, []);
+
+  const handleGenerate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!name || !text || !ppUrl) {
       setError("Harap lengkapi Nama, Komentar, dan Foto Profil.");
       return;
     }
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     setError(null);
     setIsLoading(true);
+
+    if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+      URL.revokeObjectURL(currentObjectUrlRef.current);
+      currentObjectUrlRef.current = null;
+    }
     setGeneratedImgSrc(null);
 
-    const params = new URLSearchParams();
-    params.append("url", ppUrl);
-    params.append("name", name);
-    params.append("text", text);
-
-    const apiUrl = `https://apii.nexadev.my.id/ttqc?${params.toString()}`;
-    const proxyUrl = getProxiedImageUrl(apiUrl);
-
-    const img = new Image();
-    img.onload = () => {
-      setGeneratedImgSrc(apiUrl);
+    try {
+      const result = await generateTtqc(
+        {
+          url: ppUrl,
+          name,
+          text,
+        },
+        abortControllerRef.current.signal
+      );
+      currentObjectUrlRef.current = result.objectUrl;
+      setGeneratedImgSrc(result.objectUrl);
+    } catch (err: any) {
+      if (err.name === "CanceledError" || err.message === "Permintaan dibatalkan.") {
+        return;
+      }
+      setError(err.message || "Gagal membuat TikTok Quote.");
+    } finally {
       setIsLoading(false);
-    };
-    img.onerror = () => {
-      setError("Gagal membuat TikTok Quote. Pastikan parameter URL gambar valid.");
-      setIsLoading(false);
-    };
-    img.src = proxyUrl;
+    }
   };
 
   const handleDownload = () => {
@@ -152,7 +178,7 @@ export const TtqcTool: React.FC = () => {
 
           <div className="p-6 bg-slate-950 rounded-2xl flex items-center justify-center overflow-hidden border border-slate-900">
             <img
-              src={getProxiedImageUrl(generatedImgSrc)}
+              src={generatedImgSrc}
               alt="TTQC Result"
               className="max-h-[420px] w-auto rounded-xl shadow-2xl object-contain"
             />

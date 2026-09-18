@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Music, Download, Disc, Loader2, AlertCircle, Sparkles, Layers, RefreshCw, Layers2 } from "lucide-react";
-import { getProxiedImageUrl, triggerDownload } from "../../services/api";
+import { triggerDownload } from "../../services/api";
+import { generateWmp } from "../../services/nexaDevApi";
 
 export const WaifuPlayerTool: React.FC = () => {
   const [style, setStyle] = useState<"wmp1" | "wmp2">("wmp1");
@@ -13,11 +14,25 @@ export const WaifuPlayerTool: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [generatedImgSrc, setGeneratedImgSrc] = useState<string | null>(null);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const currentObjectUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+        URL.revokeObjectURL(currentObjectUrlRef.current);
+      }
+    };
+  }, []);
+
   const getCombinedText = () => {
     return [line1, line2, line3, line4].filter(Boolean).join("|");
   };
 
-  const handleGenerate = (e?: React.FormEvent) => {
+  const handleGenerate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const combined = getCombinedText();
     if (!combined) {
@@ -25,23 +40,32 @@ export const WaifuPlayerTool: React.FC = () => {
       return;
     }
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     setError(null);
     setIsLoading(true);
+
+    if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+      URL.revokeObjectURL(currentObjectUrlRef.current);
+      currentObjectUrlRef.current = null;
+    }
     setGeneratedImgSrc(null);
 
-    const apiUrl = `https://apii.nexadev.my.id/${style}?text=${encodeURIComponent(combined)}`;
-    const proxyUrl = getProxiedImageUrl(apiUrl);
-
-    const img = new Image();
-    img.onload = () => {
-      setGeneratedImgSrc(apiUrl);
+    try {
+      const result = await generateWmp(style, combined, abortControllerRef.current.signal);
+      currentObjectUrlRef.current = result.objectUrl;
+      setGeneratedImgSrc(result.objectUrl);
+    } catch (err: any) {
+      if (err.name === "CanceledError" || err.message === "Permintaan dibatalkan.") {
+        return;
+      }
+      setError(err.message || "Gagal membuat kartu Windows Media Player. Silakan coba kombinasi teks lain.");
+    } finally {
       setIsLoading(false);
-    };
-    img.onerror = () => {
-      setError("Gagal membuat kartu Windows Media Player. Silakan coba kombinasi teks lain.");
-      setIsLoading(false);
-    };
-    img.src = proxyUrl;
+    }
   };
 
   const handleDownload = () => {
@@ -222,7 +246,7 @@ export const WaifuPlayerTool: React.FC = () => {
 
           <div className="p-6 bg-slate-950 rounded-2xl flex items-center justify-center overflow-hidden border border-black/10 dark:border-white/10 shadow-inner">
             <img
-              src={getProxiedImageUrl(generatedImgSrc)}
+              src={generatedImgSrc}
               alt="Windows Media Player Card"
               className="max-h-[460px] w-auto rounded-xl shadow-2xl object-contain"
             />

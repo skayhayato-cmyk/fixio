@@ -21,8 +21,14 @@ import {
   Sparkles,
   X,
   Clock,
+  Radio,
+  Tv,
+  ShieldCheck,
 } from "lucide-react";
 import axios from "axios";
+
+// 0.1s Silent WAV audio data URI carrier to keep mobile hardware audio pipeline active in background
+const SILENT_AUDIO_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
 // TypeScript declarations for official YouTube IFrame Player API
 declare global {
@@ -235,6 +241,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
   const [isLiked, setIsLiked] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [isBackgroundPlay, setIsBackgroundPlay] = useState<boolean>(true);
 
   // Search input & Active Track
   const [searchQuery, setSearchQuery] = useState("");
@@ -259,7 +266,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [userScrolledLyrics, setUserScrolledLyrics] = useState(false);
 
-  // DOM Refs
+  // DOM & Audio Refs
   const ytPlayerContainerRef = useRef<HTMLDivElement | null>(null);
   const ytPlayerRef = useRef<any>(null);
   const activeLyricRef = useRef<HTMLDivElement | null>(null);
@@ -269,6 +276,40 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
   const isMountedRef = useRef(true);
   const searchRequestIdRef = useRef(0);
   const pendingPlayRef = useRef(false);
+
+  // Background Audio & Session Keepalive Refs
+  const silentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<any>(null);
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+  const isBackgroundPlayRef = useRef(isBackgroundPlay);
+  isBackgroundPlayRef.current = isBackgroundPlay;
+  const manualPauseRef = useRef(false);
+
+  // Start silent carrier & audio context to keep mobile audio session alive in background
+  const startBackgroundAudioSession = useCallback(() => {
+    try {
+      if (silentAudioRef.current && silentAudioRef.current.paused) {
+        silentAudioRef.current.play().catch(() => {});
+      }
+      if (typeof window !== "undefined") {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          if (!audioContextRef.current) {
+            const ctx = new AudioCtx();
+            if (ctx.state === "suspended") {
+              ctx.resume().catch(() => {});
+            }
+            audioContextRef.current = ctx;
+          } else if (audioContextRef.current.state === "suspended") {
+            audioContextRef.current.resume().catch(() => {});
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Background audio session init error:", e);
+    }
+  }, []);
 
   // Keep repeat ref in sync for event listeners
   useEffect(() => {
@@ -319,10 +360,12 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
         const d = event.target.getDuration();
         if (d > 0) setDuration(d);
 
-        // Direct play initiation
+        // Direct play initiation with background session
+        startBackgroundAudioSession();
         event.target.playVideo();
         setIsPlaying(true);
         pendingPlayRef.current = false;
+        manualPauseRef.current = false;
       } catch (err) {
         console.warn("Autoplay notice:", err);
       }
@@ -337,9 +380,18 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
         setIsPlaying(true);
         setIsBuffering(false);
         pendingPlayRef.current = false;
+        manualPauseRef.current = false;
+        startBackgroundAudioSession();
         const d = event.target.getDuration();
         if (d > 0) setDuration(d);
       } else if (state === 2) { // PAUSED
+        // If paused automatically when tab was backgrounded / phone screen locked:
+        if (document.visibilityState === "hidden" && isPlayingRef.current && !manualPauseRef.current && isBackgroundPlayRef.current) {
+          try {
+            event.target.playVideo();
+            return;
+          } catch {}
+        }
         setIsPlaying(false);
         setIsBuffering(false);
       } else if (state === 3) { // BUFFERING
@@ -383,12 +435,14 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
     if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
       try {
         ytPlayerRef.current.loadVideoById(videoId, 0);
+        startBackgroundAudioSession();
         if (typeof ytPlayerRef.current.playVideo === "function") {
           ytPlayerRef.current.playVideo();
         }
         setIsPlaying(true);
         setIsBuffering(false);
         pendingPlayRef.current = false;
+        manualPauseRef.current = false;
         return;
       } catch (e) {
         console.warn("Failed to load into existing player, rebuilding instance:", e);
@@ -456,7 +510,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
         createPlayer();
       };
     }
-  }, [isMuted, volume, isPlaying]);
+  }, [isMuted, volume, isPlaying, startBackgroundAudioSession]);
 
   // Continuous accurate time tracking via requestAnimationFrame (Zero setInterval)
   useEffect(() => {
@@ -507,8 +561,10 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
     if (!ytPlayerRef.current) {
       if (currentTrack?.id) {
         pendingPlayRef.current = true;
+        manualPauseRef.current = false;
         setIsPlaying(true);
         setIsBuffering(false);
+        startBackgroundAudioSession();
         setupYouTubePlayer(currentTrack.id);
       }
       return;
@@ -522,6 +578,10 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
 
       // YouTube player states: 1 = PLAYING, 2 = PAUSED, 3 = BUFFERING, -1 = UNSTARTED, 0 = ENDED, 5 = CUED
       if (playerState === 1 || isPlaying) {
+        manualPauseRef.current = true;
+        if (silentAudioRef.current) {
+          silentAudioRef.current.pause();
+        }
         if (typeof ytPlayerRef.current.pauseVideo === "function") {
           ytPlayerRef.current.pauseVideo();
         }
@@ -529,6 +589,8 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
         setIsBuffering(false);
         pendingPlayRef.current = false;
       } else {
+        manualPauseRef.current = false;
+        startBackgroundAudioSession();
         if (typeof ytPlayerRef.current.playVideo === "function") {
           ytPlayerRef.current.playVideo();
         }
@@ -539,6 +601,8 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
       console.warn("Playback toggle fallback:", err);
       if (currentTrack?.id) {
         pendingPlayRef.current = true;
+        manualPauseRef.current = false;
+        startBackgroundAudioSession();
         setupYouTubePlayer(currentTrack.id);
       }
     }
@@ -575,6 +639,152 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
     const prevTrack = CURATED_TRACKS[prevIdx];
     searchAndPlayTrack(prevTrack.query);
   };
+
+  // ---------------------------------------------------------------------------
+  // MediaSession API Integration (Lock Screen, Notification & Headphone Controls)
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
+
+    const songTitle = parsedTrack.song || currentTrack?.title || "Fixio Music";
+    const artistName = parsedTrack.artist || currentTrack?.channel || "YouTube";
+    const thumbUrl = currentTrack?.thumbnail || "/pwa-512x512.png";
+
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: songTitle,
+        artist: artistName,
+        album: "Fixio Hub",
+        artwork: [
+          { src: thumbUrl, sizes: "96x96", type: "image/png" },
+          { src: thumbUrl, sizes: "128x128", type: "image/png" },
+          { src: thumbUrl, sizes: "192x192", type: "image/png" },
+          { src: thumbUrl, sizes: "256x256", type: "image/png" },
+          { src: thumbUrl, sizes: "384x384", type: "image/png" },
+          { src: thumbUrl, sizes: "512x512", type: "image/png" },
+        ],
+      });
+
+      navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+
+      if (duration > 0 && typeof navigator.mediaSession.setPositionState === "function") {
+        navigator.mediaSession.setPositionState({
+          duration: Math.max(duration, 1),
+          playbackRate: 1.0,
+          position: Math.min(Math.max(currentTime, 0), duration),
+        });
+      }
+    } catch (err) {
+      console.warn("MediaSession update error:", err);
+    }
+  }, [currentTrack, parsedTrack, isPlaying, duration, currentTime]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
+
+    try {
+      navigator.mediaSession.setActionHandler("play", () => {
+        manualPauseRef.current = false;
+        startBackgroundAudioSession();
+        if (ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === "function") {
+          ytPlayerRef.current.playVideo();
+        }
+        setIsPlaying(true);
+      });
+
+      navigator.mediaSession.setActionHandler("pause", () => {
+        manualPauseRef.current = true;
+        if (silentAudioRef.current) {
+          silentAudioRef.current.pause();
+        }
+        if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === "function") {
+          ytPlayerRef.current.pauseVideo();
+        }
+        setIsPlaying(false);
+      });
+
+      navigator.mediaSession.setActionHandler("previoustrack", () => {
+        handlePrevTrack();
+      });
+
+      navigator.mediaSession.setActionHandler("nexttrack", () => {
+        handleNextTrack();
+      });
+
+      navigator.mediaSession.setActionHandler("seekto", (details) => {
+        if (details.seekTime !== undefined) {
+          handleSeek(details.seekTime);
+        }
+      });
+
+      navigator.mediaSession.setActionHandler("seekbackward", (details) => {
+        handleSeek(currentTime - (details.seekOffset || 10));
+      });
+
+      navigator.mediaSession.setActionHandler("seekforward", (details) => {
+        handleSeek(currentTime + (details.seekOffset || 10));
+      });
+
+      navigator.mediaSession.setActionHandler("stop", () => {
+        manualPauseRef.current = true;
+        if (silentAudioRef.current) {
+          silentAudioRef.current.pause();
+        }
+        if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
+          ytPlayerRef.current.stopVideo();
+        }
+        setIsPlaying(false);
+      });
+    } catch (e) {
+      console.warn("MediaSession action handler error:", e);
+    }
+  }, [currentTime, duration, currentTrack, startBackgroundAudioSession]);
+
+  // ---------------------------------------------------------------------------
+  // Page Visibility & Window Blur Background Keep-Alive
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (isPlayingRef.current && !manualPauseRef.current && isBackgroundPlayRef.current) {
+          startBackgroundAudioSession();
+          // Keep YouTube audio playing in background
+          setTimeout(() => {
+            if (isPlayingRef.current && !manualPauseRef.current && ytPlayerRef.current) {
+              try {
+                const state = ytPlayerRef.current.getPlayerState?.();
+                if (state === 2 || state === 3 || state === -1) {
+                  ytPlayerRef.current.playVideo();
+                }
+              } catch {}
+            }
+          }, 120);
+        }
+      } else if (document.visibilityState === "visible") {
+        if (isPlayingRef.current && !manualPauseRef.current && ytPlayerRef.current) {
+          try {
+            const state = ytPlayerRef.current.getPlayerState?.();
+            if (state !== 1) {
+              ytPlayerRef.current.playVideo();
+            }
+          } catch {}
+        }
+      }
+    };
+
+    const handleBlur = () => {
+      if (isPlayingRef.current && !manualPauseRef.current && isBackgroundPlayRef.current) {
+        startBackgroundAudioSession();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, [startBackgroundAudioSession]);
 
   // ---------------------------------------------------------------------------
   // Lyrics Fetching & Synchronization Logic
@@ -816,7 +1026,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
           </button>
 
           {showOptionsMenu && (
-            <div className="absolute right-0 top-12 w-56 bg-[#12282e]/95 backdrop-blur-xl border border-white/10 rounded-2xl p-2 shadow-2xl z-40 space-y-1 text-xs">
+            <div className="absolute right-0 top-12 w-64 bg-[#12282e]/95 backdrop-blur-xl border border-white/10 rounded-2xl p-2.5 shadow-2xl z-40 space-y-1.5 text-xs">
               <button
                 onClick={() => {
                   setShowSearchModal(true);
@@ -827,6 +1037,22 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
                 <Search className="w-4 h-4 text-emerald-400" />
                 <span>Cari Lagu Lain</span>
               </button>
+
+              <button
+                onClick={() => {
+                  setIsBackgroundPlay((prev) => !prev);
+                }}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-left hover:bg-white/10 text-white/90"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Radio className="w-4 h-4 text-amber-400" />
+                  <span>Putar di Latar Belakang</span>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isBackgroundPlay ? "bg-emerald-500/30 text-emerald-300 border border-emerald-500/40" : "bg-white/10 text-white/40"}`}>
+                  {isBackgroundPlay ? "AKTIF" : "NONAKTIF"}
+                </span>
+              </button>
+
               <button
                 onClick={() => {
                   setPlaybackMode((prev) => (prev === "audio" ? "video" : "audio"));
@@ -1118,10 +1344,18 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
             </div>
           </div>
 
+          {/* PWA Background Play Active Pill */}
+          <div className="w-full max-w-[360px] mx-auto mt-3 flex items-center justify-center gap-1.5 text-[10px] font-medium text-teal-300/90 bg-teal-950/40 border border-teal-500/20 py-1 px-3 rounded-full select-none">
+            <Radio className={`w-3 h-3 ${isPlaying ? "text-emerald-400 animate-pulse" : "text-white/40"}`} />
+            <span>
+              {isBackgroundPlay ? "Background Play Aktif (Tetap menyala di luar PWA)" : "Background Play Dimatikan"}
+            </span>
+          </div>
+
           {/* Bottom Card: "Pratinjau lirik" Drawer (Matching Screenshot 1 Bottom) */}
           <div
             onClick={() => setShowLyricsSheet(true)}
-            className="w-full max-w-[360px] mx-auto mt-4 p-4 rounded-2xl bg-[#0e3b45]/70 hover:bg-[#0e3b45]/90 border border-white/10 backdrop-blur-md cursor-pointer transition transform hover:-translate-y-0.5 active:translate-y-0 select-none shadow-lg"
+            className="w-full max-w-[360px] mx-auto mt-2.5 p-4 rounded-2xl bg-[#0e3b45]/70 hover:bg-[#0e3b45]/90 border border-white/10 backdrop-blur-md cursor-pointer transition transform hover:-translate-y-0.5 active:translate-y-0 select-none shadow-lg"
           >
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs font-bold text-white tracking-wide">
@@ -1342,6 +1576,17 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
           </div>
         </div>
       )}
+
+      {/* Hidden 0.1s silent loop audio element to keep OS audio pipeline active during background playback */}
+      <audio
+        ref={silentAudioRef}
+        src={SILENT_AUDIO_URI}
+        loop
+        playsInline
+        preload="auto"
+        className="hidden"
+        aria-hidden="true"
+      />
     </div>
   );
 };

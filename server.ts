@@ -54,7 +54,49 @@ app.post("/api/upload", upload.single("file") as any, async (req: any, res: any)
   }
 });
 
-// Image Proxy & Binary Stream Endpoint
+// SSRF Protection Helper
+function isSafePublicUrl(urlString: string): boolean {
+  if (!urlString || typeof urlString !== "string") return false;
+  try {
+    const parsed = new URL(urlString);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    const hostname = parsed.hostname.toLowerCase();
+    
+    // Block loopback, link-local, cloud metadata, and internal aliases
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "0.0.0.0" ||
+      hostname === "::1" ||
+      hostname === "169.254.169.254" ||
+      hostname.endsWith(".localhost") ||
+      hostname.endsWith(".local") ||
+      hostname.endsWith(".internal")
+    ) {
+      return false;
+    }
+
+    // Block private IPv4 ranges (10.x.x.x, 192.168.x.x, 172.16-31.x.x, 127.x.x.x, 169.254.x.x)
+    const ipv4Match = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+    if (ipv4Match) {
+      const b1 = parseInt(ipv4Match[1], 10);
+      const b2 = parseInt(ipv4Match[2], 10);
+      if (b1 === 10 || b1 === 127 || b1 === 0) return false;
+      if (b1 === 192 && b2 === 168) return false;
+      if (b1 === 172 && b2 >= 16 && b2 <= 31) return false;
+      if (b1 === 169 && b2 === 254) return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Exponential backoff sleep helper
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Image Proxy & Binary Stream Endpoint with Retry & SSRF Protection
 app.get("/api/proxy-image", async (req, res) => {
   try {
     const targetUrl = req.query.url as string;
@@ -66,13 +108,13 @@ app.get("/api/proxy-image", async (req, res) => {
       return res.status(400).send("URL lokal (blob/data) tidak perlu di-proxy");
     }
 
-    if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
-      return res.status(400).send("Protokol URL tidak didukung");
+    if (!isSafePublicUrl(targetUrl)) {
+      return res.status(400).send("URL target tidak valid atau tidak diizinkan (SSRF Protection)");
     }
 
     const isPicsart = targetUrl.includes("picsart.com");
     const headers: Record<string, string> = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
     };
 
@@ -81,18 +123,55 @@ app.get("/api/proxy-image", async (req, res) => {
       headers["Origin"] = "https://picsart.com";
     }
 
-    const response = await axios.get(targetUrl, {
-      responseType: "arraybuffer",
-      timeout: 45000,
-      headers,
-    });
+    let response: any = null;
+    let lastError: any = null;
 
-    const contentType = (response.headers["content-type"] as string) || "image/png";
-    if (contentType.includes("text/html") || response.status >= 400) {
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      try {
+        if (attempt > 0) {
+          await delay(1000 * Math.pow(2, attempt - 1));
+        }
+
+        response = await axios.get(targetUrl, {
+          responseType: "arraybuffer",
+          timeout: 45000,
+          headers,
+        });
+
+        if (response && response.status < 400) {
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
+        const status = err?.response?.status;
+        if (status && status >= 400 && status < 500 && status !== 429) {
+          break; // Do not retry client errors
+        }
+      }
+    }
+
+    if (!response) {
+      const errStatus = lastError?.response?.status;
+      if (errStatus === 429) {
+        return res.status(429).json({ status: false, message: "Rate limit server upstream. Silakan coba sebentar lagi." });
+      }
+      return res.status(errStatus || 502).json({
+        status: false,
+        message: "Layanan server gambar sedang sibuk atau URL tidak dapat diakses secara publik.",
+      });
+    }
+
+    let contentType = (response.headers["content-type"] as string) || "image/png";
+    if (contentType.includes("text/html") || contentType.includes("application/json")) {
       return res.status(502).json({
         status: false,
-        message: "Layanan server gambar sedang sibuk atau URL tidak mengembalikan gambar valid.",
+        message: "Server mengembalikan format non-gambar.",
       });
+    }
+
+    // Standardize application/octet-stream to image/png if buffer exists
+    if (contentType.includes("octet-stream")) {
+      contentType = "image/png";
     }
 
     res.setHeader("Content-Type", contentType);
@@ -104,7 +183,7 @@ app.get("/api/proxy-image", async (req, res) => {
     }
     return res.send(response.data);
   } catch (error: any) {
-    console.warn("Image proxy warning for:", req.query.url, error.message);
+    console.warn("Image proxy error for:", req.query.url, error.message);
     return res.status(502).json({
       status: false,
       message: "Gagal mengambil gambar dari sumber target",
@@ -113,7 +192,7 @@ app.get("/api/proxy-image", async (req, res) => {
   }
 });
 
-// Dedicated Wink HD Enhance & Converter Endpoint
+// Dedicated Wink HD Enhance & Converter Endpoint (api.nexadev.my.id/api/wink)
 app.get("/api/wink-enhance", async (req, res) => {
   try {
     const targetUrl = req.query.url as string;
@@ -121,16 +200,32 @@ app.get("/api/wink-enhance", async (req, res) => {
       return res.status(400).json({ status: false, message: "Parameter 'url' diperlukan" });
     }
 
-    console.log("Processing Wink HD for URL:", targetUrl);
-    const winkApiUrl = `https://api.nexadev.my.id/api/wink?url=${encodeURIComponent(targetUrl)}`;
-    const winkResponse = await axios.get(winkApiUrl, {
-      timeout: 60000,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
+    if (!isSafePublicUrl(targetUrl)) {
+      return res.status(400).json({ status: false, message: "URL target tidak valid atau tidak diizinkan." });
+    }
 
-    const data = winkResponse.data;
+    const winkApiUrl = `https://api.nexadev.my.id/api/wink?url=${encodeURIComponent(targetUrl)}`;
+    
+    let winkResponse: any = null;
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      try {
+        if (attempt > 0) await delay(1000 * Math.pow(2, attempt - 1));
+        winkResponse = await axios.get(winkApiUrl, {
+          timeout: 60000,
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json, text/plain, */*",
+          },
+        });
+        if (winkResponse?.data) break;
+      } catch (err: any) {
+        if (attempt === 2 || (err?.response?.status && err.response.status < 500 && err.response.status !== 429)) {
+          throw err;
+        }
+      }
+    }
+
+    const data = winkResponse?.data;
     const rawResultUrl = data?.resultUrl || data?.result || data?.url || data?.data?.url;
 
     if (!rawResultUrl) {
@@ -140,7 +235,7 @@ app.get("/api/wink-enhance", async (req, res) => {
       });
     }
 
-    // Now fetch the high-res result image and convert to data URL so the frontend receives it guaranteed
+    // Fetch the high-res result image and stream/convert with headers
     try {
       const imgRes = await axios.get(rawResultUrl, {
         responseType: "arraybuffer",
@@ -161,7 +256,7 @@ app.get("/api/wink-enhance", async (req, res) => {
         dataUrl,
         resultUrl: rawResultUrl,
         sizeBytes: imgRes.data.length,
-        mimeType,
+        mimeType: "image/png",
       });
     } catch (imgErr: any) {
       console.warn("Could not inline base64 image, fallback to proxy url:", imgErr.message);
@@ -169,18 +264,84 @@ app.get("/api/wink-enhance", async (req, res) => {
         status: true,
         dataUrl: `/api/proxy-image?url=${encodeURIComponent(rawResultUrl)}`,
         resultUrl: rawResultUrl,
+        mimeType: "image/png",
       });
     }
   } catch (error: any) {
     console.error("Wink enhance error:", error?.response?.data || error.message);
-    return res.status(500).json({
+    const status = error?.response?.status || 500;
+    let message = "Gagal memproses peningkatan kualitas foto. Pastikan URL gambar publik dan tidak memerlukan login.";
+    if (status === 429) message = "Batas frekuensi tercapai. Silakan tunggu beberapa detik.";
+    return res.status(status >= 400 && status < 600 ? status : 500).json({
       status: false,
-      message: error?.response?.data?.message || error.message || "Gagal memproses peningkatan kualitas foto",
+      message,
     });
   }
 });
 
-// Video Proxy & Stream Endpoint (for Bratvid)
+// Dedicated Remove Background Endpoint (api.nexadev.my.id/tools/remove/)
+app.get("/api/nexa/remove-bg", async (req, res) => {
+  try {
+    const targetUrl = req.query.url as string;
+    if (!targetUrl) {
+      return res.status(400).json({ status: false, message: "Parameter 'url' diperlukan" });
+    }
+
+    if (!isSafePublicUrl(targetUrl)) {
+      return res.status(400).json({ status: false, message: "URL target tidak valid atau tidak diizinkan." });
+    }
+
+    const removeBgUrl = `https://api.nexadev.my.id/tools/remove/?url=${encodeURIComponent(targetUrl)}`;
+    
+    let response: any = null;
+    let lastError: any = null;
+
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      try {
+        if (attempt > 0) await delay(1000 * Math.pow(2, attempt - 1));
+        response = await axios.get(removeBgUrl, {
+          responseType: "arraybuffer",
+          timeout: 60000,
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "image/*, */*",
+          },
+        });
+        if (response && response.status < 400) break;
+      } catch (err: any) {
+        lastError = err;
+        const status = err?.response?.status;
+        if (status && status >= 400 && status < 500 && status !== 429) {
+          break;
+        }
+      }
+    }
+
+    if (!response) {
+      const errStatus = lastError?.response?.status || 500;
+      return res.status(errStatus >= 400 && errStatus < 600 ? errStatus : 500).json({
+        status: false,
+        message: "Layanan remove background upstream sedang bermasalah. Pastikan gambar publik dan jelas.",
+      });
+    }
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    if (req.query.download === "true") {
+      res.setHeader("Content-Disposition", `attachment; filename="remove_bg_${Date.now()}.png"`);
+    }
+    return res.send(response.data);
+  } catch (error: any) {
+    console.error("Remove bg error:", error.message);
+    return res.status(500).json({
+      status: false,
+      message: "Gagal menghapus latar belakang gambar.",
+    });
+  }
+});
+
+// Video Proxy & Stream Endpoint (for Bratvid apii.nexadev.my.id/bratvid2)
 app.get("/api/proxy-video", async (req, res) => {
   try {
     const targetUrl = req.query.url as string;
@@ -188,13 +349,28 @@ app.get("/api/proxy-video", async (req, res) => {
       return res.status(400).send("Parameter 'url' diperlukan");
     }
 
-    const response = await axios.get(targetUrl, {
-      responseType: "stream",
-      timeout: 60000,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
+    if (!isSafePublicUrl(targetUrl)) {
+      return res.status(400).send("URL target tidak valid atau tidak diizinkan.");
+    }
+
+    let response: any = null;
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      try {
+        if (attempt > 0) await delay(1000 * Math.pow(2, attempt - 1));
+        response = await axios.get(targetUrl, {
+          responseType: "stream",
+          timeout: 90000,
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          },
+        });
+        if (response && response.status < 400) break;
+      } catch (err: any) {
+        if (attempt === 2 || (err?.response?.status && err.response.status < 500 && err.response.status !== 429)) {
+          throw err;
+        }
+      }
+    }
 
     res.setHeader("Content-Type", (response.headers["content-type"] as string) || "video/mp4");
     if (req.query.download === "true") {

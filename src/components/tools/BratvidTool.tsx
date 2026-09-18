@@ -1,44 +1,70 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Video, Download, Play, Loader2, AlertCircle, Sparkles, RefreshCw } from "lucide-react";
-import { getProxiedVideoUrl, triggerVideoDownload } from "../../services/api";
+import { generateBratVideo } from "../../services/nexaDevApi";
 
 export const BratvidTool: React.FC = () => {
   const [text, setText] = useState("nexa nich 😱");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoObjectUrl, setVideoObjectUrl] = useState<string | null>(null);
 
-  const handleGenerate = (e?: React.FormEvent) => {
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const currentObjectUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+        URL.revokeObjectURL(currentObjectUrlRef.current);
+      }
+    };
+  }, []);
+
+  const handleGenerate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!text.trim()) {
       setError("Masukkan teks untuk video Brat.");
       return;
     }
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     setError(null);
     setIsLoading(true);
-    setVideoUrl(null);
 
-    const apiUrl = `https://apii.nexadev.my.id/bratvid2?text=${encodeURIComponent(text)}`;
-    const proxyUrl = getProxiedVideoUrl(apiUrl);
+    if (currentObjectUrlRef.current && currentObjectUrlRef.current.startsWith("blob:")) {
+      URL.revokeObjectURL(currentObjectUrlRef.current);
+      currentObjectUrlRef.current = null;
+    }
+    setVideoObjectUrl(null);
 
-    // Test load video
-    const testVideo = document.createElement("video");
-    testVideo.src = proxyUrl;
-    testVideo.onloadeddata = () => {
-      setVideoUrl(apiUrl);
+    try {
+      const result = await generateBratVideo(text, abortControllerRef.current.signal);
+      currentObjectUrlRef.current = result.objectUrl;
+      setVideoObjectUrl(result.objectUrl);
+    } catch (err: any) {
+      if (err.name === "CanceledError" || err.message === "Permintaan dibatalkan.") {
+        return;
+      }
+      setError(err.message || "Terjadi kesalahan saat memproses video Brat.");
+    } finally {
       setIsLoading(false);
-    };
-    testVideo.onerror = () => {
-      // Fallback: sometimes onloadeddata might be delayed, set video URL anyway
-      setVideoUrl(apiUrl);
-      setIsLoading(false);
-    };
+    }
   };
 
   const handleDownload = () => {
-    if (videoUrl) {
-      triggerVideoDownload(videoUrl, `brat_${Date.now()}.mp4`);
+    if (videoObjectUrl) {
+      const link = document.createElement("a");
+      link.href = videoObjectUrl;
+      link.download = `brat_${Date.now()}.mp4`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -105,7 +131,7 @@ export const BratvidTool: React.FC = () => {
       )}
 
       {/* Result Video */}
-      {videoUrl && (
+      {videoObjectUrl && (
         <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -122,7 +148,7 @@ export const BratvidTool: React.FC = () => {
 
           <div className="p-4 bg-slate-950 rounded-2xl flex items-center justify-center overflow-hidden border border-slate-900">
             <video
-              src={getProxiedVideoUrl(videoUrl)}
+              src={videoObjectUrl}
               controls
               autoPlay
               loop
