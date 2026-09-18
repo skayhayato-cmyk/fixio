@@ -204,14 +204,15 @@ app.get("/api/wink-enhance", async (req, res) => {
       return res.status(400).json({ status: false, message: "URL target tidak valid atau tidak diizinkan." });
     }
 
-    const winkApiUrl = `https://api.nexadev.my.id/api/wink?url=${encodeURIComponent(targetUrl)}`;
+    // Canonical trailing slash to prevent 301 drop
+    const winkApiUrl = `https://api.nexadev.my.id/api/wink/?url=${encodeURIComponent(targetUrl)}`;
     
     let winkResponse: any = null;
     for (let attempt = 0; attempt <= 2; attempt++) {
       try {
         if (attempt > 0) await delay(1000 * Math.pow(2, attempt - 1));
         winkResponse = await axios.get(winkApiUrl, {
-          timeout: 60000,
+          timeout: 45000,
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "application/json, text/plain, */*",
@@ -229,7 +230,7 @@ app.get("/api/wink-enhance", async (req, res) => {
     const rawResultUrl = data?.resultUrl || data?.result || data?.url || data?.data?.url;
 
     if (!rawResultUrl) {
-      return res.status(400).json({
+      return res.status(422).json({
         status: false,
         message: data?.message || "Gagal mendapatkan hasil URL dari API Wink",
       });
@@ -239,7 +240,7 @@ app.get("/api/wink-enhance", async (req, res) => {
     try {
       const imgRes = await axios.get(rawResultUrl, {
         responseType: "arraybuffer",
-        timeout: 45000,
+        timeout: 30000,
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
           "Referer": "https://picsart.com/",
@@ -269,10 +270,10 @@ app.get("/api/wink-enhance", async (req, res) => {
     }
   } catch (error: any) {
     console.error("Wink enhance error:", error?.response?.data || error.message);
-    const status = error?.response?.status || 500;
+    const status = error?.response?.status || 502;
     let message = "Gagal memproses peningkatan kualitas foto. Pastikan URL gambar publik dan tidak memerlukan login.";
     if (status === 429) message = "Batas frekuensi tercapai. Silakan tunggu beberapa detik.";
-    return res.status(status >= 400 && status < 600 ? status : 500).json({
+    return res.status(status >= 400 && status < 600 ? status : 502).json({
       status: false,
       message,
     });
@@ -301,7 +302,7 @@ app.get("/api/nexa/remove-bg", async (req, res) => {
         if (attempt > 0) await delay(1000 * Math.pow(2, attempt - 1));
         response = await axios.get(removeBgUrl, {
           responseType: "arraybuffer",
-          timeout: 60000,
+          timeout: 45000,
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "image/*, */*",
@@ -318,11 +319,26 @@ app.get("/api/nexa/remove-bg", async (req, res) => {
     }
 
     if (!response) {
-      const errStatus = lastError?.response?.status || 500;
-      return res.status(errStatus >= 400 && errStatus < 600 ? errStatus : 500).json({
+      const errStatus = lastError?.response?.status || 502;
+      return res.status(errStatus >= 400 && errStatus < 600 ? errStatus : 502).json({
         status: false,
         message: "Layanan remove background upstream sedang bermasalah. Pastikan gambar publik dan jelas.",
       });
+    }
+
+    const buffer = Buffer.from(response.data);
+    if (buffer.length > 0 && buffer[0] === 0x7b /* '{' */) {
+      try {
+        const json = JSON.parse(buffer.toString("utf-8"));
+        if (json && (json.status === false || json.statusCode >= 400)) {
+          return res.status(422).json({
+            status: false,
+            message: json.message || "Gagal menghapus background gambar.",
+          });
+        }
+      } catch {
+        // proceed
+      }
     }
 
     res.setHeader("Content-Type", "image/png");
@@ -331,10 +347,10 @@ app.get("/api/nexa/remove-bg", async (req, res) => {
     if (req.query.download === "true") {
       res.setHeader("Content-Disposition", `attachment; filename="remove_bg_${Date.now()}.png"`);
     }
-    return res.send(response.data);
+    return res.send(buffer);
   } catch (error: any) {
     console.error("Remove bg error:", error.message);
-    return res.status(500).json({
+    return res.status(502).json({
       status: false,
       message: "Gagal menghapus latar belakang gambar.",
     });

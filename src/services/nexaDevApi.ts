@@ -376,7 +376,7 @@ export async function enhanceWinkHd(imageUrl: string, signal?: AbortSignal): Pro
     throw new Error("URL gambar sumber tidak valid atau kosong. Harap unggah gambar terlebih dahulu.");
   }
 
-  // 1. Try dedicated backend endpoint first
+  // 1. Try dedicated backend endpoint first (/api/wink-enhance)
   try {
     const backendRes = await axios.get("/api/wink-enhance", {
       params: { url: imageUrl },
@@ -396,13 +396,22 @@ export async function enhanceWinkHd(imageUrl: string, signal?: AbortSignal): Pro
         filename: `wink_hd_${Date.now()}.png`,
         objectUrl,
       };
+    } else if (backendRes.data?.message) {
+      throw new Error(backendRes.data.message);
     }
   } catch (backendErr: any) {
+    if (backendErr.name === "CanceledError" || backendErr.code === "ERR_CANCELED") {
+      throw backendErr;
+    }
+    const serverMsg = backendErr?.response?.data?.message || backendErr.message;
+    if (serverMsg && !serverMsg.includes("status code 500") && !serverMsg.includes("Network Error")) {
+      throw new Error(serverMsg);
+    }
     console.warn("Dedicated wink-enhance endpoint notice, trying direct API:", backendErr.message);
   }
 
-  // 2. Direct JSON flow to https://api.nexadev.my.id/api/wink?url={IMAGE_URL}
-  const winkApiUrl = `${NEXA_API_HOST}/api/wink`;
+  // 2. Direct JSON flow to canonical https://api.nexadev.my.id/api/wink/?url={IMAGE_URL}
+  const winkApiUrl = `${NEXA_API_HOST}/api/wink/`;
   const jsonData = await fetchJsonResult<WinkJsonResponse>(winkApiUrl, { url: imageUrl }, { signal });
 
   const rawUrl = jsonData.resultUrl || jsonData.result || jsonData.url || jsonData.data?.url;
@@ -432,7 +441,8 @@ export async function enhanceWinkHd(imageUrl: string, signal?: AbortSignal): Pro
 
 /**
  * 2. Remove Background
- * Endpoint: https://api.nexadev.my.id/tools/remove/?url={IMAGE_URL}
+ * Primary: /api/nexa/remove-bg?url={IMAGE_URL}
+ * Fallback: https://api.nexadev.my.id/tools/remove/?url={IMAGE_URL}
  * Output: image binary (PNG transparan)
  */
 export async function removeBackground(imageUrl: string, signal?: AbortSignal): Promise<BinaryResult> {
@@ -440,6 +450,64 @@ export async function removeBackground(imageUrl: string, signal?: AbortSignal): 
     throw new Error("URL gambar sumber tidak valid atau kosong. Harap unggah gambar terlebih dahulu.");
   }
 
+  // 1. Try dedicated backend endpoint first (/api/nexa/remove-bg)
+  try {
+    const res = await axios.get("/api/nexa/remove-bg", {
+      params: { url: imageUrl },
+      responseType: "blob",
+      timeout: 60000,
+      signal,
+    });
+
+    const blob: Blob = res.data;
+    const contentType = (res.headers["content-type"] as string) || blob.type || "";
+
+    // Check if the server returned JSON error text
+    if (contentType.includes("application/json") || contentType.includes("text/")) {
+      const text = await blob.text();
+      try {
+        const json = JSON.parse(text);
+        throw new Error(json.message || "Gagal menghapus background gambar.");
+      } catch {
+        throw new Error(text.slice(0, 150));
+      }
+    }
+
+    // Check if starts with JSON curly brace
+    if (blob.size < 500) {
+      const headerText = await blob.slice(0, 50).text();
+      if (headerText.trim().startsWith("{")) {
+        const fullText = await blob.text();
+        try {
+          const json = JSON.parse(fullText);
+          throw new Error(json.message || "Gagal menghapus background gambar.");
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    const pngBlob = await convertToPng(blob);
+    const objectUrl = URL.createObjectURL(pngBlob);
+
+    return {
+      blob: pngBlob,
+      mimeType: "image/png",
+      filename: `remove_bg_${Date.now()}.png`,
+      objectUrl,
+    };
+  } catch (directErr: any) {
+    if (directErr.name === "CanceledError" || directErr.code === "ERR_CANCELED") {
+      throw directErr;
+    }
+    const serverMsg = directErr?.response?.data?.message || directErr.message;
+    if (serverMsg && !serverMsg.includes("status code 500") && !serverMsg.includes("Network Error")) {
+      throw new Error(serverMsg);
+    }
+    console.warn("Dedicated remove-bg endpoint notice, trying proxy fallback:", directErr.message);
+  }
+
+  // 2. Fallback: Proxy image through /api/proxy-image
   const endpoint = `${NEXA_API_HOST}/tools/remove/`;
   const result = await fetchImageBinary(endpoint, { url: imageUrl }, {
     signal,
