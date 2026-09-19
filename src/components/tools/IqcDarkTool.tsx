@@ -49,11 +49,6 @@ export const IqcDarkTool: React.FC = () => {
       return;
     }
 
-    if (hasImage && !ppUrl.trim()) {
-      setError("Harap unggah gambar atau pilih mode 'Tanpa Gambar'.");
-      return;
-    }
-
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -69,7 +64,8 @@ export const IqcDarkTool: React.FC = () => {
     setGeneratedImgSrc(null);
     setEngineUsed(null);
 
-    const activeImageUrl = hasImage && ppUrl.trim() ? ppUrl.trim() : undefined;
+    // Bisa tanpa URL: Jika tidak dicentang/kosong, otomatis tanpa URL
+    const activeImageUrl = hasImage && ppUrl && ppUrl.trim() ? ppUrl.trim() : undefined;
 
     try {
       const result = await generateIqcDark(
@@ -82,7 +78,7 @@ export const IqcDarkTool: React.FC = () => {
       );
       currentObjectUrlRef.current = result.objectUrl;
       setGeneratedImgSrc(result.objectUrl);
-      setEngineUsed(`NexaDev API (${activeImageUrl ? "Dengan Gambar" : "Tanpa Gambar"})`);
+      setEngineUsed(`NexaDev API (${activeImageUrl ? "Dengan Gambar" : "Tanpa URL Gambar"})`);
     } catch (err: any) {
       if (err.name === "CanceledError" || err.message === "Permintaan dibatalkan.") {
         return;
@@ -91,7 +87,7 @@ export const IqcDarkTool: React.FC = () => {
       try {
         const canvasDataUrl = await renderIqcDarkCanvas(text.trim(), time.trim() || "12:00", activeImageUrl);
         setGeneratedImgSrc(canvasDataUrl);
-        setEngineUsed(`Fixio Canvas Engine (${activeImageUrl ? "Dengan Gambar" : "Tanpa Gambar"})`);
+        setEngineUsed(`Fixio Canvas Engine (${activeImageUrl ? "Dengan Gambar" : "Tanpa URL Gambar"})`);
       } catch (canvasErr: any) {
         setError(err.message || canvasErr.message || "Gagal membuat gambar iPhone Quote Chat.");
       }
@@ -143,7 +139,7 @@ export const IqcDarkTool: React.FC = () => {
               }`}
             >
               <Type className="w-4 h-4 text-indigo-500 shrink-0" />
-              <span>Tanpa Gambar (Teks Saja)</span>
+              <span>Tanpa URL (Teks Quote Saja)</span>
             </button>
 
             <button
@@ -156,7 +152,7 @@ export const IqcDarkTool: React.FC = () => {
               }`}
             >
               <ImageIcon className="w-4 h-4 text-pink-500 shrink-0" />
-              <span>Dengan Gambar (Foto)</span>
+              <span>Dengan URL / Foto Gambar</span>
             </button>
           </div>
         </div>

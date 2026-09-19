@@ -93,7 +93,23 @@ export async function triggerDownload(url: string, filename: string) {
     }
 
     const isExternal = url.startsWith("http://") || url.startsWith("https://");
-    const downloadUrl = isExternal ? getProxiedImageUrl(url, true, filename) : url;
+    const isAudio =
+      filename.toLowerCase().endsWith(".mp3") ||
+      filename.toLowerCase().endsWith(".m4a") ||
+      url.includes("spotidown") ||
+      url.includes("audio");
+    const isVideo = filename.toLowerCase().endsWith(".mp4") || url.includes(".mp4");
+
+    let downloadUrl = url;
+    if (isExternal) {
+      if (isAudio) {
+        downloadUrl = `/api/audio-proxy?url=${encodeURIComponent(url)}&download=true&filename=${encodeURIComponent(filename)}`;
+      } else if (isVideo) {
+        downloadUrl = getProxiedVideoUrl(url, true, filename);
+      } else {
+        downloadUrl = getProxiedImageUrl(url, true, filename);
+      }
+    }
 
     const res = await fetch(downloadUrl);
     const blob = await res.blob();
@@ -178,9 +194,21 @@ export async function downloadMedia(url: string, filename: string, mimeType?: st
     }
 
     const isExternal = url.startsWith("http://") || url.startsWith("https://");
+    const isAudio =
+      mimeType?.includes("audio") ||
+      filename.toLowerCase().endsWith(".mp3") ||
+      filename.toLowerCase().endsWith(".m4a") ||
+      url.includes("spotidown");
+    const isVideo =
+      mimeType?.includes("video") ||
+      url.includes(".mp4") ||
+      filename.toLowerCase().endsWith(".mp4");
+
     let downloadUrl = url;
     if (isExternal) {
-      if (mimeType?.includes("video") || url.includes(".mp4")) {
+      if (isAudio) {
+        downloadUrl = `/api/audio-proxy?url=${encodeURIComponent(url)}&download=true&filename=${encodeURIComponent(filename)}`;
+      } else if (isVideo) {
         downloadUrl = getProxiedVideoUrl(url, true, filename);
       } else {
         downloadUrl = getProxiedImageUrl(url, true, filename);

@@ -1122,7 +1122,8 @@ app.get("/api/audio-proxy", async (req, res) => {
     res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
 
     const contentType = response.headers["content-type"];
-    res.setHeader("Content-Type", typeof contentType === "string" ? contentType : "audio/mpeg");
+    const isMp3 = (req.query.filename as string)?.toLowerCase().endsWith(".mp3") || (req.query.url as string)?.includes("spotidown");
+    res.setHeader("Content-Type", isMp3 ? "audio/mpeg" : (typeof contentType === "string" ? contentType : "audio/mpeg"));
 
     const contentLength = response.headers["content-length"];
     if (contentLength) {
@@ -1136,6 +1137,12 @@ app.get("/api/audio-proxy", async (req, res) => {
 
     res.setHeader("Accept-Ranges", "bytes");
     res.setHeader("Cache-Control", "public, max-age=3600");
+
+    if (req.query.download === "true" || req.query.filename) {
+      const rawName = (req.query.filename as string) || "track.mp3";
+      const safeName = rawName.replace(/["\r\n]/g, "_");
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(safeName)}"`);
+    }
 
     response.data.pipe(res);
 

@@ -905,13 +905,13 @@ export const MediaDownloader: React.FC<MediaDownloaderProps> = ({
                     {isAudio && (
                       <div className="space-y-3 pt-1">
                         {item.thumbnail && (
-                          <div className="flex items-center gap-3.5">
+                          <div className="flex items-start gap-3.5">
                             <img
                               src={getProxiedImageUrl(item.thumbnail)}
                               alt={item.title}
-                              className="w-16 h-16 rounded-xl object-cover shadow-sm bg-slate-200 dark:bg-slate-800 shrink-0"
+                              className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover shadow-sm bg-slate-200 dark:bg-slate-800 shrink-0 border border-black/5 dark:border-white/10"
                             />
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1 space-y-0.5">
                               <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate">
                                 {item.title || "Track"}
                               </h4>
@@ -920,14 +920,19 @@ export const MediaDownloader: React.FC<MediaDownloaderProps> = ({
                                   {item.artist}
                                 </p>
                               )}
-                              <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                              {item.album && (
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                                  Album: {item.album}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-3 text-[11px] text-slate-400 pt-0.5">
                                 {item.duration && (
-                                  <span className="flex items-center gap-0.5">
+                                  <span className="flex items-center gap-1">
                                     <Clock className="w-3 h-3" /> {item.duration}
                                   </span>
                                 )}
                                 {item.year && (
-                                  <span className="flex items-center gap-0.5">
+                                  <span className="flex items-center gap-1">
                                     <Calendar className="w-3 h-3" /> {item.year}
                                   </span>
                                 )}
@@ -944,7 +949,7 @@ export const MediaDownloader: React.FC<MediaDownloaderProps> = ({
                             </div>
                           ) : (
                             <audio
-                              src={getProxiedVideoUrl(item.url)}
+                              src={`/api/audio-proxy?url=${encodeURIComponent(item.url)}`}
                               controls
                               preload="metadata"
                               onError={() => setFailedPreviews((prev) => new Set(prev).add(item.id))}
