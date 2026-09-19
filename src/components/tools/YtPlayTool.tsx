@@ -372,14 +372,22 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
       ytPlayerRef.current = event.target;
       setIsBuffering(false);
       try {
-        event.target.setVolume(isMuted ? 0 : volume * 100);
         const d = event.target.getDuration();
         if (d > 0) setDuration(d);
 
-        // Direct play initiation with background session
-        startBackgroundAudioSession();
-        event.target.playVideo();
-        setIsPlaying(true);
+        // In audio mode with native stream, keep YouTube player muted and paused
+        if (playbackMode === "audio" && audioStreamUrl) {
+          event.target.mute();
+          if (typeof event.target.pauseVideo === "function") {
+            event.target.pauseVideo();
+          }
+        } else {
+          event.target.setVolume(isMuted ? 0 : volume * 100);
+          if (!isMuted) event.target.unMute();
+          startBackgroundAudioSession();
+          event.target.playVideo();
+          setIsPlaying(true);
+        }
         pendingPlayRef.current = false;
         manualPauseRef.current = false;
       } catch (err) {
@@ -388,6 +396,17 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
     };
 
     const onPlayerStateChange = (event: any) => {
+      // If in audio mode with native audio stream, do not let YouTube player hijack playback
+      if (playbackMode === "audio" && audioStreamUrl) {
+        try {
+          event.target.mute();
+          if (event.data === 1) { // If it started playing video audio, pause it
+            event.target.pauseVideo();
+          }
+        } catch {}
+        return;
+      }
+
       // Official YouTube API State enum:
       // -1: UNSTARTED, 0: ENDED, 1: PLAYING, 2: PAUSED, 3: BUFFERING, 5: CUED
       const state = event.data;
@@ -401,7 +420,6 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
         const d = event.target.getDuration();
         if (d > 0) setDuration(d);
       } else if (state === 2) { // PAUSED
-        // If paused automatically when tab was backgrounded / phone screen locked:
         if (document.visibilityState === "hidden" && isPlayingRef.current && !manualPauseRef.current && isBackgroundPlayRef.current) {
           try {
             event.target.playVideo();
@@ -424,7 +442,6 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
           handleNextTrack();
         }
       } else if (state === 5) { // CUED
-        setIsPlaying(false);
         setIsBuffering(false);
       } else if (state === -1) { // UNSTARTED
         setIsBuffering(false);
@@ -533,7 +550,8 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
     let animId: number;
 
     const updatePlayTime = () => {
-      if (ytPlayerRef.current && !isScrubbing) {
+      // In video mode, sync time from YouTube player
+      if (playbackMode === "video" && ytPlayerRef.current && !isScrubbing) {
         try {
           if (typeof ytPlayerRef.current.getCurrentTime === "function") {
             const time = ytPlayerRef.current.getCurrentTime();
@@ -554,7 +572,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
 
     animId = requestAnimationFrame(updatePlayTime);
     return () => cancelAnimationFrame(animId);
-  }, [isScrubbing, duration]);
+  }, [isScrubbing, duration, playbackMode]);
 
   // Volume & Mute synchronizer
   useEffect(() => {
@@ -563,7 +581,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
     }
     if (ytPlayerRef.current && typeof ytPlayerRef.current.setVolume === "function") {
       try {
-        if (isMuted) {
+        if (isMuted || (playbackMode === "audio" && audioStreamUrl)) {
           ytPlayerRef.current.mute();
         } else {
           ytPlayerRef.current.unMute();
@@ -571,7 +589,51 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
         }
       } catch {}
     }
-  }, [volume, isMuted]);
+  }, [volume, isMuted, playbackMode, audioStreamUrl]);
+
+  // Switch between Audio and Video Modes cleanly without audio clash
+  const handleSwitchMode = (targetMode: "audio" | "video") => {
+    if (targetMode === playbackMode) return;
+    setPlaybackMode(targetMode);
+
+    if (targetMode === "video") {
+      // Pause HTML5 audio
+      if (htmlAudioRef.current) {
+        htmlAudioRef.current.pause();
+      }
+      // Unmute & start YouTube player
+      if (ytPlayerRef.current) {
+        try {
+          ytPlayerRef.current.unMute();
+          ytPlayerRef.current.setVolume(isMuted ? 0 : Math.round(volume * 100));
+          if (typeof ytPlayerRef.current.seekTo === "function") {
+            ytPlayerRef.current.seekTo(currentTime, true);
+          }
+          if (isPlaying && typeof ytPlayerRef.current.playVideo === "function") {
+            ytPlayerRef.current.playVideo();
+          }
+        } catch {}
+      } else if (currentTrack?.id) {
+        setupYouTubePlayer(currentTrack.id);
+      }
+    } else {
+      // Audio mode
+      if (ytPlayerRef.current) {
+        try {
+          ytPlayerRef.current.mute();
+          if (typeof ytPlayerRef.current.pauseVideo === "function") {
+            ytPlayerRef.current.pauseVideo();
+          }
+        } catch {}
+      }
+      if (htmlAudioRef.current) {
+        htmlAudioRef.current.currentTime = currentTime;
+        if (isPlaying) {
+          htmlAudioRef.current.play().catch(() => {});
+        }
+      }
+    }
+  };
 
   // Sync HTML5 audio stream with playback mode and time
   useEffect(() => {
@@ -1236,7 +1298,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
 
                   {/* Mode Badge in top corner */}
                   <button
-                    onClick={() => setPlaybackMode("video")}
+                    onClick={() => handleSwitchMode("video")}
                     className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-medium text-white/80 hover:text-white flex items-center gap-1 cursor-pointer transition hover:scale-105 active:scale-95"
                     title="Beralih ke Video"
                   >
@@ -1249,7 +1311,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
               {/* In Video Mode: Audio mode toggle pill */}
               {playbackMode === "video" && (
                 <button
-                  onClick={() => setPlaybackMode("audio")}
+                  onClick={() => handleSwitchMode("audio")}
                   className="absolute top-3 right-3 z-20 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/10 text-[10px] font-medium text-white/80 hover:text-white flex items-center gap-1 cursor-pointer transition hover:scale-105 active:scale-95"
                   title="Kembali ke Tampilan Cover"
                 >
@@ -1268,20 +1330,6 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
               <p className="text-sm font-semibold text-white/90 group-hover:text-emerald-300 transition truncate leading-relaxed">
                 {activeLyricText}
               </p>
-            </div>
-
-            {/* Background Audio Playback Status Badge (Mirip Spotify Downloader) */}
-            <div className="w-full max-w-[360px] mx-auto mt-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1.5 text-emerald-300 font-medium">
-                <span className="relative flex h-2 w-2">
-                  <span className={`absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 ${isPlaying ? "animate-ping" : ""}`} />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
-                </span>
-                <span>Putar Latar Belakang Aktif</span>
-              </div>
-              <span className="text-white/50 text-[10px] font-medium">
-                {playbackMode === "audio" ? "Mode Audio (Mirip Spotify)" : "Mode Video"}
-              </span>
             </div>
           </div>
 
