@@ -221,10 +221,30 @@ export interface FFRankCs {
   tier?: string;
   star?: number;
   image?: string;
+  imageUrl?: string;
   points?: number;
   rankId?: number;
   maxRank?: number;
   showInProfile?: boolean;
+}
+
+export interface FFAssetItem {
+  id?: number;
+  file?: string;
+  url?: string;
+  garenaUrl?: string;
+  note?: string;
+}
+
+export interface FFDiscordEmbed {
+  author?: { name?: string; icon_url?: string };
+  title?: string;
+  description?: string;
+  color?: number;
+  thumbnail?: { url?: string };
+  fields?: Array<{ name: string; value: string; inline?: boolean }>;
+  footer?: { text?: string; icon_url?: string };
+  timestamp?: string;
 }
 
 export interface FFProfile {
@@ -282,14 +302,29 @@ export interface FFProfile {
     garenaUrl?: string;
   };
   assets?: {
-    avatar?: { url?: string };
-    profileAvatar?: { url?: string };
-    pin?: { url?: string };
-    banner?: { url?: string };
-    primeImage?: { url?: string; level?: number };
+    avatar?: FFAssetItem;
+    profileAvatar?: FFAssetItem;
+    pin?: FFAssetItem;
+    title?: any;
+    banner?: FFAssetItem;
+    badge?: {
+      id?: number;
+      count?: number;
+      url?: string | null;
+      note?: string;
+    };
+    primeImage?: {
+      level?: number;
+      file?: string;
+      url?: string;
+    };
+    verifiedBadge?: any;
     brRankImage?: string;
     csRankImage?: string;
-    pet?: { url?: string };
+    pet?: {
+      id?: number;
+      url?: string;
+    };
     clothes?: Array<{ id: number; url: string }>;
     weaponSkins?: Array<{ id: number; url: string }>;
   };
@@ -313,7 +348,12 @@ export interface FFProfile {
   social?: {
     accountId?: string;
     language?: string;
+    modePrefer?: string | null;
     rankShow?: string;
+  };
+  externalIcon?: {
+    status?: string;
+    showType?: string;
   };
 }
 
@@ -324,8 +364,10 @@ export interface FreeFireStalkerResponse {
   uid?: string;
   profile?: FFProfile;
   discord?: {
+    note?: string;
     webhookPayload?: any;
     webhookPayloadOld?: any;
+    embeds?: FFDiscordEmbed[];
   };
   message?: string;
 }

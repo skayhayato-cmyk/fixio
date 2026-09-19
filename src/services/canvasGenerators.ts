@@ -798,6 +798,16 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
   ctx.textAlign = "left";
   ctx.fillText("🏆 BATTLE ROYALE (BR)", 570, 145);
 
+  // Attempt to draw actual BR Rank PNG badge
+  const brRankUrl = profile.assets?.brRankImage || profile.ranks?.br?.imageUrl;
+  if (brRankUrl) {
+    try {
+      const proxied = `/api/proxy-image?url=${encodeURIComponent(brRankUrl)}`;
+      const brImg = await loadImage(proxied);
+      ctx.drawImage(brImg, 755, 125, 65, 65);
+    } catch {}
+  }
+
   ctx.fillStyle = "#ffffff";
   ctx.font = "900 28px 'Space Grotesk', sans-serif";
   ctx.fillText(profile.ranks?.br?.tier || "Bronze I", 570, 190);
@@ -825,6 +835,16 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
   ctx.font = "800 14px 'Space Grotesk', sans-serif";
   ctx.textAlign = "left";
   ctx.fillText("⚔️ CLASH SQUAD (CS)", 880, 145);
+
+  // Attempt to draw actual CS Rank PNG badge
+  const csRankUrl = profile.assets?.csRankImage || profile.ranks?.cs?.imageUrl;
+  if (csRankUrl) {
+    try {
+      const proxied = `/api/proxy-image?url=${encodeURIComponent(csRankUrl)}`;
+      const csImg = await loadImage(proxied);
+      ctx.drawImage(csImg, 1080, 125, 65, 65);
+    } catch {}
+  }
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "900 28px 'Space Grotesk', sans-serif";
@@ -857,19 +877,64 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
   // Valuation details
   ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
   ctx.font = "600 14px sans-serif";
-  ctx.fillText("Estimasi Nilai Akun:", 575, 445);
+  ctx.fillText("Estimasi Nilai Akun:", 575, 442);
   ctx.fillStyle = "#4ade80";
   ctx.font = "900 24px 'Space Grotesk', sans-serif";
-  ctx.fillText(profile.estimate?.text || "Rp 600.000", 575, 480);
+  ctx.fillText(profile.estimate?.text || "Rp 600.000", 575, 474);
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
   ctx.font = "600 13px sans-serif";
-  ctx.fillText(`Equivalent: ~${profile.estimate?.diamonds || 390} Diamonds • $${profile.estimate?.usd || "34.22"} USD`, 575, 510);
+  ctx.fillText(`Equivalent: ~${profile.estimate?.diamonds || 390} Diamonds • $${profile.estimate?.usd || "34.22"} USD`, 575, 504);
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
   ctx.font = "600 13px sans-serif";
-  ctx.fillText(`Dibuat: ${profile.dates?.createdAtText || "Rabu, 12 April 2023"}`, 575, 550);
-  ctx.fillText(`Login Terakhir: ${profile.dates?.lastLoginAtText || "Baru-baru ini"}`, 575, 578);
+  ctx.fillText(`Dibuat: ${profile.dates?.createdAtText || "Rabu, 12 April 2023"}`, 575, 542);
+  ctx.fillText(`Login Terakhir: ${profile.dates?.lastLoginAtText || "Baru-baru ini"}`, 575, 572);
+
+  // Outfit & Weapon preview panel inside card
+  ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+  roundRect(ctx, 890, 420, 250, 185, 14);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.stroke();
+
+  ctx.fillStyle = "#f59e0b";
+  ctx.font = "800 12px sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText("👕 OUTFIT & WEAPONS (PNG)", 905, 445);
+
+  const previewItems = [
+    ...(profile.assets?.clothes || []).slice(0, 3).map((c) => ({ url: c.url })),
+    ...(profile.assets?.weaponSkins || []).slice(0, 2).map((w) => ({ url: w.url })),
+  ].slice(0, 4);
+
+  if (previewItems.length > 0) {
+    let xOffset = 905;
+    for (let i = 0; i < previewItems.length; i++) {
+      const it = previewItems[i];
+      try {
+        const proxied = `/api/proxy-image?url=${encodeURIComponent(it.url)}`;
+        const img = await loadImage(proxied);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
+        roundRect(ctx, xOffset, 465, 52, 52, 8);
+        ctx.fill();
+        ctx.drawImage(img, xOffset + 2, 467, 48, 48);
+      } catch {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
+        roundRect(ctx, xOffset, 465, 52, 52, 8);
+        ctx.fill();
+      }
+      xOffset += 56;
+    }
+    ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.font = "600 11px sans-serif";
+    ctx.fillText(`${(profile.assets?.clothes?.length || 0) + (profile.assets?.weaponSkins?.length || 0)} Total Aset PNG`, 905, 545);
+    ctx.fillText("Tersedia untuk diunduh di Fixio", 905, 565);
+  } else {
+    ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+    ctx.font = "500 11px sans-serif";
+    ctx.fillText("Aset item siap ditinjau", 905, 485);
+  }
 
   // Watermark
   ctx.textAlign = "right";
