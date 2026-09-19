@@ -568,7 +568,26 @@ app.get("/api/stalker/ff", async (req, res) => {
         Accept: "application/json, text/plain, */*",
       },
     });
-    return res.json(response.data);
+
+    const data = response.data;
+    // Sanitize branding in Discord embeds and notifications
+    if (data?.discord?.embeds && Array.isArray(data.discord.embeds)) {
+      data.discord.embeds.forEach((emb: any) => {
+        if (emb.author?.name) {
+          emb.author.name = emb.author.name
+            .replace(/NOTIF ADENPEDIA CEK FF/gi, "NOTIF FIXIO CEK FF")
+            .replace(/ADENPEDIA/gi, "FIXIO");
+        }
+        if (emb.footer?.text) {
+          emb.footer.text = emb.footer.text.replace(/adenpedia\.my\.id/gi, "api.nexadev.my.id");
+        }
+        if (emb.title) {
+          emb.title = emb.title.replace(/ADENPEDIA/gi, "FIXIO");
+        }
+      });
+    }
+
+    return res.json(data);
   } catch (error: any) {
     console.error("FF Stalker server error:", error?.message);
     const status = error?.response?.status || 502;

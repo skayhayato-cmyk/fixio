@@ -220,7 +220,7 @@ const SAMPLE_DATA: FreeFireStalkerResponse = {
     embeds: [
       {
         author: {
-          name: "NOTIF ADENPEDIA CEK FF",
+          name: "NOTIF FIXIO CEK FF",
           icon_url:
             "https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/FF_UI_Badge_UGC.png",
         },
@@ -246,7 +246,7 @@ const SAMPLE_DATA: FreeFireStalkerResponse = {
           { name: "📝 Signature", value: "BOBON", inline: false },
         ],
         footer: {
-          text: "adenpedia.my.id • Free Fire Account Checker",
+          text: "api.nexadev.my.id • Free Fire Account Checker",
           icon_url:
             "https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/2NBSYS_Level04.png",
         },
@@ -254,7 +254,7 @@ const SAMPLE_DATA: FreeFireStalkerResponse = {
       },
       {
         author: {
-          name: "👑 CAPTAIN INFO — ADENPEDIA",
+          name: "👑 CAPTAIN INFO — FIXIO",
           icon_url:
             "https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/FF_UI_Badge_UGC.png",
         },
@@ -274,7 +274,7 @@ const SAMPLE_DATA: FreeFireStalkerResponse = {
           { name: "🏰 Clan", value: "**BARANGREPㅤID** (Lv.2)", inline: false },
         ],
         footer: {
-          text: "adenpedia.my.id • Captain Info",
+          text: "api.nexadev.my.id • Captain Info",
           icon_url:
             "https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/2NBSYS_Level04.png",
         },
@@ -282,6 +282,30 @@ const SAMPLE_DATA: FreeFireStalkerResponse = {
       },
     ],
   },
+};
+
+export const sanitizeDiscordData = (
+  discord?: FreeFireStalkerResponse["discord"]
+): FreeFireStalkerResponse["discord"] | null => {
+  if (!discord) return null;
+  const cloned = JSON.parse(JSON.stringify(discord));
+  if (Array.isArray(cloned.embeds)) {
+    cloned.embeds = cloned.embeds.map((emb: any) => {
+      if (emb.author?.name) {
+        emb.author.name = emb.author.name
+          .replace(/NOTIF ADENPEDIA CEK FF/gi, "NOTIF FIXIO CEK FF")
+          .replace(/ADENPEDIA/gi, "FIXIO");
+      }
+      if (emb.footer?.text) {
+        emb.footer.text = emb.footer.text.replace(/adenpedia\.my\.id/gi, "api.nexadev.my.id");
+      }
+      if (emb.title) {
+        emb.title = emb.title.replace(/ADENPEDIA/gi, "FIXIO");
+      }
+      return emb;
+    });
+  }
+  return cloned;
 };
 
 export interface ExtractedPngAsset {
@@ -542,7 +566,7 @@ export const FreeFireStalkerTool: React.FC = () => {
       if (data && data.ok && data.profile) {
         setProfile(data.profile);
         if (data.discord) {
-          setDiscordData(data.discord);
+          setDiscordData(sanitizeDiscordData(data.discord));
         }
 
         // Convert response into PNG card immediately
@@ -562,7 +586,7 @@ export const FreeFireStalkerTool: React.FC = () => {
       if (err.name === "CanceledError") return;
       if (targetUid === "7606762852") {
         setProfile(SAMPLE_DATA.profile!);
-        setDiscordData(SAMPLE_DATA.discord);
+        setDiscordData(sanitizeDiscordData(SAMPLE_DATA.discord));
         setIsGeneratingPng(true);
         try {
           const pngUrl = await renderFFStalkerCard(SAMPLE_DATA.profile!);
@@ -588,7 +612,7 @@ export const FreeFireStalkerTool: React.FC = () => {
     setUid("7606762852");
     setError(null);
     setProfile(SAMPLE_DATA.profile!);
-    setDiscordData(SAMPLE_DATA.discord);
+    setDiscordData(sanitizeDiscordData(SAMPLE_DATA.discord));
     setActiveTab("assets");
 
     setIsGeneratingPng(true);
@@ -1557,7 +1581,11 @@ export const FreeFireStalkerTool: React.FC = () => {
                           {emb.author.icon_url && (
                             <img src={getProxiedImageUrl(emb.author.icon_url)} alt="Icon" className="w-4 h-4 rounded-full" />
                           )}
-                          <span>{emb.author.name}</span>
+                          <span>
+                            {emb.author.name
+                              ?.replace(/NOTIF ADENPEDIA CEK FF/gi, "NOTIF FIXIO CEK FF")
+                              ?.replace(/ADENPEDIA/gi, "FIXIO")}
+                          </span>
                         </div>
                       )}
 
@@ -1598,7 +1626,9 @@ export const FreeFireStalkerTool: React.FC = () => {
                           {emb.footer.icon_url && (
                             <img src={getProxiedImageUrl(emb.footer.icon_url)} alt="Icon" className="w-3.5 h-3.5 rounded-full" />
                           )}
-                          <span>{emb.footer.text}</span>
+                          <span>
+                            {emb.footer.text?.replace(/adenpedia\.my\.id/gi, "api.nexadev.my.id")}
+                          </span>
                         </div>
                       )}
                     </div>
