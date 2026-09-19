@@ -158,163 +158,129 @@ export default function App() {
     }
   };
 
-  // 1. Initial Pristine Landing Screen
-  if (!hasEnteredApp && !activeToolId) {
-    return (
-      <div className="min-h-screen text-black dark:text-white transition-colors duration-200">
-        <AmbientBackground />
+  // Unified Layout (Landing Screen or Main App View)
+  const isLandingView = !hasEnteredApp && !activeToolId;
 
-        <div className="relative z-10">
+  return (
+    <div className="min-h-screen flex flex-col text-black dark:text-white transition-colors duration-200">
+      <AmbientBackground />
+
+      {isLandingView ? (
+        /* 1. Initial Pristine Landing Screen */
+        <div className="relative z-10 flex-1">
           <InitialLanding
             onOpenApp={() => setHasEnteredApp(true)}
             onOpenSettings={() => setIsSettingsOpen(true)}
             settings={settings}
             pwa={pwa}
           />
-
-          <SettingsModal
-            isOpen={isSettingsOpen}
-            onClose={() => setIsSettingsOpen(false)}
+        </div>
+      ) : (
+        /* 2. Main App Screen (Tools Catalog or Active Tool) */
+        <>
+          {/* iOS Minimal Navbar */}
+          <Navbar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            onHomeClick={() => {
+              setActiveToolId(null);
+              setHasEnteredApp(false);
+            }}
+            onOpenSettings={() => setIsSettingsOpen(true)}
             settings={settings}
             pwa={pwa}
           />
 
-          {/* Persistent YtPlay Background Player (Mirip Spotify Downloader) */}
-          {ytPlayerMounted && (
-            <YtPlayTool
-              onBack={() => setActiveToolId(null)}
-              isMinimized={activeToolId !== "yt-play"}
-              onMaximize={() => {
-                setHasEnteredApp(true);
-                setActiveToolId("yt-play");
-              }}
-              onClosePlayer={() => {
-                setYtPlayerMounted(false);
-                if (activeToolId === "yt-play") setActiveToolId(null);
-              }}
-            />
-          )}
+          {/* Content sits in its own stacking context above the fixed ambient backdrop */}
+          <div className="relative z-10 flex flex-col flex-1">
+            <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6">
+              {activeTool ? (
+                /* Active Tool Screen */
+                <div className="space-y-4 animate-ios-fade">
+                  {/* Minimal iOS Back Navigation */}
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => setActiveToolId(null)}
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-[#007aff] dark:text-[#0a84ff] hover:opacity-80 transition cursor-pointer active:scale-95"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      <span>{t("allTools")}</span>
+                    </button>
 
-          {/* No-Internet Pill indicator */}
-          {!pwa.isOnline && (
-            <div
-              className="fixed bottom-4 inset-x-4 sm:inset-x-0 sm:mx-auto sm:w-fit z-50 flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#3a3a3c] text-white text-xs font-medium shadow-md"
-              title={t("noInternetDesc")}
-            >
-              <WifiOff className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>{t("noInternetTitle")}</span>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+                    <span className="text-xs text-[#8e8e93] dark:text-[#98989d] uppercase font-semibold tracking-wider">
+                      {activeTool.category}
+                    </span>
+                  </div>
 
-  // 2. Main App Screen (Tools Catalog or Active Tool)
-  return (
-    <div className="min-h-screen flex flex-col text-black dark:text-white transition-colors duration-200">
-      <AmbientBackground />
-
-      {/* iOS Minimal Navbar */}
-      <Navbar
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onHomeClick={() => {
-          setActiveToolId(null);
-          setHasEnteredApp(false);
-        }}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        settings={settings}
-        pwa={pwa}
-      />
-
-      {/* Content sits in its own stacking context above the fixed
-          ambient backdrop (position:fixed layers paint above static
-          content otherwise, hiding the page behind the blobs) */}
-      <div className="relative z-10 flex flex-col flex-1">
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6">
-        {activeTool ? (
-          /* Active Tool Screen */
-          <div className="space-y-4 animate-ios-fade">
-            {/* Minimal iOS Back Navigation */}
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setActiveToolId(null)}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-[#007aff] dark:text-[#0a84ff] hover:opacity-80 transition cursor-pointer active:scale-95"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span>{t("allTools")}</span>
-              </button>
-
-              <span className="text-xs text-[#8e8e93] dark:text-[#98989d] uppercase font-semibold tracking-wider">
-                {activeTool.category}
-              </span>
-            </div>
-
-            {/* Tool Container */}
-            <div className="bg-white dark:bg-[#1c1c1e] p-5 sm:p-7 rounded-2xl border border-black/5 dark:border-white/10 shadow-xs">
-              {renderActiveToolComponent()}
-            </div>
-          </div>
-        ) : (
-          /* Tools Catalog Grid */
-          <div className="space-y-6 animate-ios-fade">
-            {/* Minimal Segmented Category Tabs */}
-            <CategoryFilter
-              activeCategory={selectedCategory}
-              onSelectCategory={setSelectedCategory}
-              counts={categoryCounts}
-              settings={settings}
-            />
-
-            {/* Tools Grid (2 columns on tablet/desktop, 1 on mobile) */}
-            {filteredTools.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {filteredTools.map((tool) => (
-                  <ToolCard
-                    key={tool.id}
-                    tool={tool}
-                    onSelect={(id) => setActiveToolId(id)}
-                  />
-                ))}
-              </div>
-            ) : (
-              /* Minimal Empty State */
-              <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 p-10 text-center space-y-3">
-                <div className="w-10 h-10 bg-[#f2f2f7] dark:bg-[#2c2c2e] text-[#8e8e93] rounded-full flex items-center justify-center mx-auto">
-                  <Search className="w-5 h-5" />
+                  {/* Tool Container */}
+                  <div className="bg-white dark:bg-[#1c1c1e] p-5 sm:p-7 rounded-2xl border border-black/5 dark:border-white/10 shadow-xs">
+                    {renderActiveToolComponent()}
+                  </div>
                 </div>
-                <p className="text-sm font-medium text-black dark:text-white">
-                  {language === "id" ? "Tidak ada alat yang cocok" : "No utilities found"}
-                </p>
-                <button
-                  onClick={() => {
-                    setSearchQuery("");
-                    setSelectedCategory("all");
-                  }}
-                  className="text-xs text-[#007aff] dark:text-[#0a84ff] font-semibold hover:underline cursor-pointer"
-                >
-                  {language === "id" ? "Tampilkan Semua Alat" : "Show All Tools"}
-                </button>
-              </div>
-            )}
+              ) : (
+                /* Tools Catalog Grid */
+                <div className="space-y-6 animate-ios-fade">
+                  {/* Minimal Segmented Category Tabs */}
+                  <CategoryFilter
+                    activeCategory={selectedCategory}
+                    onSelectCategory={setSelectedCategory}
+                    counts={categoryCounts}
+                    settings={settings}
+                  />
+
+                  {/* Tools Grid (2 columns on tablet/desktop, 1 on mobile) */}
+                  {filteredTools.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {filteredTools.map((tool) => (
+                        <ToolCard
+                          key={tool.id}
+                          tool={tool}
+                          onSelect={(id) => setActiveToolId(id)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    /* Minimal Empty State */
+                    <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 p-10 text-center space-y-3">
+                      <div className="w-10 h-10 bg-[#f2f2f7] dark:bg-[#2c2c2e] text-[#8e8e93] rounded-full flex items-center justify-center mx-auto">
+                        <Search className="w-5 h-5" />
+                      </div>
+                      <p className="text-sm font-medium text-black dark:text-white">
+                        {language === "id" ? "Tidak ada alat yang cocok" : "No utilities found"}
+                      </p>
+                      <button
+                        onClick={() => {
+                          setSearchQuery("");
+                          setSelectedCategory("all");
+                        }}
+                        className="text-xs text-[#007aff] dark:text-[#0a84ff] font-semibold hover:underline cursor-pointer"
+                      >
+                        {language === "id" ? "Tampilkan Semua Alat" : "Show All Tools"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </main>
+
+            {/* Minimal iOS Footer */}
+            <Footer
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              language={language}
+            />
           </div>
-        )}
-      </main>
+        </>
+      )}
 
-      {/* Minimal iOS Footer */}
-      <Footer
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        language={language}
-      />
-      </div>
-
-      {/* Persistent YtPlay Background Player (Mirip Spotify Downloader) */}
+      {/* SINGLE Persistent YtPlay Background Player (Never unmounts or resets across navigation) */}
       {ytPlayerMounted && (
         <YtPlayTool
           onBack={() => setActiveToolId(null)}
           isMinimized={activeToolId !== "yt-play"}
-          onMaximize={() => setActiveToolId("yt-play")}
+          onMaximize={() => {
+            setHasEnteredApp(true);
+            setActiveToolId("yt-play");
+          }}
           onClosePlayer={() => {
             setYtPlayerMounted(false);
             if (activeToolId === "yt-play") setActiveToolId(null);
@@ -330,8 +296,7 @@ export default function App() {
         pwa={pwa}
       />
 
-      {/* No-Internet Toast — shown whenever connectivity drops, since every
-          tool call depends on the live API and will fail without it. */}
+      {/* No-Internet Toast */}
       {!pwa.isOnline && (
         <div
           className="fixed bottom-4 inset-x-4 sm:inset-x-0 sm:mx-auto sm:w-fit z-50 flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#3a3a3c] text-white text-xs font-medium shadow-md"

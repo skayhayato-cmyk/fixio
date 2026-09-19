@@ -375,8 +375,8 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
         const d = event.target.getDuration();
         if (d > 0) setDuration(d);
 
-        // In audio mode with native stream, keep YouTube player muted and paused
-        if (playbackMode === "audio" && audioStreamUrl) {
+        // In audio mode, keep YouTube player muted and paused
+        if (playbackMode === "audio") {
           event.target.mute();
           if (typeof event.target.pauseVideo === "function") {
             event.target.pauseVideo();
@@ -874,26 +874,41 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
       if (document.visibilityState === "hidden") {
         if (isPlayingRef.current && !manualPauseRef.current && isBackgroundPlayRef.current) {
           startBackgroundAudioSession();
-          // Keep YouTube audio playing in background
-          setTimeout(() => {
-            if (isPlayingRef.current && !manualPauseRef.current && ytPlayerRef.current) {
-              try {
-                const state = ytPlayerRef.current.getPlayerState?.();
-                if (state === 2 || state === 3 || state === -1) {
-                  ytPlayerRef.current.playVideo();
-                }
-              } catch {}
-            }
-          }, 120);
+          // Keep YouTube audio playing in background ONLY in video mode
+          if (playbackMode === "video") {
+            setTimeout(() => {
+              if (isPlayingRef.current && !manualPauseRef.current && ytPlayerRef.current) {
+                try {
+                  const state = ytPlayerRef.current.getPlayerState?.();
+                  if (state === 2 || state === 3 || state === -1) {
+                    ytPlayerRef.current.playVideo();
+                  }
+                } catch {}
+              }
+            }, 120);
+          }
         }
       } else if (document.visibilityState === "visible") {
-        if (isPlayingRef.current && !manualPauseRef.current && ytPlayerRef.current) {
-          try {
-            const state = ytPlayerRef.current.getPlayerState?.();
-            if (state !== 1) {
-              ytPlayerRef.current.playVideo();
-            }
-          } catch {}
+        // When user re-enters the PWA:
+        // In AUDIO mode, YouTube player MUST remain muted & paused to prevent double/clashing audio!
+        if (playbackMode === "audio") {
+          if (ytPlayerRef.current) {
+            try {
+              ytPlayerRef.current.mute();
+              if (typeof ytPlayerRef.current.pauseVideo === "function") {
+                ytPlayerRef.current.pauseVideo();
+              }
+            } catch {}
+          }
+        } else if (playbackMode === "video") {
+          if (isPlayingRef.current && !manualPauseRef.current && ytPlayerRef.current) {
+            try {
+              const state = ytPlayerRef.current.getPlayerState?.();
+              if (state !== 1) {
+                ytPlayerRef.current.playVideo();
+              }
+            } catch {}
+          }
         }
       }
     };
@@ -910,7 +925,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [startBackgroundAudioSession]);
+  }, [startBackgroundAudioSession, playbackMode]);
 
   // ---------------------------------------------------------------------------
   // Lyrics Fetching & Synchronization Logic
@@ -1066,8 +1081,10 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({
           });
       }
 
-      // Initialize YouTube player engine
-      setupYouTubePlayer(songData.id);
+      // Initialize YouTube player engine only when in video mode
+      if (playbackMode === "video") {
+        setupYouTubePlayer(songData.id);
+      }
 
       // Fetch accurate synced lyrics
       const parsed = parseTrackInfo(songData.title, songData.channel);
