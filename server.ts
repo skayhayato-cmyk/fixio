@@ -851,13 +851,14 @@ app.get("/api/instagram-dl-v2", async (req, res) => {
 });
 
 // Spotify Downloader Proxy — returns track metadata + mp3_url
-app.get("/api/spotify-dl", async (req, res) => {
+const handleSpotifyDownload = async (req: any, res: any) => {
   try {
-    const targetUrl = req.query.url as string;
+    const targetUrl = (req.query.url as string)?.trim();
     if (!targetUrl) {
       return res.status(400).json({ ok: false, message: "URL track Spotify diperlukan" });
     }
-    const response = await axios.get(`https://api.nexadev.my.id/api/spotify?url=${encodeURIComponent(targetUrl)}`, {
+    const apiUrl = `https://api.nexaadev.my.id/api/spotify?url=${encodeURIComponent(targetUrl)}`;
+    const response = await axios.get(apiUrl, {
       timeout: 30000,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
@@ -875,7 +876,10 @@ app.get("/api/spotify-dl", async (req, res) => {
       message: extractErrorMessage(error, "Gagal mengambil data lagu Spotify. Pastikan link track valid."),
     });
   }
-});
+};
+
+app.get("/api/spotify-dl", handleSpotifyDownload);
+app.get("/api/spotify", handleSpotifyDownload);
 
 // YT Play API Proxy with direct YouTube search fallback
 app.get("/api/ytplay", async (req, res) => {

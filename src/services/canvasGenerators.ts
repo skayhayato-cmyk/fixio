@@ -443,22 +443,28 @@ export async function renderFakeCallCanvas(name: string, duration: string, avata
 }
 
 // 5. iOS Dark Quote (IQC Dark)
-export async function renderIqcDarkCanvas(text: string, time: string = "12:00"): Promise<string> {
+export async function renderIqcDarkCanvas(
+  text: string,
+  time: string = "12:00",
+  imageUrl?: string
+): Promise<string> {
   const canvas = document.createElement("canvas");
+  const hasImage = Boolean(imageUrl && imageUrl.trim());
   canvas.width = 800;
-  canvas.height = 500;
+  canvas.height = hasImage ? 720 : 500;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas context not available");
 
   // Deep iOS OLED Dark
   ctx.fillStyle = "#000000";
-  ctx.fillRect(0, 0, 800, 500);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // Glass card
+  const cardHeight = hasImage ? 560 : 340;
   ctx.fillStyle = "rgba(28, 28, 30, 0.95)";
   ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
   ctx.lineWidth = 1;
-  roundRect(ctx, 80, 80, 640, 340, 28);
+  roundRect(ctx, 80, 80, 640, cardHeight, 28);
   ctx.fill();
   ctx.stroke();
 
@@ -468,16 +474,40 @@ export async function renderIqcDarkCanvas(text: string, time: string = "12:00"):
   ctx.textAlign = "left";
   ctx.fillText("NOTES • " + time, 120, 135);
 
+  let textStartY = 200;
+
+  // Render Image if provided
+  if (hasImage && imageUrl) {
+    try {
+      const img = await loadImage(imageUrl);
+      ctx.save();
+      // Rounded image inside card
+      roundRect(ctx, 120, 160, 560, 260, 18);
+      ctx.clip();
+      // Draw image cover
+      const hRatio = 560 / img.width;
+      const vRatio = 260 / img.height;
+      const ratio = Math.max(hRatio, vRatio);
+      const centerShiftX = (560 - img.width * ratio) / 2;
+      const centerShiftY = (260 - img.height * ratio) / 2;
+      ctx.drawImage(img, 0, 0, img.width, img.height, 120 + centerShiftX, 160 + centerShiftY, img.width * ratio, img.height * ratio);
+      ctx.restore();
+      textStartY = 460;
+    } catch (e) {
+      console.warn("Could not load image in renderIqcDarkCanvas, fallback to text:", e);
+    }
+  }
+
   // Quote Text
   ctx.fillStyle = "#ffffff";
   ctx.font = "600 28px sans-serif";
-  wrapText(ctx, text || "Segala sesuatu yang indah memerlukan waktu dan ketekunan.", 120, 200, 560, 42);
+  wrapText(ctx, text || "Segala sesuatu yang indah memerlukan waktu dan ketekunan.", 120, textStartY, 560, 42);
 
   // Watermark
   ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
   ctx.font = "500 13px sans-serif";
   ctx.textAlign = "right";
-  ctx.fillText("Shared from iPhone • Fixio", 680, 380);
+  ctx.fillText("Shared from iPhone • Fixio", 680, cardHeight + 40);
 
   return canvas.toDataURL("image/png");
 }

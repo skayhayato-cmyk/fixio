@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 import {
   Download,
   Video,
@@ -407,7 +408,16 @@ export const MediaDownloader: React.FC<MediaDownloaderProps> = ({
 
   // Process Spotify API
   const processSpotify = async (targetUrl: string): Promise<MediaItem[]> => {
-    const res = await fetchProxiedJson<any>(`/api/spotify?url=${encodeURIComponent(targetUrl)}`);
+    let res: any = null;
+    try {
+      const resp = await axios.get<any>("/api/spotify-dl", {
+        params: { url: targetUrl },
+        timeout: 35000,
+      });
+      res = resp.data;
+    } catch {
+      res = await fetchProxiedJson<any>(`https://api.nexaadev.my.id/api/spotify?url=${encodeURIComponent(targetUrl)}`);
+    }
     const items: MediaItem[] = [];
 
     if (!res || !Array.isArray(res.tracks) || res.tracks.length === 0) {

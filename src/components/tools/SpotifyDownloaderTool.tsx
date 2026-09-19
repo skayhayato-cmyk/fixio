@@ -21,12 +21,15 @@ export const SpotifyDownloaderTool: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [tracks, setTracks] = useState<SpotifyTrack[]>([]);
 
-  const handleDownload = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const cleanUrl = url.trim();
+  const handleDownload = async (targetUrlOverride?: string) => {
+    const cleanUrl = (targetUrlOverride || url).trim();
     if (!cleanUrl) {
       setError("Masukkan link track Spotify terlebih dahulu.");
       return;
+    }
+
+    if (targetUrlOverride) {
+      setUrl(targetUrlOverride);
     }
 
     setError(null);
@@ -34,15 +37,24 @@ export const SpotifyDownloaderTool: React.FC = () => {
     setTracks([]);
 
     try {
-      const res = await axios.get<SpotifyDownloadResponse>("/api/spotify-dl", {
-        params: { url: cleanUrl },
-        timeout: 45000,
-      });
+      let data: SpotifyDownloadResponse | null = null;
+      try {
+        const res = await axios.get<SpotifyDownloadResponse>("/api/spotify-dl", {
+          params: { url: cleanUrl },
+          timeout: 45000,
+        });
+        data = res.data;
+      } catch (localErr: any) {
+        // Direct fallback to API if local route encounters issues
+        const fallbackUrl = `https://api.nexaadev.my.id/api/spotify?url=${encodeURIComponent(cleanUrl)}`;
+        const fallbackRes = await axios.get<SpotifyDownloadResponse>(fallbackUrl, { timeout: 45000 });
+        data = fallbackRes.data;
+      }
 
-      if (res.data?.ok && res.data.tracks && res.data.tracks.length > 0) {
-        setTracks(res.data.tracks);
+      if (data?.ok && data.tracks && data.tracks.length > 0) {
+        setTracks(data.tracks);
       } else {
-        setError(res.data?.message || "Gagal mengambil lagu. Pastikan link track Spotify valid.");
+        setError(data?.message || "Gagal mengambil lagu. Pastikan link track Spotify valid.");
       }
     } catch (err: any) {
       setError(err?.response?.data?.message || err.message || "Terjadi kesalahan saat menghubungi server Spotify.");
@@ -50,6 +62,9 @@ export const SpotifyDownloaderTool: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  const sampleTrackUrl =
+    "https://open.spotify.com/track/5WOSNVChcadlsCRiqXE45K?si=medCM_2XT5-7ewU5h2yr0g&utm_source=copy-link";
 
   return (
     <div className="space-y-6">
@@ -68,7 +83,13 @@ export const SpotifyDownloaderTool: React.FC = () => {
       </div>
 
       {/* Input Section */}
-      <form onSubmit={handleDownload} className="space-y-4 bg-slate-50/50 dark:bg-[#121214] p-4 sm:p-5 rounded-2xl border border-black/5 dark:border-white/10">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleDownload();
+        }}
+        className="space-y-4 bg-slate-50/50 dark:bg-[#121214] p-4 sm:p-5 rounded-2xl border border-black/5 dark:border-white/10"
+      >
         <div>
           <label className="block text-xs sm:text-sm font-semibold text-black dark:text-white mb-1.5">
             Link Track Spotify <span className="text-red-500">*</span>
@@ -83,6 +104,15 @@ export const SpotifyDownloaderTool: React.FC = () => {
               onChange={(e) => setUrl(e.target.value)}
               className="w-full pl-10 pr-3.5 py-2.5 bg-white dark:bg-[#1c1c1e] border border-black/10 dark:border-white/10 rounded-xl text-xs sm:text-sm text-black dark:text-white placeholder-[#8e8e93] focus:outline-none focus:ring-2 focus:ring-[#007aff] transition-all"
             />
+          </div>
+          <div className="flex items-center justify-between gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => handleDownload(sampleTrackUrl)}
+              className="text-[11px] text-[#007aff] dark:text-[#0a84ff] hover:underline flex items-center gap-1 cursor-pointer font-medium"
+            >
+              <span>Contoh: Hindia - everything u are</span>
+            </button>
           </div>
         </div>
 

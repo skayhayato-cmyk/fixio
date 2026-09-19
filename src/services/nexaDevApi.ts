@@ -719,27 +719,33 @@ export async function generateIgStory(
 /**
  * 9. iPhone Quote Chat Dark Mode (IQC Dark)
  * Endpoint: https://apii.nexadev.my.id/iqc-dark?text={TEXT}&time={TIME}&url={IMAGE_URL}
+ * Mendukung dengan gambar (lampiran foto) maupun tanpa gambar (teks saja)
  */
 export async function generateIqcDark(
   params: {
     text: string;
-    time: string;
-    url: string;
+    time?: string;
+    url?: string;
   },
   signal?: AbortSignal
 ): Promise<BinaryResult> {
-  if (!params.text || !params.url) {
-    throw new Error("Harap masukkan teks pesan dan foto profil.");
+  if (!params.text) {
+    throw new Error("Harap masukkan teks pesan.");
   }
 
   const endpoint = `${NEXA_APII_HOST}/iqc-dark`;
+  const queryParams: Record<string, string> = {
+    text: params.text,
+    time: params.time || "00.00",
+  };
+
+  if (params.url && params.url.trim()) {
+    queryParams.url = params.url.trim();
+  }
+
   return fetchImageBinary(
     endpoint,
-    {
-      text: params.text,
-      time: params.time || "00.00",
-      url: params.url,
-    },
+    queryParams,
     {
       signal,
       defaultFilename: `iqc_dark_${Date.now()}.png`,
