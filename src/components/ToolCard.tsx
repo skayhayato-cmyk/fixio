@@ -20,7 +20,8 @@ import {
   Download,
   FileVideo,
   DownloadCloud,
-  Music2
+  Music2,
+  Gamepad2
 } from "lucide-react";
 
 const ICON_MAP: Record<string, any> = {
@@ -43,6 +44,7 @@ const ICON_MAP: Record<string, any> = {
   FileVideo,
   DownloadCloud,
   Music2,
+  Gamepad2,
 };
 
 interface ToolCardProps {

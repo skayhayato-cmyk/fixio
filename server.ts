@@ -553,6 +553,58 @@ app.get("/api/proxy-json", async (req, res) => {
   }
 });
 
+// Stalker Free Fire Endpoint
+app.get("/api/stalker/ff", async (req, res) => {
+  try {
+    const id = (req.query.id as string)?.trim();
+    if (!id) {
+      return res.status(400).json({ ok: false, message: "Parameter UID Free Fire 'id' diperlukan." });
+    }
+    const apiUrl = `https://api.nexadev.my.id/api/ff?id=${encodeURIComponent(id)}`;
+    const response = await axios.get(apiUrl, {
+      timeout: 25000,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Fixio/1.0",
+        Accept: "application/json, text/plain, */*",
+      },
+    });
+    return res.json(response.data);
+  } catch (error: any) {
+    console.error("FF Stalker server error:", error?.message);
+    const status = error?.response?.status || 502;
+    const message =
+      error?.response?.data?.message ||
+      "Gagal mengambil data Free Fire. Pastikan UID akun valid dan coba lagi.";
+    return res.status(status >= 400 && status < 600 ? status : 502).json({ ok: false, message });
+  }
+});
+
+// Stalker Roblox Endpoint
+app.get("/api/stalker/roblox", async (req, res) => {
+  try {
+    const username = (req.query.username as string)?.trim();
+    if (!username) {
+      return res.status(400).json({ status: false, message: "Parameter 'username' Roblox diperlukan." });
+    }
+    const apiUrl = `https://api.nexadev.my.id/api/roblox?username=${encodeURIComponent(username)}`;
+    const response = await axios.get(apiUrl, {
+      timeout: 25000,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Fixio/1.0",
+        Accept: "application/json, text/plain, */*",
+      },
+    });
+    return res.json(response.data);
+  } catch (error: any) {
+    console.error("Roblox Stalker server error:", error?.message);
+    const status = error?.response?.status || 502;
+    const message =
+      error?.response?.data?.message ||
+      "Gagal mengambil data akun Roblox. Pastikan username tepat dan coba lagi.";
+    return res.status(status >= 400 && status < 600 ? status : 502).json({ status: false, message });
+  }
+});
+
 function extractErrorMessage(error: any, fallback: string): string {
   if (!error) return fallback;
   if (typeof error?.response?.data === "object" && error?.response?.data !== null) {

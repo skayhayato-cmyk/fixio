@@ -17,6 +17,8 @@ import { RemoveBgTool } from "./components/tools/RemoveBgTool";
 import { WebScreenshotTool } from "./components/tools/WebScreenshotTool";
 import { InstagramStalkerTool } from "./components/tools/InstagramStalkerTool";
 import { TikTokStalkerTool } from "./components/tools/TikTokStalkerTool";
+import { FreeFireStalkerTool } from "./components/tools/FreeFireStalkerTool";
+import { RobloxStalkerTool } from "./components/tools/RobloxStalkerTool";
 import { QcWaTool } from "./components/tools/QcWaTool";
 import { FakeCallTool } from "./components/tools/FakeCallTool";
 import { BratvidTool } from "./components/tools/BratvidTool";
@@ -120,6 +122,10 @@ export default function App() {
         return <WebScreenshotTool />;
       case "ig-stalker":
         return <InstagramStalkerTool />;
+      case "ff-stalker":
+        return <FreeFireStalkerTool />;
+      case "roblox-stalker":
+        return <RobloxStalkerTool />;
       case "tiktok-stalker":
         return <TikTokStalkerTool />;
       case "tiktok-dl":
