@@ -27,7 +27,8 @@
     "next": "^16.3.5",
     "postcss": "^8.5.28",
     "react": "^19.0.1",
-    "react-dom": "^19.0.1"
+    "react-dom": "^19.0.1",
+    "youtubei.js": "^18.0.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",

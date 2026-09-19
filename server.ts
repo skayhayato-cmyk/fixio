@@ -888,20 +888,20 @@ app.get("/api/ytplay", async (req, res) => {
     return res.status(400).json({ status: false, message: "Query lagu (q) diperlukan" });
   }
 
-  // 1. Try NexaDev API
+  // 1. Try NexaDev API (provides full metadata and direct mp3 url in data.url)
   try {
     const response = await axios.get(`https://api.nexadev.my.id/api/ytplay/?q=${encodeURIComponent(query)}`, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
       },
-      timeout: 10000,
+      timeout: 25000,
     });
     if (response.data && typeof response.data === "object" && response.data.status && response.data.id) {
       return res.json(response.data);
     }
   } catch (error: any) {
-    console.warn("NexaDev YT Play failed, trying direct YouTube search fallback...");
+    console.warn("NexaDev YT Play failed or timed out, trying direct YouTube search fallback...");
   }
 
   // 2. Direct YouTube Search Fallback
@@ -956,6 +956,35 @@ app.get("/api/ytplay", async (req, res) => {
     status: false,
     message: "Gagal menemukan lagu di YouTube. Coba kata kunci lain.",
   });
+});
+
+// Dedicated audio stream resolution endpoint for background playback
+app.get("/api/ytplay-audio", async (req, res) => {
+  const query = (req.query.q as string) || (req.query.id as string);
+  if (!query) {
+    return res.status(400).json({ status: false, message: "Query q atau id lagu diperlukan" });
+  }
+
+  try {
+    const response = await axios.get(`https://api.nexadev.my.id/api/ytplay/?q=${encodeURIComponent(query)}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+      },
+      timeout: 25000,
+    });
+    if (response.data && response.data.data?.url) {
+      return res.json({
+        status: true,
+        url: response.data.data.url,
+        data: response.data.data,
+      });
+    }
+  } catch (err: any) {
+    console.warn("ytplay-audio resolution error:", extractErrorMessage(err, "Audio stream resolution error"));
+  }
+
+  return res.status(404).json({ status: false, message: "Audio stream tidak tersedia" });
 });
 
 // Lyric API Proxy (Genius fallback)

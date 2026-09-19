@@ -10,6 +10,7 @@ import {
   ListMusic,
   Laptop2,
   ChevronDown,
+  ChevronUp,
   MoreVertical,
   Plus,
   Check,
@@ -24,6 +25,8 @@ import {
   Radio,
   Tv,
   ShieldCheck,
+  Download,
+  Maximize2,
 } from "lucide-react";
 import axios from "axios";
 
@@ -71,8 +74,11 @@ interface ParsedTrack {
   cleanFull: string;
 }
 
-interface YtPlayToolProps {
+export interface YtPlayToolProps {
   onBack?: () => void;
+  isMinimized?: boolean;
+  onMaximize?: () => void;
+  onClosePlayer?: () => void;
 }
 
 // Curated inspiration tracks (Default is Post Malone - Sunflower matching Spotify screenshot)
@@ -234,7 +240,12 @@ const loadYouTubeIframeScript = () => {
   }
 };
 
-export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
+export const YtPlayTool: React.FC<YtPlayToolProps> = ({
+  onBack,
+  isMinimized = false,
+  onMaximize,
+  onClosePlayer,
+}) => {
   // Navigation & UI mode states
   const [showLyricsSheet, setShowLyricsSheet] = useState(false);
   const [playbackMode, setPlaybackMode] = useState<"audio" | "video">("audio");
@@ -265,6 +276,11 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
   const [syncedLyrics, setSyncedLyrics] = useState<SyncedLyricLine[]>([]);
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [userScrolledLyrics, setUserScrolledLyrics] = useState(false);
+
+  // Native HTML5 Audio Element for Background Playback (Mirip Spotify Downloader)
+  const htmlAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioStreamUrl, setAudioStreamUrl] = useState<string | null>(null);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
 
   // DOM & Audio Refs
   const ytPlayerContainerRef = useRef<HTMLDivElement | null>(null);
@@ -542,6 +558,9 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
 
   // Volume & Mute synchronizer
   useEffect(() => {
+    if (htmlAudioRef.current) {
+      htmlAudioRef.current.volume = isMuted ? 0 : volume;
+    }
     if (ytPlayerRef.current && typeof ytPlayerRef.current.setVolume === "function") {
       try {
         if (isMuted) {
@@ -554,10 +573,44 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
     }
   }, [volume, isMuted]);
 
+  // Sync HTML5 audio stream with playback mode and time
+  useEffect(() => {
+    if (playbackMode === "audio" && audioStreamUrl && htmlAudioRef.current) {
+      if (isPlaying || pendingPlayRef.current) {
+        htmlAudioRef.current.currentTime = currentTime;
+        htmlAudioRef.current.play().catch(() => {});
+        if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === "function") {
+          try {
+            ytPlayerRef.current.pauseVideo();
+          } catch {}
+        }
+      }
+    }
+  }, [audioStreamUrl, playbackMode]);
+
   // ---------------------------------------------------------------------------
-  // YouTube Playback Action Controls (Invoking YouTube API directly)
+  // YouTube & Background HTML5 Audio Playback Action Controls
   // ---------------------------------------------------------------------------
   const handleTogglePlay = () => {
+    // 1. In Audio Mode with native MP3 stream (Mirip Spotify Downloader Background Audio)
+    if (playbackMode === "audio" && audioStreamUrl && htmlAudioRef.current) {
+      if (isPlaying) {
+        manualPauseRef.current = true;
+        htmlAudioRef.current.pause();
+        if (silentAudioRef.current) silentAudioRef.current.pause();
+        setIsPlaying(false);
+        setIsBuffering(false);
+      } else {
+        manualPauseRef.current = false;
+        startBackgroundAudioSession();
+        htmlAudioRef.current.play().catch(() => {});
+        setIsPlaying(true);
+        setIsBuffering(false);
+      }
+      return;
+    }
+
+    // 2. Video Mode or YouTube Player Fallback
     if (!ytPlayerRef.current) {
       if (currentTrack?.id) {
         pendingPlayRef.current = true;
@@ -611,6 +664,9 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
   const handleSeek = (targetSeconds: number) => {
     const clamped = Math.max(0, Math.min(duration || 1000, targetSeconds));
     setCurrentTime(clamped);
+    if (playbackMode === "audio" && htmlAudioRef.current) {
+      htmlAudioRef.current.currentTime = clamped;
+    }
     if (ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === "function") {
       try {
         ytPlayerRef.current.seekTo(clamped, true);
@@ -686,7 +742,9 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
       navigator.mediaSession.setActionHandler("play", () => {
         manualPauseRef.current = false;
         startBackgroundAudioSession();
-        if (ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === "function") {
+        if (playbackMode === "audio" && audioStreamUrl && htmlAudioRef.current) {
+          htmlAudioRef.current.play().catch(() => {});
+        } else if (ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === "function") {
           ytPlayerRef.current.playVideo();
         }
         setIsPlaying(true);
@@ -696,6 +754,9 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
         manualPauseRef.current = true;
         if (silentAudioRef.current) {
           silentAudioRef.current.pause();
+        }
+        if (htmlAudioRef.current) {
+          htmlAudioRef.current.pause();
         }
         if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === "function") {
           ytPlayerRef.current.pauseVideo();
@@ -730,6 +791,9 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
         if (silentAudioRef.current) {
           silentAudioRef.current.pause();
         }
+        if (htmlAudioRef.current) {
+          htmlAudioRef.current.pause();
+        }
         if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
           ytPlayerRef.current.stopVideo();
         }
@@ -738,7 +802,7 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
     } catch (e) {
       console.warn("MediaSession action handler error:", e);
     }
-  }, [currentTime, duration, currentTrack, startBackgroundAudioSession]);
+  }, [currentTime, duration, currentTrack, startBackgroundAudioSession, playbackMode, audioStreamUrl]);
 
   // ---------------------------------------------------------------------------
   // Page Visibility & Window Blur Background Keep-Alive
@@ -916,7 +980,31 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
       setCurrentTrack(songData);
       setDuration(songData.duration_seconds || 0);
 
-      // Directly change song and start playing
+      // Check for direct MP3 audio stream for background playback (Mirip Spotify Downloader)
+      if (songData.data?.url) {
+        const stream = `/api/audio-proxy?url=${encodeURIComponent(songData.data.url)}`;
+        setAudioStreamUrl(stream);
+      } else {
+        setIsAudioLoading(true);
+        axios
+          .get("/api/ytplay-audio", { params: { q: songData.title, id: songData.id } })
+          .then((aRes) => {
+            if (!isMountedRef.current || currentReqId !== searchRequestIdRef.current) return;
+            if (aRes.data?.url) {
+              const stream = `/api/audio-proxy?url=${encodeURIComponent(aRes.data.url)}`;
+              setAudioStreamUrl(stream);
+              setCurrentTrack((prev) => (prev ? { ...prev, data: aRes.data.data } : prev));
+            }
+          })
+          .catch(() => {})
+          .finally(() => {
+            if (isMountedRef.current && currentReqId === searchRequestIdRef.current) {
+              setIsAudioLoading(false);
+            }
+          });
+      }
+
+      // Initialize YouTube player engine
       setupYouTubePlayer(songData.id);
 
       // Fetch accurate synced lyrics
@@ -980,10 +1068,15 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
   const currentProgress = duration > 0 ? Math.min(100, ((isScrubbing ? scrubTime : currentTime) / duration) * 100) : 0;
 
   return (
-    <div
-      id="spotify-music-player-root"
-      className="fixed inset-0 z-50 bg-gradient-to-b from-[#0a2f38] via-[#081f25] to-[#040f12] text-white flex flex-col justify-between overflow-hidden font-sans select-none"
-    >
+    <>
+      <div
+        id="spotify-music-player-root"
+        className={
+          isMinimized
+            ? "fixed -top-[9999px] -left-[9999px] w-1 h-1 opacity-0 pointer-events-none overflow-hidden"
+            : "fixed inset-0 z-50 bg-gradient-to-b from-[#0a2f38] via-[#081f25] to-[#040f12] text-white flex flex-col justify-between overflow-hidden font-sans select-none"
+        }
+      >
       {/* --------------------------------------------------------------------- */}
       {/* 1. TOP BAR (Matching Screenshot 1) */}
       {/* --------------------------------------------------------------------- */}
@@ -1084,6 +1177,17 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
                 <Share2 className="w-4 h-4 text-sky-400" />
                 <span>Salin Tautan YouTube</span>
               </button>
+              {currentTrack?.data?.url && (
+                <a
+                  href={`/api/audio-proxy?url=${encodeURIComponent(currentTrack.data.url)}`}
+                  download={currentTrack.data.filename || `${parsedTrack.song}.mp3`}
+                  onClick={() => setShowOptionsMenu(false)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left hover:bg-white/10 text-emerald-300 font-medium"
+                >
+                  <Download className="w-4 h-4 text-emerald-400" />
+                  <span>Unduh MP3 ({currentTrack.data.size || "128kbps"})</span>
+                </a>
+              )}
             </div>
           )}
         </div>
@@ -1164,6 +1268,20 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
               <p className="text-sm font-semibold text-white/90 group-hover:text-emerald-300 transition truncate leading-relaxed">
                 {activeLyricText}
               </p>
+            </div>
+
+            {/* Background Audio Playback Status Badge (Mirip Spotify Downloader) */}
+            <div className="w-full max-w-[360px] mx-auto mt-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 text-emerald-300 font-medium">
+                <span className="relative flex h-2 w-2">
+                  <span className={`absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 ${isPlaying ? "animate-ping" : ""}`} />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                </span>
+                <span>Putar Latar Belakang Aktif</span>
+              </div>
+              <span className="text-white/50 text-[10px] font-medium">
+                {playbackMode === "audio" ? "Mode Audio (Mirip Spotify)" : "Mode Video"}
+              </span>
             </div>
           </div>
 
@@ -1587,6 +1705,141 @@ export const YtPlayTool: React.FC<YtPlayToolProps> = ({ onBack }) => {
         className="hidden"
         aria-hidden="true"
       />
+
+      {/* HTML5 Native Audio Stream for Seamless Background Playback (Mirip Spotify Downloader) */}
+      <audio
+        ref={htmlAudioRef}
+        src={audioStreamUrl || undefined}
+        loop={isRepeat}
+        playsInline
+        preload="auto"
+        className="hidden"
+        aria-hidden="true"
+        onPlay={() => {
+          setIsPlaying(true);
+          setIsBuffering(false);
+        }}
+        onPause={() => {
+          setIsPlaying(false);
+        }}
+        onTimeUpdate={(e) => {
+          if (!isScrubbing) {
+            const el = e.currentTarget;
+            setCurrentTime(el.currentTime);
+            if (el.duration && !isNaN(el.duration)) {
+              setDuration(el.duration);
+            }
+          }
+        }}
+        onEnded={() => {
+          if (isRepeatRef.current) {
+            if (htmlAudioRef.current) {
+              htmlAudioRef.current.currentTime = 0;
+              htmlAudioRef.current.play().catch(() => {});
+            }
+          } else {
+            handleNextTrack();
+          }
+        }}
+        onError={(e) => {
+          console.warn("HTML5 audio playback error in background:", e);
+        }}
+      />
     </div>
-  );
+
+    {/* Floating Mini Player Widget (matching Spotify / Apple Music background playback) */}
+    {isMinimized && (
+      <div
+        id="fixio-ytplay-mini-player"
+        className="fixed bottom-4 sm:bottom-6 left-3 right-3 sm:left-auto sm:right-6 sm:w-[420px] z-50 bg-[#0c181f]/95 backdrop-blur-2xl border border-teal-500/40 shadow-[0_12px_45px_rgba(0,0,0,0.85)] rounded-2xl p-2.5 flex items-center justify-between gap-3 text-white cursor-pointer select-none transition-all hover:border-teal-400 active:scale-[0.99] group"
+        onClick={() => {
+          if (onMaximize) onMaximize();
+        }}
+        title="Ketuk untuk membuka pemutar musik lengkap"
+      >
+        {/* Progress bar line at top edge */}
+        <div className="absolute top-0 left-3 right-3 h-[2px] bg-white/10 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-teal-400 to-emerald-400 transition-all duration-300"
+            style={{ width: `${currentProgress}%` }}
+          />
+        </div>
+
+        {/* Mini Album Cover Thumbnail */}
+        <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-black/40 border border-white/10 shadow-md">
+          {currentTrack?.thumbnail ? (
+            <img
+              src={currentTrack.thumbnail}
+              alt={parsedTrack.song}
+              referrerPolicy="no-referrer"
+              className={`w-full h-full object-cover transition-transform duration-500 ${isPlaying ? "scale-105" : ""}`}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-teal-900/30">
+              <Headphones className="w-5 h-5 text-teal-400" />
+            </div>
+          )}
+          {isPlaying && (
+            <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+              <div className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-ping" />
+            </div>
+          )}
+        </div>
+
+        {/* Song & Artist Info */}
+        <div className="flex-1 min-w-0 pr-1">
+          <p className="text-xs font-bold text-white truncate leading-tight group-hover:text-teal-300 transition-colors">
+            {parsedTrack.song}
+          </p>
+          <p className="text-[11px] text-white/60 truncate leading-tight mt-0.5">
+            {parsedTrack.artist}
+          </p>
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="inline-flex items-center gap-1 text-[9px] font-semibold tracking-wide text-teal-300 bg-teal-500/20 px-1.5 py-0.5 rounded-md border border-teal-500/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+              Latar Belakang Aktif
+            </span>
+            <span className="text-[10px] text-white/40 tabular-nums">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+          </div>
+        </div>
+
+        {/* Mini Playback Controls */}
+        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={handleTogglePlay}
+            className="w-9 h-9 rounded-full bg-teal-400 hover:bg-teal-300 text-black flex items-center justify-center transition hover:scale-105 active:scale-95 shadow-md cursor-pointer"
+            title={isPlaying ? "Jeda" : "Putar"}
+          >
+            {isPlaying ? (
+              <Pause className="w-4 h-4 fill-black text-black" />
+            ) : (
+              <Play className="w-4 h-4 fill-black text-black ml-0.5" />
+            )}
+          </button>
+          <button
+            onClick={handleNextTrack}
+            className="w-8 h-8 rounded-full text-white/70 hover:text-white flex items-center justify-center hover:bg-white/10 active:scale-90 transition cursor-pointer"
+            title="Lagu Berikutnya"
+          >
+            <SkipForward className="w-4 h-4 fill-current" />
+          </button>
+          {onClosePlayer && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onClosePlayer();
+              }}
+              className="w-7 h-7 rounded-full text-white/40 hover:text-white flex items-center justify-center hover:bg-white/10 transition ml-0.5 cursor-pointer"
+              title="Tutup Pemutar Musik"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    )}
+  </>
+);
 };

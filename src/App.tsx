@@ -49,6 +49,14 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<ToolCategory>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [ytPlayerMounted, setYtPlayerMounted] = useState<boolean>(false);
+
+  // Automatically mount persistent background player when user opens yt-play
+  useEffect(() => {
+    if (activeToolId === "yt-play") {
+      setYtPlayerMounted(true);
+    }
+  }, [activeToolId]);
 
   // Custom Hooks for PWA and Settings
   const pwa = usePWA();
@@ -97,21 +105,6 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [activeToolId, hasEnteredApp]);
 
-  // When activeToolId is "yt-play"
-  if (activeToolId === "yt-play") {
-    return (
-      <>
-        <YtPlayTool onBack={() => setActiveToolId(null)} />
-        <SettingsModal
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-          settings={settings}
-          pwa={pwa}
-        />
-      </>
-    );
-  }
-
   const renderActiveToolComponent = () => {
     switch (activeToolId) {
       case "wink-hd":
@@ -157,7 +150,7 @@ export default function App() {
       case "info-gempa":
         return <InfoGempaTool />;
       case "yt-play":
-        return <YtPlayTool onBack={() => setActiveToolId(null)} />;
+        return null;
       case "uploader":
         return <StandaloneUploaderTool onSelectTool={(id) => setActiveToolId(id)} />;
       default:
@@ -186,9 +179,23 @@ export default function App() {
             pwa={pwa}
           />
 
-          {/* No-Internet Pill indicator — Fixio is online-only, every tool
-              calls a live API, so this warns the user rather than implying
-              the app still works offline. */}
+          {/* Persistent YtPlay Background Player (Mirip Spotify Downloader) */}
+          {ytPlayerMounted && (
+            <YtPlayTool
+              onBack={() => setActiveToolId(null)}
+              isMinimized={activeToolId !== "yt-play"}
+              onMaximize={() => {
+                setHasEnteredApp(true);
+                setActiveToolId("yt-play");
+              }}
+              onClosePlayer={() => {
+                setYtPlayerMounted(false);
+                if (activeToolId === "yt-play") setActiveToolId(null);
+              }}
+            />
+          )}
+
+          {/* No-Internet Pill indicator */}
           {!pwa.isOnline && (
             <div
               className="fixed bottom-4 inset-x-4 sm:inset-x-0 sm:mx-auto sm:w-fit z-50 flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#3a3a3c] text-white text-xs font-medium shadow-md"
@@ -301,6 +308,19 @@ export default function App() {
         language={language}
       />
       </div>
+
+      {/* Persistent YtPlay Background Player (Mirip Spotify Downloader) */}
+      {ytPlayerMounted && (
+        <YtPlayTool
+          onBack={() => setActiveToolId(null)}
+          isMinimized={activeToolId !== "yt-play"}
+          onMaximize={() => setActiveToolId("yt-play")}
+          onClosePlayer={() => {
+            setYtPlayerMounted(false);
+            if (activeToolId === "yt-play") setActiveToolId(null);
+          }}
+        />
+      )}
 
       {/* Settings Modal */}
       <SettingsModal
