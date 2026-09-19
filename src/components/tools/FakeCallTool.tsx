@@ -89,22 +89,22 @@ export const FakeCallTool: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="border-b border-slate-100 pb-4">
-        <div className="flex items-center gap-2 text-green-600 font-semibold text-sm mb-1">
+      <div className="border-b border-black/5 dark:border-white/10 pb-4">
+        <div className="flex items-center gap-2 text-green-600 dark:text-green-400 font-semibold text-sm mb-1">
           <PhoneCall className="w-4 h-4" />
           <span>Call Screen Simulator</span>
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Fake Call Generator</h2>
-        <p className="text-slate-500 text-sm mt-1">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Fake Call Generator</h2>
+        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
           Buat tangkapan layar panggilan suara palsu yang tampak nyata dengan nama kontak, durasi berbicara, dan foto profil pilihan Anda.
         </p>
       </div>
 
       {/* Form */}
-      <form onSubmit={handleGenerate} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs space-y-4">
+      <form onSubmit={handleGenerate} className="bg-slate-50/50 dark:bg-[#121214] p-5 rounded-3xl border border-black/5 dark:border-white/10 shadow-xs space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5 flex items-center gap-1">
               <User className="w-3.5 h-3.5 text-slate-400" />
               Nama Penelpon <span className="text-red-500">*</span>
             </label>
@@ -114,12 +114,12 @@ export const FakeCallTool: React.FC = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Contoh: NexaDev atau Crush ❤️"
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white"
+              className="w-full px-3.5 py-2.5 bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/15 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-green-500 font-medium"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5 flex items-center gap-1">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
               Durasi Panggilan (Menit.Detik)
             </label>
@@ -128,7 +128,7 @@ export const FakeCallTool: React.FC = () => {
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
               placeholder="Contoh: 19.45 atau 01:23:45"
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white font-mono"
+              className="w-full px-3.5 py-2.5 bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/15 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-green-500 font-mono"
             />
           </div>
         </div>
@@ -165,27 +165,27 @@ export const FakeCallTool: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-sm flex items-start gap-3">
+        <div className="p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-2xl text-rose-700 dark:text-rose-300 text-sm flex items-start gap-3">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold">Proses Gagal</p>
-            <p className="text-rose-600 text-xs mt-0.5">{error}</p>
+            <p className="text-rose-600 dark:text-rose-400 text-xs mt-0.5">{error}</p>
           </div>
         </div>
       )}
 
       {/* Result */}
       {generatedImgSrc && (
-        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4 animate-in fade-in duration-300">
+        <div className="bg-white dark:bg-[#121214] p-5 rounded-3xl border border-black/5 dark:border-white/10 shadow-sm space-y-4 animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                 Tampilan Panggilan Suara
               </h3>
               {engineUsed && (
                 <span className="text-[11px] font-semibold text-slate-400">
-                  Engine: <span className="text-green-600">{engineUsed}</span>
+                  Engine: <span className="text-green-600 dark:text-green-400">{engineUsed}</span>
                 </span>
               )}
             </div>
@@ -198,7 +198,7 @@ export const FakeCallTool: React.FC = () => {
             </button>
           </div>
 
-          <div className="p-6 bg-slate-900 rounded-2xl flex items-center justify-center overflow-hidden border border-slate-800">
+          <div className="p-6 bg-slate-900 rounded-2xl flex items-center justify-center overflow-hidden border border-slate-800 dark:border-white/10">
             <img
               src={generatedImgSrc}
               alt="Fake Call Result"

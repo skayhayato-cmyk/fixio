@@ -574,7 +574,7 @@ export const MediaDownloader: React.FC<MediaDownloaderProps> = ({
   return (
     <div className="space-y-6 max-w-4xl mx-auto pb-16">
       {/* Header Banner */}
-      <div className="border-b border-slate-200 dark:border-slate-800 pb-5">
+      <div className="border-b border-black/5 dark:border-white/10 pb-5">
         <div className="flex items-center gap-2 font-semibold text-sm mb-1.5">
           <span
             className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${activeMeta.bgColor} ${activeMeta.color} border ${activeMeta.borderColor}`}
@@ -599,7 +599,7 @@ export const MediaDownloader: React.FC<MediaDownloaderProps> = ({
         className="bg-white dark:bg-[#121214] p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-white/10 shadow-sm space-y-4"
       >
         {/* Platform Selection Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-white/10 pb-3">
           <span className="text-xs font-semibold text-slate-400">Target Platform:</span>
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
@@ -762,7 +762,7 @@ export const MediaDownloader: React.FC<MediaDownloaderProps> = ({
       {mediaItems.length > 0 && (
         <div className="bg-white dark:bg-[#121214] rounded-3xl border border-slate-200/80 dark:border-white/10 shadow-sm p-6 space-y-6 animate-in fade-in duration-300">
           {/* Result Header & Metadata */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 dark:border-white/5 pb-4 gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 dark:border-white/10 pb-4 gap-3">
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold px-2.5 py-1 bg-sky-100 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 rounded-full flex items-center gap-1">

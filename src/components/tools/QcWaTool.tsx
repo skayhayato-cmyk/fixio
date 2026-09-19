@@ -103,24 +103,26 @@ export const QcWaTool: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="border-b border-slate-100 pb-4">
-        <div className="flex items-center gap-2 text-emerald-600 font-semibold text-sm mb-1">
+      <div className="border-b border-black/5 dark:border-white/10 pb-4">
+        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-semibold text-sm mb-1">
           <MessageSquare className="w-4 h-4" />
           <span>WhatsApp Bubble Quote Maker</span>
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Quote Chat WhatsApp (QCWA)</h2>
-        <p className="text-slate-500 text-sm mt-1">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Quote Chat WhatsApp (QCWA)</h2>
+        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
           Buat stiker kutipan chat WhatsApp autentik dengan nama, nomor, foto profil custom, tema Light/Dark, serta lampiran gambar.
         </p>
       </div>
 
       {/* Mode Selector */}
-      <div className="flex bg-slate-100 p-1.5 rounded-2xl w-fit">
+      <div className="flex bg-slate-100 dark:bg-[#1c1c1e] p-1.5 rounded-2xl w-fit border border-black/5 dark:border-white/10">
         <button
           type="button"
           onClick={() => setActiveTab("withImage")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === "withImage" ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
+            activeTab === "withImage"
+              ? "bg-white dark:bg-[#2c2c2e] text-emerald-700 dark:text-emerald-400 shadow-xs"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
           }`}
         >
           <ImageIcon className="w-4 h-4" />
@@ -130,7 +132,9 @@ export const QcWaTool: React.FC = () => {
           type="button"
           onClick={() => setActiveTab("standard")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === "standard" ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
+            activeTab === "standard"
+              ? "bg-white dark:bg-[#2c2c2e] text-emerald-700 dark:text-emerald-400 shadow-xs"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
           }`}
         >
           <MessageSquare className="w-4 h-4" />
@@ -139,11 +143,11 @@ export const QcWaTool: React.FC = () => {
       </div>
 
       {/* Form Input */}
-      <form onSubmit={handleGenerate} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs space-y-4">
+      <form onSubmit={handleGenerate} className="bg-slate-50/50 dark:bg-[#121214] p-5 rounded-3xl border border-black/5 dark:border-white/10 shadow-xs space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Username */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
               Nama Pengirim (Username) <span className="text-red-500">*</span>
             </label>
             <input
@@ -152,13 +156,13 @@ export const QcWaTool: React.FC = () => {
               value={usn}
               onChange={(e) => setUsn(e.target.value)}
               placeholder="Contoh: Raja Iblis"
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+              className="w-full px-3.5 py-2.5 bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/15 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
             />
           </div>
 
           {/* Phone */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
               Nomor Telepon (Phone)
             </label>
             <input
@@ -166,7 +170,7 @@ export const QcWaTool: React.FC = () => {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="Contoh: 6287876034799"
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+              className="w-full px-3.5 py-2.5 bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/15 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
             />
           </div>
         </div>
@@ -182,7 +186,7 @@ export const QcWaTool: React.FC = () => {
 
         {/* Message Text */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
             Pesan Chat WhatsApp <span className="text-red-500">*</span>
           </label>
           <textarea
@@ -191,14 +195,14 @@ export const QcWaTool: React.FC = () => {
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Tuliskan kalimat chat quote di sini..."
-            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white resize-none"
+            className="w-full px-3.5 py-2.5 bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/15 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none font-medium"
           />
         </div>
 
         {/* Mode & Tag */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5 flex items-center gap-1">
               <Tag className="w-3.5 h-3.5 text-slate-400" /> Tag Badge (Role/Tag)
             </label>
             <input
@@ -206,20 +210,22 @@ export const QcWaTool: React.FC = () => {
               value={tag}
               onChange={(e) => setTag(e.target.value)}
               placeholder="Contoh: ara-ara atau admin"
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+              className="w-full px-3.5 py-2.5 bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/15 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
               Tema Tampilan (Mode)
             </label>
-            <div className="flex bg-slate-100 p-1 rounded-xl">
+            <div className="flex bg-slate-100 dark:bg-[#1c1c1e] p-1 rounded-xl border border-black/5 dark:border-white/10">
               <button
                 type="button"
                 onClick={() => setMode("light")}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  mode === "light" ? "bg-white text-amber-600 shadow-xs" : "text-slate-600"
+                  mode === "light"
+                    ? "bg-white dark:bg-[#2c2c2e] text-amber-600 shadow-xs"
+                    : "text-slate-600 dark:text-slate-400"
                 }`}
               >
                 <Sun className="w-3.5 h-3.5" /> Light Mode
@@ -228,7 +234,9 @@ export const QcWaTool: React.FC = () => {
                 type="button"
                 onClick={() => setMode("dark")}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  mode === "dark" ? "bg-slate-900 text-white shadow-xs" : "text-slate-600"
+                  mode === "dark"
+                    ? "bg-slate-900 text-white shadow-xs"
+                    : "text-slate-600 dark:text-slate-400"
                 }`}
               >
                 <Moon className="w-3.5 h-3.5" /> Dark Mode
@@ -239,7 +247,7 @@ export const QcWaTool: React.FC = () => {
 
         {/* If Mode with Image: show second uploader */}
         {activeTab === "withImage" && (
-          <div className="pt-2 border-t border-slate-100">
+          <div className="pt-2 border-t border-black/5 dark:border-white/10">
             <ImageUploaderZone
               label="Lampiran Gambar di dalam Chat"
               helperText="Drag & drop foto yang dikirim di dalam bubble chat"
@@ -273,27 +281,27 @@ export const QcWaTool: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-sm flex items-start gap-3">
+        <div className="p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-2xl text-rose-700 dark:text-rose-300 text-sm flex items-start gap-3">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold">Gagal Membuat Quote</p>
-            <p className="text-rose-600 text-xs mt-0.5">{error}</p>
+            <p className="text-rose-600 dark:text-rose-400 text-xs mt-0.5">{error}</p>
           </div>
         </div>
       )}
 
       {/* Result */}
       {generatedImgSrc && (
-        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4 animate-in fade-in duration-300">
+        <div className="bg-white dark:bg-[#121214] p-5 rounded-3xl border border-black/5 dark:border-white/10 shadow-sm space-y-4 animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                 Hasil Quote WhatsApp
               </h3>
               {engineUsed && (
                 <span className="text-[11px] font-semibold text-slate-400">
-                  Engine: <span className="text-emerald-600">{engineUsed}</span>
+                  Engine: <span className="text-emerald-600 dark:text-emerald-400">{engineUsed}</span>
                 </span>
               )}
             </div>
@@ -306,7 +314,7 @@ export const QcWaTool: React.FC = () => {
             </button>
           </div>
 
-          <div className="p-6 bg-slate-100 rounded-2xl flex items-center justify-center overflow-hidden border border-slate-200">
+          <div className="p-6 bg-slate-100 dark:bg-[#1c1c1e] rounded-2xl flex items-center justify-center overflow-hidden border border-slate-200 dark:border-white/10">
             <img
               src={generatedImgSrc}
               alt="QCWA Result"

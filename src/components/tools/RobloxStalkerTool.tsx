@@ -133,13 +133,13 @@ export const RobloxStalkerTool: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="border-b border-slate-100 pb-4">
-        <div className="flex items-center gap-2 text-cyan-600 font-semibold text-sm mb-1">
+      <div className="border-b border-black/5 dark:border-white/10 pb-4">
+        <div className="flex items-center gap-2 text-cyan-600 dark:text-cyan-400 font-semibold text-sm mb-1">
           <Gamepad2 className="w-4 h-4" />
           <span>Roblox Profile Intelligence</span>
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Stalker Roblox</h2>
-        <p className="text-slate-500 text-sm mt-1">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Stalker Roblox</h2>
+        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
           Lacak profil Roblox, otomatis konversi kartu profil PNG beresolusi tinggi, serta tampilkan avatar, teman, follower, daftar tempat permainan, dan item koleksi.
         </p>
       </div>
@@ -147,11 +147,11 @@ export const RobloxStalkerTool: React.FC = () => {
       {/* Input Form */}
       <form
         onSubmit={handleSearch}
-        className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs space-y-4"
+        className="bg-slate-50/50 dark:bg-[#121214] p-5 rounded-2xl border border-black/5 dark:border-white/10 shadow-xs space-y-4"
       >
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <label className="block text-sm font-semibold text-slate-800">
+            <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200">
               Username Roblox <span className="text-red-500">*</span>
             </label>
             <button
@@ -160,14 +160,14 @@ export const RobloxStalkerTool: React.FC = () => {
                 setUsername("Linkmon99");
                 handleSearch(undefined, "Linkmon99");
               }}
-              className="text-xs text-cyan-600 hover:text-cyan-700 font-medium underline flex items-center gap-1 cursor-pointer"
+              className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline font-medium flex items-center gap-1 cursor-pointer"
             >
               <Sparkles className="w-3 h-3" />
               Contoh: Linkmon99
             </button>
           </div>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-bold">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 font-bold">
               @
             </div>
             <input
@@ -176,7 +176,7 @@ export const RobloxStalkerTool: React.FC = () => {
               placeholder="contoh: Linkmon99 atau builderman"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:bg-white transition-all font-medium"
+              className="w-full pl-9 pr-4 py-3 bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/15 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all font-medium"
             />
           </div>
         </div>
@@ -204,11 +204,11 @@ export const RobloxStalkerTool: React.FC = () => {
 
       {/* Error Alert */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 text-red-700 text-sm">
+        <div className="p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 rounded-xl flex items-start gap-3 text-red-700 dark:text-red-300 text-sm">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-500" />
           <div>
             <p className="font-semibold">Terjadi Kesalahan</p>
-            <p className="text-red-600 text-xs mt-0.5">{error}</p>
+            <p className="text-red-600 dark:text-red-400 text-xs mt-0.5">{error}</p>
           </div>
         </div>
       )}
@@ -217,13 +217,13 @@ export const RobloxStalkerTool: React.FC = () => {
       {data && (
         <div className="space-y-6">
           {/* Sub Navigation Tabs */}
-          <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-2 border-b border-black/5 dark:border-white/10 pb-2 overflow-x-auto no-scrollbar">
             <button
               onClick={() => setActiveTab("card")}
               className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 shrink-0 ${
                 activeTab === "card"
                   ? "bg-cyan-600 text-white shadow-xs"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  : "bg-slate-100 dark:bg-[#1c1c1e] text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-[#2c2c2e]"
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -234,7 +234,7 @@ export const RobloxStalkerTool: React.FC = () => {
               className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 shrink-0 ${
                 activeTab === "details"
                   ? "bg-cyan-600 text-white shadow-xs"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  : "bg-slate-100 dark:bg-[#1c1c1e] text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-[#2c2c2e]"
               }`}
             >
               <Users className="w-3.5 h-3.5" />
@@ -245,7 +245,7 @@ export const RobloxStalkerTool: React.FC = () => {
               className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 shrink-0 ${
                 activeTab === "games"
                   ? "bg-cyan-600 text-white shadow-xs"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  : "bg-slate-100 dark:bg-[#1c1c1e] text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-[#2c2c2e]"
               }`}
             >
               <Gamepad2 className="w-3.5 h-3.5" />
@@ -256,7 +256,7 @@ export const RobloxStalkerTool: React.FC = () => {
               className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 shrink-0 ${
                 activeTab === "inventory"
                   ? "bg-cyan-600 text-white shadow-xs"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  : "bg-slate-100 dark:bg-[#1c1c1e] text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-[#2c2c2e]"
               }`}
             >
               <Box className="w-3.5 h-3.5" />
@@ -266,17 +266,17 @@ export const RobloxStalkerTool: React.FC = () => {
 
           {/* TAB 1: PNG CARD (Konversi ke PNG) */}
           {activeTab === "card" && (
-            <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-xs space-y-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="bg-white dark:bg-[#121214] rounded-2xl border border-black/5 dark:border-white/10 p-5 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-black/5 dark:border-white/10">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-800/40">
                       ✓ Konversi Otomatis PNG
                     </span>
                     <span className="text-xs text-slate-400">1200 × 675 PX (HD)</span>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900 mt-1">Kartu Gamer Roblox Siap Unduh</h3>
-                  <p className="text-xs text-slate-500">
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white mt-1">Kartu Gamer Roblox Siap Unduh</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     Visualisasi profil rapi mencakup avatar headshot, bio, follower, serta daftar tempat populer.
                   </p>
                 </div>
@@ -293,7 +293,7 @@ export const RobloxStalkerTool: React.FC = () => {
               </div>
 
               {/* PNG Preview */}
-              <div className="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 flex items-center justify-center min-h-[260px]">
+              <div className="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 dark:border-white/10 flex items-center justify-center min-h-[260px]">
                 {isGeneratingPng ? (
                   <div className="flex flex-col items-center justify-center p-8 text-cyan-400 space-y-2">
                     <Loader2 className="w-8 h-8 animate-spin" />
@@ -318,7 +318,7 @@ export const RobloxStalkerTool: React.FC = () => {
           {(activeTab === "details" || activeTab === "card") && (
             <div className="space-y-4">
               {/* Profile Card Header */}
-              <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-xs">
+              <div className="bg-white dark:bg-[#121214] rounded-2xl border border-black/5 dark:border-white/10 p-6 shadow-xs">
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-5">
                   {/* Avatar */}
                   <div className="relative shrink-0">
@@ -346,24 +346,24 @@ export const RobloxStalkerTool: React.FC = () => {
                   {/* Info */}
                   <div className="flex-1 space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                      <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
                         {data.displayName || data.name}
                       </h3>
-                      <span className="text-slate-500 font-medium text-sm">@{data.name}</span>
+                      <span className="text-slate-500 dark:text-slate-400 font-medium text-sm">@{data.name}</span>
                       {data.hasVerifiedBadge && (
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs font-bold rounded-md border border-blue-200">
+                        <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 text-xs font-bold rounded-md border border-blue-200 dark:border-blue-800/40">
                           ✓ Terverifikasi
                         </span>
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                      <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-700">
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                      <span className="font-mono bg-slate-100 dark:bg-[#1c1c1e] px-2 py-0.5 rounded text-slate-700 dark:text-slate-300">
                         ID: {data.id}
                       </span>
                       <button
                         onClick={() => handleCopy(String(data.id), "id")}
-                        className="text-cyan-600 hover:text-cyan-700 font-medium flex items-center gap-1 cursor-pointer"
+                        className="text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 font-medium flex items-center gap-1 cursor-pointer"
                       >
                         {copiedText === "id" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                         <span>{copiedText === "id" ? "Tersalin" : "Salin ID"}</span>
@@ -373,7 +373,7 @@ export const RobloxStalkerTool: React.FC = () => {
                     </div>
 
                     {data.description && (
-                      <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-100 whitespace-pre-wrap leading-relaxed mt-2">
+                      <p className="text-xs text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-[#1c1c1e] p-3 rounded-xl border border-slate-100 dark:border-white/10 whitespace-pre-wrap leading-relaxed mt-2">
                         {data.description}
                       </p>
                     )}
@@ -381,20 +381,20 @@ export const RobloxStalkerTool: React.FC = () => {
                 </div>
 
                 {/* Social Stats Grid */}
-                <div className="grid grid-cols-3 gap-3 mt-6 pt-5 border-t border-slate-100">
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                    <span className="text-xs text-slate-500 font-semibold block mb-1">Friends</span>
-                    <p className="text-xl font-bold text-slate-900">{formatNumber(data.friends)}</p>
+                <div className="grid grid-cols-3 gap-3 mt-6 pt-5 border-t border-black/5 dark:border-white/10">
+                  <div className="p-4 bg-slate-50 dark:bg-[#1c1c1e] rounded-xl border border-black/5 dark:border-white/10 text-center">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold block mb-1">Friends</span>
+                    <p className="text-xl font-bold text-slate-900 dark:text-white">{formatNumber(data.friends)}</p>
                   </div>
 
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                    <span className="text-xs text-slate-500 font-semibold block mb-1">Followers</span>
-                    <p className="text-xl font-bold text-cyan-600">{formatNumber(data.followers)}</p>
+                  <div className="p-4 bg-slate-50 dark:bg-[#1c1c1e] rounded-xl border border-black/5 dark:border-white/10 text-center">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold block mb-1">Followers</span>
+                    <p className="text-xl font-bold text-cyan-600 dark:text-cyan-400">{formatNumber(data.followers)}</p>
                   </div>
 
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                    <span className="text-xs text-slate-500 font-semibold block mb-1">Following</span>
-                    <p className="text-xl font-bold text-slate-900">{formatNumber(data.followings)}</p>
+                  <div className="p-4 bg-slate-50 dark:bg-[#1c1c1e] rounded-xl border border-black/5 dark:border-white/10 text-center">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold block mb-1">Following</span>
+                    <p className="text-xl font-bold text-slate-900 dark:text-white">{formatNumber(data.followings)}</p>
                   </div>
                 </div>
               </div>
@@ -403,9 +403,9 @@ export const RobloxStalkerTool: React.FC = () => {
 
           {/* TAB 3: DAFTAR GAME */}
           {activeTab === "games" && (
-            <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-xs space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2 text-slate-900 font-bold text-base">
+            <div className="bg-white dark:bg-[#121214] rounded-2xl border border-black/5 dark:border-white/10 p-5 shadow-xs space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/10">
+                <div className="flex items-center gap-2 text-slate-900 dark:text-white font-bold text-base">
                   <Gamepad2 className="w-5 h-5 text-cyan-600" />
                   <span>Daftar Game & Tempat ({data.games?.length || 0})</span>
                 </div>
@@ -416,26 +416,26 @@ export const RobloxStalkerTool: React.FC = () => {
                   {data.games.map((game) => (
                     <div
                       key={game.id}
-                      className="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-cyan-200 transition-all space-y-2.5"
+                      className="p-4 bg-slate-50 dark:bg-[#1c1c1e] rounded-xl border border-black/5 dark:border-white/10 hover:border-cyan-200 dark:hover:border-cyan-800 transition-all space-y-2.5"
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <h4 className="font-bold text-slate-900 text-sm line-clamp-1">{game.name}</h4>
-                        <span className="text-[10px] font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-500">
+                        <h4 className="font-bold text-slate-900 dark:text-white text-sm line-clamp-1">{game.name}</h4>
+                        <span className="text-[10px] font-mono bg-white dark:bg-[#2c2c2e] px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400">
                           ID: {game.id}
                         </span>
                       </div>
 
                       {game.description && (
-                        <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
                           {game.description}
                         </p>
                       )}
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60 text-xs">
-                        <span className="font-semibold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded-md border border-cyan-100">
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60 dark:border-white/10 text-xs">
+                        <span className="font-semibold text-cyan-700 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/30 px-2 py-0.5 rounded-md border border-cyan-100 dark:border-cyan-800/40">
                           👀 {formatNumber(game.placeVisits)} Kunjungan
                         </span>
-                        <span className="text-slate-400 text-[11px]">
+                        <span className="text-slate-400 dark:text-slate-500 text-[11px]">
                           Dibuat: {formatDate(game.created)}
                         </span>
                       </div>
@@ -452,10 +452,10 @@ export const RobloxStalkerTool: React.FC = () => {
 
           {/* TAB 4: INVENTORY & KOLEKSI */}
           {activeTab === "inventory" && (
-            <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-xs space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2 text-slate-900 font-bold text-base">
-                  <Box className="w-5 h-5 text-indigo-600" />
+            <div className="bg-white dark:bg-[#121214] rounded-2xl border border-black/5 dark:border-white/10 p-5 shadow-xs space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/10">
+                <div className="flex items-center gap-2 text-slate-900 dark:text-white font-bold text-base">
+                  <Box className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                   <span>Item Koleksi & Inventory ({data.inventory?.length || 0})</span>
                 </div>
               </div>
@@ -465,32 +465,32 @@ export const RobloxStalkerTool: React.FC = () => {
                   {data.inventory.map((item, idx) => (
                     <div
                       key={item.userAssetId || idx}
-                      className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 space-y-2"
+                      className="p-3.5 bg-slate-50 dark:bg-[#1c1c1e] rounded-xl border border-black/5 dark:border-white/10 space-y-2"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-900 line-clamp-1">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">
                           {item.name}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-mono">
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
                           #{item.assetId}
                         </span>
                       </div>
 
                       <div className="space-y-1 text-xs">
-                        <div className="flex justify-between text-slate-600">
+                        <div className="flex justify-between text-slate-600 dark:text-slate-300">
                           <span>RAP (Rata-rata):</span>
-                          <span className="font-bold text-emerald-600">
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">
                             {formatNumber(item.recentAveragePrice)} R$
                           </span>
                         </div>
                         {item.originalPrice !== undefined && (
-                          <div className="flex justify-between text-slate-400 text-[11px]">
+                          <div className="flex justify-between text-slate-400 dark:text-slate-500 text-[11px]">
                             <span>Harga Asli:</span>
                             <span>{formatNumber(item.originalPrice)} R$</span>
                           </div>
                         )}
                         {item.assetStock !== undefined && (
-                          <div className="flex justify-between text-slate-400 text-[11px]">
+                          <div className="flex justify-between text-slate-400 dark:text-slate-500 text-[11px]">
                             <span>Stok Item:</span>
                             <span>{formatNumber(item.assetStock)} pcs</span>
                           </div>
