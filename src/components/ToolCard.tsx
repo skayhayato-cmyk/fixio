@@ -22,7 +22,8 @@ import {
   DownloadCloud,
   Music2,
   Gamepad2,
-  QrCode
+  QrCode,
+  Wand2
 } from "lucide-react";
 
 const ICON_MAP: Record<string, any> = {
@@ -47,6 +48,7 @@ const ICON_MAP: Record<string, any> = {
   Music2,
   Gamepad2,
   QrCode,
+  Wand2,
 };
 
 interface ToolCardProps {

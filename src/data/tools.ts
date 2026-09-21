@@ -2,6 +2,24 @@ import { ToolDefinition } from "../types";
 
 export const TOOLS_LIST: ToolDefinition[] = [
   {
+    id: "imgtopromt",
+    title: "Image to Prompt AI",
+    description: "Ekstrak dan hasilkan deskripsi prompt AI terdeteksi dari foto/gambar secara otomatis.",
+    category: "image",
+    iconName: "Sparkles",
+    badge: "AI Vision",
+    popular: true,
+  },
+  {
+    id: "remini",
+    title: "Remini AI Photo Enhancer",
+    description: "Tingkatkan kejernihan, pertajam detail wajah & foto blur secara otomatis dengan Remini AI.",
+    category: "image",
+    iconName: "Wand2",
+    badge: "Remini AI",
+    popular: true,
+  },
+  {
     id: "wink-hd",
     title: "Wink HD Enhancer",
     description: "Tingkatkan resolusi dan ketajaman foto menjadi kualitas HD jernih dengan AI.",

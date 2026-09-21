@@ -15,6 +15,7 @@
  */
 
 import axios, { AxiosError } from "axios";
+import { getProxiedImageUrl } from "./api";
 
 export const NEXA_API_HOST = "https://api.nexadev.my.id";
 export const NEXA_APII_HOST = "https://apii.nexadev.my.id";
@@ -859,3 +860,132 @@ export async function generateFakeIgProfile(
     }
   );
 }
+
+export interface ReminiData {
+  id?: string;
+  filename?: string;
+  original_name?: string;
+  bytes?: number;
+  size?: string;
+  mime?: string;
+  extension?: string;
+  url: string;
+}
+
+export interface ReminiResponse {
+  author?: string;
+  status?: boolean;
+  data?: ReminiData;
+  message?: string;
+}
+
+/**
+ * 13. Remini AI Photo Enhancer
+ * Endpoint: https://api.nexadev.my.id/api/remini?url={IMAGE_URL}
+ */
+export async function enhanceReminiPhoto(
+  imageUrl: string,
+  signal?: AbortSignal
+): Promise<{
+  enhancedUrl: string;
+  objectUrl: string;
+  data: ReminiData;
+}> {
+  if (!imageUrl || !isValidHttpUrl(imageUrl)) {
+    throw new Error("URL gambar tidak valid. Harap pilih atau unggah gambar publik.");
+  }
+
+  const endpoint = `${NEXA_API_HOST}/api/remini?url=${encodeURIComponent(imageUrl)}`;
+  
+  let responseData: ReminiResponse;
+  try {
+    const res = await axios.get<ReminiResponse>("/api/proxy-json", {
+      params: { url: endpoint },
+      signal,
+      timeout: 60000,
+    });
+    responseData = res.data;
+  } catch (err: any) {
+    if (axios.isCancel(err) || err.name === "CanceledError") {
+      throw new Error("Permintaan dibatalkan.");
+    }
+    throw new Error(mapNexaError(err, "Gagal meningkatkan kualitas foto menggunakan Remini AI."));
+  }
+
+  if (!responseData || !responseData.status || !responseData.data || !responseData.data.url) {
+    throw new Error(
+      responseData?.message || "Gagal memperoleh hasil foto Remini dari server upstream."
+    );
+  }
+
+  const resultUrl = responseData.data.url;
+  
+  // Format to proxied JPG URL for seamless display
+  const proxiedJpgUrl = getProxiedImageUrl(resultUrl, false, responseData.data.filename || "remini_enhanced.jpg");
+
+  try {
+    const imageBlobRes = await axios.get(proxiedJpgUrl, {
+      responseType: "blob",
+      signal,
+      timeout: 60000,
+    });
+    const blob = new Blob([imageBlobRes.data], { type: "image/jpeg" });
+    const objectUrl = URL.createObjectURL(blob);
+    return {
+      enhancedUrl: resultUrl,
+      objectUrl,
+      data: responseData.data,
+    };
+  } catch {
+    return {
+      enhancedUrl: resultUrl,
+      objectUrl: proxiedJpgUrl,
+      data: responseData.data,
+    };
+  }
+}
+
+export interface ImgToPromptResponse {
+  author?: string;
+  status?: boolean;
+  data?: {
+    prompt?: string;
+  };
+  message?: string;
+}
+
+/**
+ * 14. Image to Prompt AI
+ * Endpoint: https://api.nexadev.my.id/ai/imgtopromt?url={IMAGE_URL}
+ */
+export async function getImageToPrompt(
+  imageUrl: string,
+  signal?: AbortSignal
+): Promise<string> {
+  if (!imageUrl || !isValidHttpUrl(imageUrl)) {
+    throw new Error("URL gambar tidak valid. Harap masukkan atau unggah gambar publik.");
+  }
+
+  const endpoint = `${NEXA_API_HOST}/ai/imgtopromt?url=${encodeURIComponent(imageUrl)}`;
+
+  try {
+    const res = await axios.get<ImgToPromptResponse>("/api/proxy-json", {
+      params: { url: endpoint },
+      signal,
+      timeout: 45000,
+    });
+
+    const responseData = res.data;
+    if (responseData && responseData.status && responseData.data && responseData.data.prompt) {
+      return responseData.data.prompt.trim();
+    }
+
+    throw new Error(responseData?.message || "Gagal memperoleh deskripsi prompt dari gambar.");
+  } catch (err: any) {
+    if (axios.isCancel(err) || err.name === "CanceledError") {
+      throw new Error("Permintaan dibatalkan.");
+    }
+    throw new Error(mapNexaError(err, "Gagal menganalisis gambar menjadi deskripsi prompt."));
+  }
+}
+

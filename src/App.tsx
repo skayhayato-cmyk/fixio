@@ -12,6 +12,8 @@ import { usePWA } from "./services/usePWA";
 import { useAppSettings } from "./services/useAppSettings";
 
 // Tool Components
+import { ReminiTool } from "./components/tools/ReminiTool";
+import { ImgToPromptTool } from "./components/tools/ImgToPromptTool";
 import { WinkHdTool } from "./components/tools/WinkHdTool";
 import { RemoveBgTool } from "./components/tools/RemoveBgTool";
 import { WebScreenshotTool } from "./components/tools/WebScreenshotTool";
@@ -108,6 +110,10 @@ export default function App() {
 
   const renderActiveToolComponent = () => {
     switch (activeToolId) {
+      case "imgtopromt":
+        return <ImgToPromptTool />;
+      case "remini":
+        return <ReminiTool />;
       case "wink-hd":
         return <WinkHdTool />;
       case "remove-bg":

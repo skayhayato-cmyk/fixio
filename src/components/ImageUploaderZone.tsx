@@ -183,6 +183,7 @@ export const ImageUploaderZone: React.FC<ImageUploaderZoneProps> = ({
                   <img
                     src={value}
                     alt="Preview"
+                    referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = "https://placehold.co/100x100?text=IMG";

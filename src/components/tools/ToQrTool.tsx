@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { QrCode, UploadCloud, Link2, Download, Copy, Check, ExternalLink, RefreshCw, AlertCircle, Sparkles, Image as ImageIcon } from "lucide-react";
+import { QrCode, UploadCloud, Link2, Download, Copy, Check, ExternalLink, RefreshCw, AlertCircle, Sparkles, Loader2, X } from "lucide-react";
 import { ImageUploaderZone } from "../ImageUploaderZone";
 import { downloadMedia } from "../../services/api";
 
@@ -7,48 +7,60 @@ interface ToQrToolProps {
   onSelectTool?: (toolId: string) => void;
 }
 
-export const ToQrTool: React.FC<ToQrToolProps> = ({ onSelectTool }) => {
+export const ToQrTool: React.FC<ToQrToolProps> = () => {
   const [activeTab, setActiveTab] = useState<"upload" | "url">("upload");
   const [imageUrl, setImageUrl] = useState("");
   const [directUrl, setDirectUrl] = useState("https://clooud.my.id/uploder/uploads/ISsVGW.jpg");
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [lastTargetUrl, setLastTargetUrl] = useState<string>("");
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isQrLoading, setIsQrLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedQr, setCopiedQr] = useState(false);
   const [copiedTarget, setCopiedTarget] = useState(false);
 
   const sampleUrl = "https://clooud.my.id/uploder/uploads/ISsVGW.jpg";
 
-  const getTargetUrl = () => {
-    if (activeTab === "upload") {
-      return imageUrl.trim();
+  // Normalize target URL or text
+  const formatTargetInput = (input: string): string => {
+    let trimmed = input.trim();
+    if (!trimmed) return "";
+    // If it looks like a web domain or URL path without protocol, auto-prepend https://
+    if (
+      !trimmed.startsWith("http://") &&
+      !trimmed.startsWith("https://") &&
+      !trimmed.startsWith("data:") &&
+      !trimmed.startsWith("blob:") &&
+      (trimmed.includes(".") && !trimmed.includes(" "))
+    ) {
+      trimmed = `https://${trimmed}`;
     }
-    return directUrl.trim();
+    return trimmed;
   };
 
   const handleGenerate = (targetOverride?: string) => {
-    const rawTarget = targetOverride || getTargetUrl();
+    let rawTarget = targetOverride !== undefined ? targetOverride : (activeTab === "upload" ? imageUrl : directUrl);
+    rawTarget = formatTargetInput(rawTarget);
+
     if (!rawTarget) {
+      setQrCodeUrl(null);
       setError(activeTab === "upload" ? "Silakan unggah foto terlebih dahulu." : "Silakan masukkan URL atau teks.");
       return;
     }
 
     setError(null);
-    setIsGenerating(true);
+    setIsQrLoading(true);
 
     try {
       // Build NexaDev To QR API URL
       const apiEndpoint = `https://api.nexadev.my.id/tools/toqr?url=${encodeURIComponent(rawTarget)}`;
-      // Wrap in image proxy to avoid CORS/Cloudflare issues and ensure instant loading
-      const proxiedQrUrl = `/api/proxy-image?url=${encodeURIComponent(apiEndpoint)}`;
+      // Wrap in image proxy with timestamp to bust browser cache
+      const proxiedQrUrl = `/api/proxy-image?url=${encodeURIComponent(apiEndpoint)}&_t=${Date.now()}`;
 
       setLastTargetUrl(rawTarget);
       setQrCodeUrl(proxiedQrUrl);
-    } catch (err: any) {
+    } catch {
       setError("Gagal membuat QR Code. Periksa kembali tautan Anda.");
-    } finally {
-      setIsGenerating(false);
+      setIsQrLoading(false);
     }
   };
 
@@ -100,6 +112,9 @@ export const ToQrTool: React.FC<ToQrToolProps> = ({ onSelectTool }) => {
             onClick={() => {
               setActiveTab("upload");
               setError(null);
+              if (imageUrl) {
+                handleGenerate(imageUrl);
+              }
             }}
             className={`flex-1 py-2 px-3 text-xs sm:text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === "upload"
@@ -115,6 +130,9 @@ export const ToQrTool: React.FC<ToQrToolProps> = ({ onSelectTool }) => {
             onClick={() => {
               setActiveTab("url");
               setError(null);
+              if (directUrl) {
+                handleGenerate(directUrl);
+              }
             }}
             className={`flex-1 py-2 px-3 text-xs sm:text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === "url"
@@ -132,20 +150,25 @@ export const ToQrTool: React.FC<ToQrToolProps> = ({ onSelectTool }) => {
           <div className="space-y-3">
             <ImageUploaderZone
               label="Pilih Foto / Gambar untuk Dijadikan QR"
-              helperText="Foto akan diunggah ke CDN publik c.termai.cc untuk menghasilkan URL QR otomatis"
+              helperText="Foto akan diunggah ke CDN c.termai.cc untuk menghasilkan URL QR otomatis"
               value={imageUrl}
               onChange={(url) => {
                 setImageUrl(url);
                 if (url) {
                   handleGenerate(url);
+                } else {
+                  setQrCodeUrl(null);
+                  setError(null);
                 }
               }}
             />
           </div>
         ) : (
           <div className="space-y-3">
-            <label className="text-sm font-semibold text-black dark:text-white flex items-center justify-between">
-              <span>Masukkan Tautan URL atau Teks</span>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <label className="text-sm font-semibold text-black dark:text-white">
+                Masukkan Tautan URL atau Teks
+              </label>
               <button
                 type="button"
                 onClick={() => {
@@ -154,27 +177,42 @@ export const ToQrTool: React.FC<ToQrToolProps> = ({ onSelectTool }) => {
                 }}
                 className="text-xs text-[#007aff] dark:text-[#0a84ff] hover:underline flex items-center gap-1 cursor-pointer font-medium"
               >
-                <Sparkles className="w-3 h-3" /> Gunakan Contoh Link
+                <Sparkles className="w-3.5 h-3.5" /> Gunakan Contoh Link
               </button>
-            </label>
+            </div>
 
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Contoh: https://clooud.my.id/uploder/uploads/ISsVGW.jpg"
-                value={directUrl}
-                onChange={(e) => setDirectUrl(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
-                className="flex-1 px-4 py-3 bg-slate-50 dark:bg-[#1c1c1e] border border-black/10 dark:border-white/10 rounded-2xl text-sm text-black dark:text-white placeholder-[#8e8e93] focus:outline-none focus:ring-2 focus:ring-[#007aff] transition-all font-mono"
-              />
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  placeholder="Contoh: https://clooud.my.id/uploder/uploads/ISsVGW.jpg"
+                  value={directUrl}
+                  onChange={(e) => setDirectUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+                  className="w-full pl-4 pr-10 py-3 bg-slate-50 dark:bg-[#1c1c1e] border border-black/10 dark:border-white/10 rounded-2xl text-sm text-black dark:text-white placeholder-[#8e8e93] focus:outline-none focus:ring-2 focus:ring-[#007aff] transition-all font-mono"
+                />
+                {directUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDirectUrl("");
+                      setQrCodeUrl(null);
+                      setError(null);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
               <button
                 type="button"
                 onClick={() => handleGenerate()}
-                disabled={isGenerating}
-                className="px-5 py-3 bg-[#007aff] hover:bg-[#0062cc] active:scale-95 text-white font-semibold text-sm rounded-2xl transition-all cursor-pointer shrink-0 shadow-xs flex items-center gap-2"
+                className="px-6 py-3 bg-[#007aff] hover:bg-[#0062cc] active:scale-95 text-white font-semibold text-sm rounded-2xl transition-all cursor-pointer shrink-0 shadow-xs flex items-center justify-center gap-2"
               >
                 <QrCode className="w-4 h-4" />
-                <span>Buat QR</span>
+                <span>Buat Kode QR</span>
               </button>
             </div>
           </div>
@@ -196,17 +234,37 @@ export const ToQrTool: React.FC<ToQrToolProps> = ({ onSelectTool }) => {
                 <QrCode className="w-4 h-4 text-emerald-500" />
                 <span>Hasil QR Code</span>
               </h3>
-              <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">500 x 500 PNG</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleGenerate(lastTargetUrl)}
+                  className="text-xs text-slate-500 hover:text-[#007aff] dark:hover:text-[#0a84ff] flex items-center gap-1 cursor-pointer font-medium"
+                >
+                  <RefreshCw className="w-3 h-3" /> Muat Ulang
+                </button>
+                <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">500 x 500 PNG</span>
+              </div>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center gap-6 bg-slate-50 dark:bg-[#1c1c1e] p-5 rounded-3xl border border-black/5 dark:border-white/10">
-              {/* QR Image Box */}
-              <div className="relative p-3 bg-white rounded-2xl shadow-md border border-slate-200 shrink-0 group">
+              {/* QR Image Box with Loader */}
+              <div className="relative p-3 bg-white rounded-2xl shadow-md border border-slate-200 shrink-0 group min-w-[200px] min-h-[200px] flex items-center justify-center">
+                {isQrLoading && (
+                  <div className="absolute inset-0 bg-white/90 rounded-2xl flex flex-col items-center justify-center gap-2 z-10">
+                    <Loader2 className="w-7 h-7 text-[#007aff] animate-spin" />
+                    <span className="text-xs font-medium text-slate-600">Memuat QR...</span>
+                  </div>
+                )}
                 <img
                   src={qrCodeUrl}
                   alt="QR Code"
+                  referrerPolicy="no-referrer"
                   className="w-44 h-44 sm:w-48 sm:h-48 object-contain rounded-lg"
-                  onError={() => setError("Gagal memuat gambar QR Code. Coba muat ulang.")}
+                  onLoad={() => setIsQrLoading(false)}
+                  onError={() => {
+                    setIsQrLoading(false);
+                    setError("Gagal memuat gambar QR Code. Coba muat ulang.");
+                  }}
                 />
               </div>
 
