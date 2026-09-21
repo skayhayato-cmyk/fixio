@@ -528,10 +528,10 @@ app.get("/api/proxy-json", async (req, res) => {
     }
 
     const response = await axios.get(targetUrl, {
-      timeout: 15000,
+      timeout: 60000,
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        Accept: "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        Accept: "application/json, text/plain, */*",
       },
     });
 
@@ -545,9 +545,13 @@ app.get("/api/proxy-json", async (req, res) => {
     });
   } catch (error: any) {
     console.warn("JSON proxy warning for:", req.query.url, extractErrorMessage(error, error.message));
+    let msg = extractErrorMessage(error, "Layanan API pihak ketiga sedang sibuk atau tidak merespons");
+    if (msg.includes("timeout")) {
+      msg = "Proses AI membutuhkan waktu cukup lama melebihi batas (timeout). Silakan coba lagi.";
+    }
     return res.status(error?.response?.status || 502).json({
       status: false,
-      message: extractErrorMessage(error, "Layanan API pihak ketiga sedang sibuk atau tidak merespons"),
+      message: msg,
       data: null,
     });
   }

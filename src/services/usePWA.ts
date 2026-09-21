@@ -19,7 +19,7 @@ export interface PWAState {
   checkForUpdates: () => Promise<boolean>;
 }
 
-export const APP_VERSION = "1.1.0";
+export const APP_VERSION = "1.2.0";
 
 declare global {
   interface Window {

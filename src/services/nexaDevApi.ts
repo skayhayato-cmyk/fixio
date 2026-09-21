@@ -972,7 +972,7 @@ export async function getImageToPrompt(
     const res = await axios.get<ImgToPromptResponse>("/api/proxy-json", {
       params: { url: endpoint },
       signal,
-      timeout: 45000,
+      timeout: 60000,
     });
 
     const responseData = res.data;
