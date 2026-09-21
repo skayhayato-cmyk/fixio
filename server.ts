@@ -527,31 +527,56 @@ app.get("/api/proxy-json", async (req, res) => {
       return res.status(400).json({ status: false, message: "URL target diperlukan" });
     }
 
-    const response = await axios.get(targetUrl, {
-      timeout: 60000,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-        Accept: "application/json, text/plain, */*",
-      },
-    });
+    let lastError: any = null;
+    let attempts = 0;
+    const maxAttempts = 3;
 
-    if (response.data && typeof response.data === "object") {
-      return res.json(response.data);
+    while (attempts < maxAttempts) {
+      attempts++;
+      try {
+        const response = await axios.get(targetUrl, {
+          timeout: 60000,
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            Accept: "application/json, text/plain, */*",
+          },
+        });
+
+        if (response.data && typeof response.data === "object") {
+          return res.json(response.data);
+        }
+      } catch (err: any) {
+        lastError = err;
+        const status = err?.response?.status;
+        console.warn(`JSON proxy attempt ${attempts}/${maxAttempts} failed for:`, targetUrl, status || err.message);
+
+        // Do not retry 4xx errors except 429
+        if (status && status >= 400 && status < 500 && status !== 429) {
+          break;
+        }
+
+        if (attempts < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
     }
+
+    let msg = extractErrorMessage(lastError, "Layanan API pihak ketiga sedang sibuk atau tidak merespons");
+    if (msg.includes("timeout")) {
+      msg = "Proses AI membutuhkan waktu cukup lama melebihi batas (timeout). Silakan coba lagi.";
+    } else if (lastError?.response?.status && lastError.response.status >= 500) {
+      msg = `Layanan API NexaDev sedang tidak stabil (Status ${lastError.response.status}). Silakan coba beberapa saat lagi.`;
+    }
+
     return res.status(502).json({
       status: false,
-      message: "Layanan API pihak ketiga sedang sibuk atau tidak merespons",
+      message: msg,
       data: null,
     });
   } catch (error: any) {
-    console.warn("JSON proxy warning for:", req.query.url, extractErrorMessage(error, error.message));
-    let msg = extractErrorMessage(error, "Layanan API pihak ketiga sedang sibuk atau tidak merespons");
-    if (msg.includes("timeout")) {
-      msg = "Proses AI membutuhkan waktu cukup lama melebihi batas (timeout). Silakan coba lagi.";
-    }
-    return res.status(error?.response?.status || 502).json({
+    return res.status(502).json({
       status: false,
-      message: msg,
+      message: extractErrorMessage(error, "Gagal memproses permintaan melalui proxy JSON."),
       data: null,
     });
   }

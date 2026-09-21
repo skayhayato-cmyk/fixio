@@ -84,10 +84,10 @@ export function mapNexaError(error: unknown, fallbackMessage = "Terjadi kesalaha
     if (status === 429) {
       return "Batas frekuensi permintaan (rate limit) tercapai. Silakan coba lagi setelah jeda beberapa saat.";
     }
-    if (status && [500, 502, 503, 504].includes(status)) {
+    if (status && status >= 500 && status <= 599) {
       return (
         serverMsg ||
-        "Layanan server upstream sedang bermasalah atau gambar tidak dapat diakses secara publik. Pastikan URL gambar publik dan dapat diunduh tanpa login."
+        "Layanan server NexaDev sedang tidak stabil atau terjadi kendala jaringan (Error " + status + "). Silakan coba beberapa saat lagi."
       );
     }
     if (error.code === "ECONNABORTED" || error.message.toLowerCase().includes("timeout")) {
@@ -968,24 +968,36 @@ export async function getImageToPrompt(
 
   const endpoint = `${NEXA_API_HOST}/ai/imgtopromt?url=${encodeURIComponent(imageUrl)}`;
 
-  try {
-    const res = await axios.get<ImgToPromptResponse>("/api/proxy-json", {
-      params: { url: endpoint },
-      signal,
-      timeout: 60000,
-    });
+  let lastError: any = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await axios.get<ImgToPromptResponse>("/api/proxy-json", {
+        params: { url: endpoint },
+        signal,
+        timeout: 60000,
+      });
 
-    const responseData = res.data;
-    if (responseData && responseData.status && responseData.data && responseData.data.prompt) {
-      return responseData.data.prompt.trim();
-    }
+      const responseData = res.data;
+      if (responseData && responseData.status && responseData.data && responseData.data.prompt) {
+        return responseData.data.prompt.trim();
+      }
 
-    throw new Error(responseData?.message || "Gagal memperoleh deskripsi prompt dari gambar.");
-  } catch (err: any) {
-    if (axios.isCancel(err) || err.name === "CanceledError") {
-      throw new Error("Permintaan dibatalkan.");
+      if (responseData && responseData.message) {
+        throw new Error(responseData.message);
+      }
+
+      throw new Error("Gagal memperoleh deskripsi prompt dari gambar.");
+    } catch (err: any) {
+      if (axios.isCancel(err) || err.name === "CanceledError") {
+        throw new Error("Permintaan dibatalkan.");
+      }
+      lastError = err;
+      if (attempt === 1 && !signal?.aborted) {
+        await new Promise((r) => setTimeout(r, 1000));
+      }
     }
-    throw new Error(mapNexaError(err, "Gagal menganalisis gambar menjadi deskripsi prompt."));
   }
+
+  throw new Error(mapNexaError(lastError, "Gagal menganalisis gambar menjadi deskripsi prompt."));
 }
 
