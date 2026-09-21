@@ -35,6 +35,7 @@ import { TikTokDownloaderV2Tool } from "./components/tools/TikTokDownloaderV2Too
 import { InstagramDownloaderTool } from "./components/tools/InstagramDownloaderTool";
 import { InstagramDownloaderV2Tool } from "./components/tools/InstagramDownloaderV2Tool";
 import { SpotifyDownloaderTool } from "./components/tools/SpotifyDownloaderTool";
+import { ToQrTool } from "./components/tools/ToQrTool";
 
 import { 
   ChevronLeft, 
@@ -153,6 +154,8 @@ export default function App() {
         return null;
       case "uploader":
         return <StandaloneUploaderTool onSelectTool={(id) => setActiveToolId(id)} />;
+      case "to-qr":
+        return <ToQrTool onSelectTool={(id) => setActiveToolId(id)} />;
       default:
         return null;
     }

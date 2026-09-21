@@ -198,4 +198,13 @@ export const TOOLS_LIST: ToolDefinition[] = [
     iconName: "UploadCloud",
     badge: "CDN Host",
   },
+  {
+    id: "to-qr",
+    title: "To QR Code Generator",
+    description: "Konversi tautan URL, teks, atau foto/gambar yang diunggah menjadi kode QR PNG resmi.",
+    category: "utility",
+    iconName: "QrCode",
+    badge: "QR Generator",
+    popular: true,
+  },
 ];
