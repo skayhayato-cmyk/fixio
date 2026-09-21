@@ -28,10 +28,14 @@ export const InstagramStalkerTool: React.FC = () => {
       if (res.status && res.data) {
         setProfile(res.data);
       } else {
-        setError(res.message || "Pengguna Instagram tidak ditemukan atau profil bersifat sangat privat.");
+        let msg = res.message || "Pengguna Instagram tidak ditemukan atau terjadi kesalahan.";
+        msg = msg.replace(/TikTok/gi, "Instagram");
+        setError(msg);
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || "Gagal mengambil data profil Instagram.");
+      let errMsg = err?.response?.data?.message || err?.message || "Pengguna Instagram tidak ditemukan atau terjadi kesalahan.";
+      errMsg = errMsg.replace(/TikTok/gi, "Instagram");
+      setError(errMsg);
     } finally {
       setIsLoading(false);
     }
