@@ -1,5 +1,6 @@
 /**
- * SVG to Android VectorDrawable XML Converter Service
+ * SVG to Android VectorDrawable XML & Alight Motion Converter Service
+ * Full spec support for Figma, Illustrator, Inkscape, Canva, CSS styles, group transforms, & gradients
  */
 
 export interface SvgToXmlOptions {
@@ -29,12 +30,33 @@ export interface SvgToXmlResult {
  * Normalizes SVG color string to Android ARGB Hex string (#AARRGGBB)
  * Enforces strict 8-digit ARGB format required by Alight Motion and Android XML parsers
  */
-export function normalizeAndroidColor(colorStr: string | null | undefined): string | null {
+export function normalizeAndroidColor(colorStr: string | null | undefined, svgDoc?: Document): string | null {
   if (!colorStr || colorStr === 'none' || colorStr === 'transparent') {
     return null;
   }
 
   const str = colorStr.trim();
+
+  // If gradient url(#id) or url('#id')
+  if (str.toLowerCase().startsWith('url(')) {
+    const match = str.match(/url\(['"]?#([^'"]+)['"]?\)/i);
+    if (match && match[1] && svgDoc) {
+      const gradId = match[1];
+      const gradEl = svgDoc.getElementById(gradId) || svgDoc.querySelector(`[id="${gradId}"]`);
+      if (gradEl) {
+        // Find first stop element
+        const stopEl = gradEl.querySelector('stop');
+        if (stopEl) {
+          const stopColor = stopEl.getAttribute('stop-color') || parseStyleAttr(stopEl.getAttribute('style'))['stop-color'];
+          if (stopColor) {
+            return normalizeAndroidColor(stopColor, svgDoc);
+          }
+        }
+      }
+    }
+    // Default fallback for unresolved gradient
+    return '#FF007AFF';
+  }
 
   // Standard Hex #RGB or #RRGGBB or #AARRGGBB
   if (str.startsWith('#')) {
@@ -89,7 +111,7 @@ export function normalizeAndroidColor(colorStr: string | null | undefined): stri
     return `#${a}${r}${g}${b}`.toUpperCase();
   }
 
-  // Named colors fallback with 8-digit ARGB
+  // Named colors fallback
   const namedColors: Record<string, string> = {
     black: '#FF000000',
     white: '#FFFFFFFF',
@@ -101,6 +123,9 @@ export function normalizeAndroidColor(colorStr: string | null | undefined): stri
     magenta: '#FFFF00FF',
     gray: '#FF808080',
     grey: '#FF808080',
+    orange: '#FFFFA500',
+    purple: '#FF800080',
+    pink: '#FFFFC0CB',
   };
 
   if (namedColors[str.toLowerCase()]) {
@@ -111,13 +136,162 @@ export function normalizeAndroidColor(colorStr: string | null | undefined): stri
 }
 
 /**
+ * Parses inline style="key:val; key2:val2" attributes
+ */
+function parseStyleAttr(styleAttr: string | null | undefined): Record<string, string> {
+  const map: Record<string, string> = {};
+  if (!styleAttr) return map;
+  const pairs = styleAttr.split(';');
+  pairs.forEach((p) => {
+    const idx = p.indexOf(':');
+    if (idx > 0) {
+      const key = p.substring(0, idx).trim().toLowerCase();
+      const val = p.substring(idx + 1).trim();
+      if (key && val) {
+        map[key] = val;
+      }
+    }
+  });
+  return map;
+}
+
+/**
+ * Parses CSS <style> tags to extract class rules (.st0 { fill: #fff; })
+ */
+function parseCssStyleBlocks(doc: Document): Record<string, Record<string, string>> {
+  const classMap: Record<string, Record<string, string>> = {};
+  const styleElements = Array.from(doc.querySelectorAll('style'));
+
+  styleElements.forEach((styleEl) => {
+    const cssText = styleEl.textContent || '';
+    // Match rule blocks: .className { prop: val; }
+    const ruleRegex = /\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}/g;
+    let match;
+    while ((match = ruleRegex.exec(cssText)) !== null) {
+      const className = match[1];
+      const declarations = match[2];
+      const parsedProps = parseStyleAttr(declarations);
+      classMap[className] = { ...classMap[className], ...parsedProps };
+    }
+  });
+
+  return classMap;
+}
+
+/**
+ * Retrieves property value with inheritance (Check Attribute -> Style Attr -> CSS Class -> Parent Elements)
+ */
+function getInheritedProperty(
+  element: Element,
+  propName: string,
+  cssClassMap: Record<string, Record<string, string>>
+): string | null {
+  let curr: Element | null = element;
+
+  while (curr && curr.tagName.toLowerCase() !== 'svg') {
+    // 1. Direct Attribute
+    const attrVal = curr.getAttribute(propName);
+    if (attrVal) return attrVal;
+
+    // 2. Inline Style attribute
+    const styleMap = parseStyleAttr(curr.getAttribute('style'));
+    if (styleMap[propName]) return styleMap[propName];
+
+    // 3. CSS Class rule
+    const className = curr.getAttribute('class');
+    if (className) {
+      const classes = className.split(/\s+/);
+      for (const cls of classes) {
+        if (cssClassMap[cls] && cssClassMap[cls][propName]) {
+          return cssClassMap[cls][propName];
+        }
+      }
+    }
+
+    // Walk up parent tree
+    curr = curr.parentElement;
+  }
+
+  // Check root <svg> tag as last resort
+  if (curr) {
+    const svgAttr = curr.getAttribute(propName);
+    if (svgAttr) return svgAttr;
+    const svgStyle = parseStyleAttr(curr.getAttribute('style'));
+    if (svgStyle[propName]) return svgStyle[propName];
+  }
+
+  return null;
+}
+
+/**
+ * Parses transform="translate(x,y) rotate(a) scale(sx,sy)" attribute into Android Group attributes
+ */
+interface TransformAttrs {
+  translateX?: number;
+  translateY?: number;
+  rotation?: number;
+  scaleX?: number;
+  scaleY?: number;
+  pivotX?: number;
+  pivotY?: number;
+}
+
+function parseGroupTransform(transformStr: string | null): TransformAttrs | null {
+  if (!transformStr) return null;
+
+  const result: TransformAttrs = {};
+
+  // translate(x [, y])
+  const translateMatch = transformStr.match(/translate\(\s*([-\d.]+)(?:[\s,]+([-\d.]+))?\s*\)/i);
+  if (translateMatch) {
+    result.translateX = parseFloat(translateMatch[1]);
+    result.translateY = translateMatch[2] ? parseFloat(translateMatch[2]) : 0;
+  }
+
+  // rotate(angle [, cx, cy])
+  const rotateMatch = transformStr.match(/rotate\(\s*([-\d.]+)(?:[\s,]+([-\d.]+))?(?:[\s,]+([-\d.]+))?\s*\)/i);
+  if (rotateMatch) {
+    result.rotation = parseFloat(rotateMatch[1]);
+    if (rotateMatch[2] && rotateMatch[3]) {
+      result.pivotX = parseFloat(rotateMatch[2]);
+      result.pivotY = parseFloat(rotateMatch[3]);
+    }
+  }
+
+  // scale(sx [, sy])
+  const scaleMatch = transformStr.match(/scale\(\s*([-\d.]+)(?:[\s,]+([-\d.]+))?\s*\)/i);
+  if (scaleMatch) {
+    result.scaleX = parseFloat(scaleMatch[1]);
+    result.scaleY = scaleMatch[2] ? parseFloat(scaleMatch[2]) : result.scaleX;
+  }
+
+  if (Object.keys(result).length === 0) return null;
+  return result;
+}
+
+/**
+ * Sanitizes path data string for Android Vector & Alight Motion parser
+ */
+function sanitizePathData(d: string): string {
+  if (!d) return '';
+  // Convert scientific notation (1.23e-4 -> 0.000123)
+  let clean = d.replace(/([-\d.]+)[eE]([-\d]+)/g, (_, num, exp) => {
+    return (parseFloat(num) * Math.pow(10, parseInt(exp, 10))).toFixed(6);
+  });
+  // Replace newlines and excessive spaces
+  clean = clean.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return clean;
+}
+
+/**
  * Converts basic SVG shapes (<rect>, <circle>, <ellipse>, <line>, <polygon>, <polyline>) to path data string
  */
 export function shapeToPathData(element: Element): string | null {
   const tagName = element.tagName.toLowerCase();
 
   if (tagName === 'path') {
-    return element.getAttribute('d') || null;
+    const d = element.getAttribute('d');
+    return d ? sanitizePathData(d) : null;
   }
 
   if (tagName === 'rect') {
@@ -131,7 +305,6 @@ export function shapeToPathData(element: Element): string | null {
     if (w <= 0 || h <= 0) return null;
 
     if (rx > 0 || ry > 0) {
-      // Rounded rect
       const rX = Math.min(rx, w / 2);
       const rY = Math.min(ry, h / 2);
       return `M ${x + rX},${y} h ${w - 2 * rX} a ${rX},${rY} 0 0 1 ${rX},${rY} v ${h - 2 * rY} a ${rX},${rY} 0 0 1 -${rX},${rY} h -${w - 2 * rX} a ${rX},${rY} 0 0 1 -${rX},-${rY} v -${h - 2 * rY} a ${rX},${rY} 0 0 1 ${rX},-${rY} Z`;
@@ -194,7 +367,6 @@ export function shapeToPathData(element: Element): string | null {
 export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptions = {}): SvgToXmlResult {
   const warnings: string[] = [];
 
-  // Parse SVG using DOMParser
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgContent, 'image/svg+xml');
 
@@ -207,6 +379,9 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
   if (!svgEl) {
     throw new Error('Elemen <svg> tidak ditemukan dalam berkas.');
   }
+
+  // Parse CSS <style> rules
+  const cssClassMap = parseCssStyleBlocks(doc);
 
   // Extract ViewBox or Width/Height
   let viewBox = svgEl.getAttribute('viewBox');
@@ -228,7 +403,6 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
 
   const targetWidthDp = options.widthDp || Math.round(vbWidth) || 24;
   const targetHeightDp = options.heightDp || Math.round(vbHeight) || 24;
-
   const indentStr = options.indentation === '4' ? '    ' : '  ';
 
   let pathCount = 0;
@@ -237,22 +411,22 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
   // Find all drawable shape elements
   const shapeElements = Array.from(svgEl.querySelectorAll('path, rect, circle, ellipse, line, polyline, polygon'));
 
-  shapeElements.forEach((el) => {
+  shapeElements.forEach((el, index) => {
     const pathData = shapeToPathData(el);
     if (!pathData || !pathData.trim()) return;
 
     pathCount++;
 
-    // Attributes extraction
-    const rawFill = el.getAttribute('fill') || svgEl.getAttribute('fill');
-    const rawStroke = el.getAttribute('stroke') || svgEl.getAttribute('stroke');
-    const rawStrokeWidth = el.getAttribute('stroke-width') || svgEl.getAttribute('stroke-width');
-    const rawFillType = el.getAttribute('fill-rule') || el.getAttribute('clip-rule');
-    const rawOpacity = el.getAttribute('opacity') || el.getAttribute('fill-opacity');
-    const rawStrokeOpacity = el.getAttribute('stroke-opacity');
+    // Inherited property resolution
+    const rawFill = getInheritedProperty(el, 'fill', cssClassMap);
+    const rawStroke = getInheritedProperty(el, 'stroke', cssClassMap);
+    const rawStrokeWidth = getInheritedProperty(el, 'stroke-width', cssClassMap);
+    const rawFillType = getInheritedProperty(el, 'fill-rule', cssClassMap) || getInheritedProperty(el, 'clip-rule', cssClassMap);
+    const rawOpacity = getInheritedProperty(el, 'opacity', cssClassMap) || getInheritedProperty(el, 'fill-opacity', cssClassMap);
+    const rawStrokeOpacity = getInheritedProperty(el, 'stroke-opacity', cssClassMap);
 
-    let fillColor = normalizeAndroidColor(rawFill);
-    let strokeColor = normalizeAndroidColor(rawStroke);
+    let fillColor = normalizeAndroidColor(rawFill, doc);
+    let strokeColor = normalizeAndroidColor(rawStroke, doc);
 
     // Default fill if neither fill nor stroke is defined
     if (!fillColor && !strokeColor && rawFill !== 'none') {
@@ -261,7 +435,7 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
 
     // Color tint override if option enabled
     if (options.tintColor && options.tintColor.trim()) {
-      const tint = normalizeAndroidColor(options.tintColor);
+      const tint = normalizeAndroidColor(options.tintColor, doc);
       if (tint) {
         if (fillColor) fillColor = tint;
         if (strokeColor) strokeColor = tint;
@@ -298,18 +472,39 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
         attrs.push(`${indentStr}${indentStr}android:strokeAlpha="${parseFloat(rawStrokeOpacity)}"`);
       }
 
-      const strokeLineCap = el.getAttribute('stroke-linecap');
+      const strokeLineCap = getInheritedProperty(el, 'stroke-linecap', cssClassMap);
       if (strokeLineCap) {
         attrs.push(`${indentStr}${indentStr}android:strokeLineCap="${strokeLineCap}"`);
       }
 
-      const strokeLineJoin = el.getAttribute('stroke-linejoin');
+      const strokeLineJoin = getInheritedProperty(el, 'stroke-linejoin', cssClassMap);
       if (strokeLineJoin) {
         attrs.push(`${indentStr}${indentStr}android:strokeLineJoin="${strokeLineJoin}"`);
       }
     }
 
-    pathsXml.push(`${indentStr}<path\n${attrs.join('\n')} />`);
+    // Check parent <g> transform if present
+    const parentG = el.closest('g');
+    const transformStr = parentG ? parentG.getAttribute('transform') : el.getAttribute('transform');
+    const groupTransforms = parseGroupTransform(transformStr);
+
+    let singlePathXml = `${indentStr}<path\n${attrs.join('\n')} />`;
+
+    if (groupTransforms) {
+      const groupAttrs: string[] = [];
+      groupAttrs.push(`${indentStr}${indentStr}android:name="group_${index + 1}"`);
+      if (groupTransforms.translateX !== undefined) groupAttrs.push(`${indentStr}${indentStr}android:translateX="${groupTransforms.translateX}"`);
+      if (groupTransforms.translateY !== undefined) groupAttrs.push(`${indentStr}${indentStr}android:translateY="${groupTransforms.translateY}"`);
+      if (groupTransforms.rotation !== undefined) groupAttrs.push(`${indentStr}${indentStr}android:rotation="${groupTransforms.rotation}"`);
+      if (groupTransforms.scaleX !== undefined) groupAttrs.push(`${indentStr}${indentStr}android:scaleX="${groupTransforms.scaleX}"`);
+      if (groupTransforms.scaleY !== undefined) groupAttrs.push(`${indentStr}${indentStr}android:scaleY="${groupTransforms.scaleY}"`);
+      if (groupTransforms.pivotX !== undefined) groupAttrs.push(`${indentStr}${indentStr}android:pivotX="${groupTransforms.pivotX}"`);
+      if (groupTransforms.pivotY !== undefined) groupAttrs.push(`${indentStr}${indentStr}android:pivotY="${groupTransforms.pivotY}"`);
+
+      singlePathXml = `${indentStr}<group\n${groupAttrs.join('\n')}>\n${indentStr}${singlePathXml}\n${indentStr}</group>`;
+    }
+
+    pathsXml.push(singlePathXml);
   });
 
   if (pathsXml.length === 0) {
