@@ -129,15 +129,91 @@ export const DEFAULT_VECTORIZER_OPTIONS: VectorizerOptions = {
 };
 
 /**
- * Loads image onto an offscreen canvas and extracts ImageData
+ * Loads image onto an offscreen canvas and extracts ImageData with multi-stage proxy & CORS fallback
  */
 async function getImageDataFromUrl(
   imageUrl: string,
   maxDimension: number = 1200
 ): Promise<{ imageData: ImageData; originalWidth: number; originalHeight: number; scaledWidth: number; scaledHeight: number }> {
+  if (!imageUrl || typeof imageUrl !== 'string') {
+    throw new Error('URL gambar tidak valid.');
+  }
+
+  const isLocalSource = imageUrl.startsWith('blob:') || imageUrl.startsWith('data:');
+
+  // Strategy 1: If local blob or data URL, load directly into HTMLImageElement
+  if (isLocalSource) {
+    try {
+      return await loadImageElementToImageData(imageUrl, maxDimension, false);
+    } catch (err: any) {
+      console.warn('Local blob image load failed:', err.message);
+    }
+  }
+
+  // Strategy 2: For remote URLs, route through server proxy /api/proxy-image to create un-tainted local Blob
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    try {
+      const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+      const proxyRes = await fetch(proxyUrl);
+      if (proxyRes.ok) {
+        const blob = await proxyRes.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        try {
+          const res = await loadImageElementToImageData(blobUrl, maxDimension, false);
+          URL.revokeObjectURL(blobUrl);
+          return res;
+        } catch (blobErr) {
+          URL.revokeObjectURL(blobUrl);
+          throw blobErr;
+        }
+      }
+    } catch (proxyErr: any) {
+      console.warn('Proxy image load failed, trying direct client fetch fallback:', proxyErr.message);
+    }
+
+    // Strategy 3: Direct fetch as blob on client
+    try {
+      const clientFetchRes = await fetch(imageUrl, { mode: 'cors' });
+      if (clientFetchRes.ok) {
+        const blob = await clientFetchRes.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        try {
+          const res = await loadImageElementToImageData(blobUrl, maxDimension, false);
+          URL.revokeObjectURL(blobUrl);
+          return res;
+        } catch (blobErr) {
+          URL.revokeObjectURL(blobUrl);
+          throw blobErr;
+        }
+      }
+    } catch (fetchErr: any) {
+      console.warn('Direct client fetch failed, trying direct Image element:', fetchErr.message);
+    }
+
+    // Strategy 4: Direct image tag with crossOrigin="anonymous"
+    try {
+      return await loadImageElementToImageData(imageUrl, maxDimension, true);
+    } catch (imgTagErr: any) {
+      console.warn('Direct Image tag load failed:', imgTagErr.message);
+    }
+  }
+
+  throw new Error('Gagal memuat gambar dari server target. Silakan coba unggah berkas gambar secara langsung dari perangkat Anda.');
+}
+
+/**
+ * Helper to render an image URL or Blob URL onto canvas and extract ImageData
+ */
+function loadImageElementToImageData(
+  url: string,
+  maxDimension: number,
+  useCrossOrigin: boolean
+): Promise<{ imageData: ImageData; originalWidth: number; originalHeight: number; scaledWidth: number; scaledHeight: number }> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    if (useCrossOrigin) {
+      img.crossOrigin = 'anonymous';
+    }
 
     img.onload = () => {
       try {
@@ -146,6 +222,11 @@ async function getImageDataFromUrl(
 
         const originalWidth = width;
         const originalHeight = height;
+
+        if (width <= 0 || height <= 0) {
+          reject(new Error('Dimensi gambar 0px.'));
+          return;
+        }
 
         // Downscale if image is larger than maxDimension for tracing performance
         if (width > maxDimension || height > maxDimension) {
@@ -168,7 +249,6 @@ async function getImageDataFromUrl(
           return;
         }
 
-        // Draw image
         ctx.drawImage(img, 0, 0, width, height);
         const imageData = ctx.getImageData(0, 0, width, height);
 
@@ -180,78 +260,15 @@ async function getImageDataFromUrl(
           scaledHeight: height,
         });
       } catch (err: any) {
-        reject(new Error(`Gagal memproses piksel gambar: ${err.message || 'CORS Restriction'}`));
+        reject(new Error(`Gagal ekstraksi piksel canvas: ${err.message || 'Canvas Tainted'}`));
       }
     };
 
     img.onerror = () => {
-      // Fallback attempt: if CORS issue, fetch image as blob or via proxy
-      fetchImageAsBlobData(imageUrl, maxDimension)
-        .then(resolve)
-        .catch(() => reject(new Error('Gagal memuat gambar. Pastikan URL valid dan dapat diakses.')));
+      reject(new Error('Format atau URL gambar tidak dapat dimuat oleh elemen browser.'));
     };
 
-    img.src = imageUrl;
-  });
-}
-
-/**
- * Fallback to fetch image via fetch API and create Blob object URL
- */
-async function fetchImageAsBlobData(
-  imageUrl: string,
-  maxDimension: number
-): Promise<{ imageData: ImageData; originalWidth: number; originalHeight: number; scaledWidth: number; scaledHeight: number }> {
-  const response = await fetch(imageUrl, { mode: 'cors' });
-  if (!response.ok) throw new Error('Network error fetching image');
-  const blob = await response.blob();
-  const blobUrl = URL.createObjectURL(blob);
-
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      let width = img.naturalWidth || img.width;
-      let height = img.naturalHeight || img.height;
-      const originalWidth = width;
-      const originalHeight = height;
-
-      if (width > maxDimension || height > maxDimension) {
-        if (width > height) {
-          height = Math.round((height * maxDimension) / width);
-          width = maxDimension;
-        } else {
-          width = Math.round((width * maxDimension) / height);
-          height = maxDimension;
-        }
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        URL.revokeObjectURL(blobUrl);
-        reject(new Error('Canvas context failure'));
-        return;
-      }
-
-      ctx.drawImage(img, 0, 0, width, height);
-      const imageData = ctx.getImageData(0, 0, width, height);
-      URL.revokeObjectURL(blobUrl);
-
-      resolve({
-        imageData,
-        originalWidth,
-        originalHeight,
-        scaledWidth: width,
-        scaledHeight: height,
-      });
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(blobUrl);
-      reject(new Error('Blob image load error'));
-    };
-    img.src = blobUrl;
+    img.src = url;
   });
 }
 

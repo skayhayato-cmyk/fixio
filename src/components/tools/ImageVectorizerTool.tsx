@@ -60,7 +60,8 @@ export const ImageVectorizerTool: React.FC<ImageVectorizerToolProps> = ({ onSele
 
   // Trigger vectorization when button is clicked or options change
   const handleVectorize = async (optsToUse: VectorizerOptions = options) => {
-    if (!imageUrl) {
+    const targetImg = imageUrl || localPreviewUrl;
+    if (!targetImg) {
       setError("Silakan pilih atau unggah gambar terlebih dahulu.");
       return;
     }
@@ -69,9 +70,25 @@ export const ImageVectorizerTool: React.FC<ImageVectorizerToolProps> = ({ onSele
     setIsLoading(true);
 
     try {
-      const activeImg = localPreviewUrl || imageUrl;
-      const res = await vectorizeImage(activeImg, optsToUse);
-      setResult(res);
+      // Try local preview URL first if present (fastest local blob), or main imageUrl
+      let res: VectorizeResult | null = null;
+      if (localPreviewUrl) {
+        try {
+          res = await vectorizeImage(localPreviewUrl, optsToUse);
+        } catch (localErr: any) {
+          console.warn("Local preview vectorize failed, trying main imageUrl:", localErr.message);
+        }
+      }
+
+      if (!res && imageUrl) {
+        res = await vectorizeImage(imageUrl, optsToUse);
+      }
+
+      if (res) {
+        setResult(res);
+      } else {
+        throw new Error("Gagal memuat piksel gambar untuk proses tracing.");
+      }
     } catch (err: any) {
       setError(err.message || "Gagal mengonversi gambar menjadi vektor SVG.");
     } finally {

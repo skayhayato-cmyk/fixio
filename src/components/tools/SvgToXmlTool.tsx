@@ -44,7 +44,7 @@ export const SvgToXmlTool: React.FC = () => {
   const [activeCopiedKey, setActiveCopiedKey] = useState<string | null>(null);
 
   // Active Code Tab
-  const [activeTab, setActiveTab] = useState<"xml" | "compose" | "preview">("xml");
+  const [activeTab, setActiveTab] = useState<"xml" | "alight" | "compose" | "preview">("xml");
 
   const sampleSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#007aff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M12 2L2 7l10 5 10-5-10-5z" />
@@ -107,17 +107,28 @@ export const SvgToXmlTool: React.FC = () => {
     setTimeout(() => setActiveCopiedKey(null), 2000);
   };
 
-  const handleDownloadXml = () => {
+  const handleDownloadXml = (formatType: "vector" | "alight" = "vector") => {
     if (!result) return;
-    const blob = new Blob([result.xmlCode], { type: "text/xml;charset=utf-8" });
+    const codeToDownload = formatType === "alight" ? result.alightXmlCode : result.xmlCode;
+    const finalFileName = formatType === "alight" 
+      ? `${fileName || "alight_vector"}_preset.xml` 
+      : `${fileName || "ic_vector_drawable"}.xml`;
+
+    // Strict application/xml MIME type ensures mobile browsers & file managers download as .xml file
+    const blob = new Blob([codeToDownload], { type: "application/xml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${fileName || "ic_vector_drawable"}.xml`;
+    link.setAttribute("download", finalFileName);
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+
+    setTimeout(() => {
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
+      URL.revokeObjectURL(url);
+    }, 300);
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -348,7 +359,7 @@ export const SvgToXmlTool: React.FC = () => {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={handleDownloadXml}
+                onClick={() => handleDownloadXml("vector")}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95"
               >
                 <Download className="w-4 h-4" />
@@ -377,25 +388,36 @@ export const SvgToXmlTool: React.FC = () => {
 
           {/* View Tab Switcher */}
           <div className="flex items-center justify-between flex-wrap gap-2 p-2 bg-slate-100 dark:bg-[#1c1c1e] rounded-xl border border-black/5 dark:border-white/10 text-xs font-medium">
-            <div className="flex items-center gap-1 bg-white dark:bg-[#2c2c2e] p-1 rounded-lg border border-black/5 dark:border-white/10">
+            <div className="flex items-center gap-1 bg-white dark:bg-[#2c2c2e] p-1 rounded-lg border border-black/5 dark:border-white/10 flex-wrap">
               <button
                 type="button"
                 onClick={() => setActiveTab("xml")}
                 className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
                   activeTab === "xml"
-                    ? "bg-[#007aff] text-white font-semibold"
-                    : "text-slate-600 dark:text-slate-300"
+                    ? "bg-[#007aff] text-white font-semibold shadow-xs"
+                    : "text-slate-600 dark:text-slate-300 hover:text-black"
                 }`}
               >
-                <FileCode className="w-3.5 h-3.5" /> Android XML
+                <FileCode className="w-3.5 h-3.5" /> Android Vector XML
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("alight")}
+                className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeTab === "alight"
+                    ? "bg-purple-600 text-white font-semibold shadow-xs"
+                    : "text-slate-600 dark:text-slate-300 hover:text-black"
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" /> Alight Motion XML
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("compose")}
                 className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
                   activeTab === "compose"
-                    ? "bg-[#007aff] text-white font-semibold"
-                    : "text-slate-600 dark:text-slate-300"
+                    ? "bg-[#007aff] text-white font-semibold shadow-xs"
+                    : "text-slate-600 dark:text-slate-300 hover:text-black"
                 }`}
               >
                 <Smartphone className="w-3.5 h-3.5" /> Jetpack Compose
@@ -405,13 +427,21 @@ export const SvgToXmlTool: React.FC = () => {
                 onClick={() => setActiveTab("preview")}
                 className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
                   activeTab === "preview"
-                    ? "bg-[#007aff] text-white font-semibold"
-                    : "text-slate-600 dark:text-slate-300"
+                    ? "bg-[#007aff] text-white font-semibold shadow-xs"
+                    : "text-slate-600 dark:text-slate-300 hover:text-black"
                 }`}
               >
                 <Eye className="w-3.5 h-3.5" /> Pratinjau Visual
               </button>
             </div>
+          </div>
+
+          {/* Compatibility Banner */}
+          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+            <span>
+              <strong>Alight Motion & Android Compatible:</strong> Menggunakan deklarasi <code className="font-mono bg-emerald-500/20 px-1 py-0.5 rounded">&lt;?xml version="1.0" encoding="utf-8"?&gt;</code> & format warna ARGB 8-Digit (<code className="font-mono bg-emerald-500/20 px-1 py-0.5 rounded">#FF...</code>) 100% bebas error saat di-import.
+            </span>
           </div>
 
           {/* Code Viewer / Preview Render */}
@@ -421,14 +451,24 @@ export const SvgToXmlTool: React.FC = () => {
                 <span className="text-emerald-400 font-semibold flex items-center gap-1.5">
                   <FileCode className="w-4 h-4" /> res/drawable/{fileName || "ic_vector_drawable"}.xml
                 </span>
-                <button
-                  type="button"
-                  onClick={() => handleCopy(result.xmlCode, "xml-box")}
-                  className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
-                >
-                  {activeCopiedKey === "xml-box" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{activeCopiedKey === "xml-box" ? "Tersalin!" : "Salin"}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadXml("vector")}
+                    className="px-3 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Unduh .xml</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(result.xmlCode, "xml-box")}
+                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
+                  >
+                    {activeCopiedKey === "xml-box" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{activeCopiedKey === "xml-box" ? "Tersalin!" : "Salin"}</span>
+                  </button>
+                </div>
               </div>
 
               <textarea
@@ -436,6 +476,39 @@ export const SvgToXmlTool: React.FC = () => {
                 value={result.xmlCode}
                 rows={14}
                 className="w-full bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-slate-200 font-mono text-xs focus:outline-none resize-y"
+              />
+            </div>
+          ) : activeTab === "alight" ? (
+            <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl border border-slate-800 space-y-3 font-mono text-xs relative">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="text-purple-400 font-semibold flex items-center gap-1.5">
+                  <Layers className="w-4 h-4" /> {fileName || "alight_vector"}_preset.xml (Alight Motion Format)
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadXml("alight")}
+                    className="px-3 py-1 bg-purple-700 hover:bg-purple-600 text-white text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Unduh Alight .xml</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(result.alightXmlCode, "alight-box")}
+                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
+                  >
+                    {activeCopiedKey === "alight-box" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{activeCopiedKey === "alight-box" ? "Tersalin!" : "Salin"}</span>
+                  </button>
+                </div>
+              </div>
+
+              <textarea
+                readOnly
+                value={result.alightXmlCode}
+                rows={14}
+                className="w-full bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-purple-200 font-mono text-xs focus:outline-none resize-y"
               />
             </div>
           ) : activeTab === "compose" ? (

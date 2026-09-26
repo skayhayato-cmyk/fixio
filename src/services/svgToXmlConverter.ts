@@ -9,10 +9,12 @@ export interface SvgToXmlOptions {
   vectorName?: string;
   indentation?: '2' | '4';
   convertColorAlpha?: boolean;
+  alightMotionPreset?: boolean; // Generate Alight Motion scene wrapper
 }
 
 export interface SvgToXmlResult {
   xmlCode: string;
+  alightXmlCode: string;
   composeCode: string;
   widthDp: number;
   heightDp: number;
@@ -24,7 +26,8 @@ export interface SvgToXmlResult {
 }
 
 /**
- * Normalizes SVG color string to Android ARGB Hex string (#AARRGGBB or #RRGGBB)
+ * Normalizes SVG color string to Android ARGB Hex string (#AARRGGBB)
+ * Enforces strict 8-digit ARGB format required by Alight Motion and Android XML parsers
  */
 export function normalizeAndroidColor(colorStr: string | null | undefined): string | null {
   if (!colorStr || colorStr === 'none' || colorStr === 'transparent') {
@@ -33,15 +36,15 @@ export function normalizeAndroidColor(colorStr: string | null | undefined): stri
 
   const str = colorStr.trim();
 
-  // Standard Hex #RGB or #RRGGBB
+  // Standard Hex #RGB or #RRGGBB or #AARRGGBB
   if (str.startsWith('#')) {
     const hex = str.substring(1);
     if (hex.length === 3) {
-      // #RGB -> #RRGGBB
+      // #RGB -> #FFRRGGBB
       const r = hex[0] + hex[0];
       const g = hex[1] + hex[1];
       const b = hex[2] + hex[2];
-      return `#${r}${g}${b}`.toUpperCase();
+      return `#FF${r}${g}${b}`.toUpperCase();
     }
     if (hex.length === 4) {
       // #ARGB -> #AARRGGBB
@@ -52,7 +55,8 @@ export function normalizeAndroidColor(colorStr: string | null | undefined): stri
       return `#${a}${r}${g}${b}`.toUpperCase();
     }
     if (hex.length === 6) {
-      return `#${hex}`.toUpperCase();
+      // #RRGGBB -> #FFRRGGBB
+      return `#FF${hex}`.toUpperCase();
     }
     if (hex.length === 8) {
       // SVG #RRGGBBAA -> Android #AARRGGBB
@@ -71,7 +75,7 @@ export function normalizeAndroidColor(colorStr: string | null | undefined): stri
     const r = parseInt(rgbMatch[1], 10).toString(16).padStart(2, '0');
     const g = parseInt(rgbMatch[2], 10).toString(16).padStart(2, '0');
     const b = parseInt(rgbMatch[3], 10).toString(16).padStart(2, '0');
-    return `#${r}${g}${b}`.toUpperCase();
+    return `#FF${r}${g}${b}`.toUpperCase();
   }
 
   // rgba(r, g, b, a)
@@ -85,18 +89,18 @@ export function normalizeAndroidColor(colorStr: string | null | undefined): stri
     return `#${a}${r}${g}${b}`.toUpperCase();
   }
 
-  // Named colors fallback
+  // Named colors fallback with 8-digit ARGB
   const namedColors: Record<string, string> = {
-    black: '#000000',
-    white: '#FFFFFF',
-    red: '#FF0000',
-    green: '#008000',
-    blue: '#0000FF',
-    yellow: '#FFFF00',
-    cyan: '#00FFFF',
-    magenta: '#FF00FF',
-    gray: '#808080',
-    grey: '#808080',
+    black: '#FF000000',
+    white: '#FFFFFFFF',
+    red: '#FFFF0000',
+    green: '#FF008000',
+    blue: '#FF0000FF',
+    yellow: '#FFFFFF00',
+    cyan: '#FF00FFFF',
+    magenta: '#FFFF00FF',
+    gray: '#FF808080',
+    grey: '#FF808080',
   };
 
   if (namedColors[str.toLowerCase()]) {
@@ -312,8 +316,9 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
     warnings.push('Tidak ditemukan kurva path atau elemen bentuk yang valid pada SVG.');
   }
 
-  // Construct full Android VectorDrawable XML
-  const xmlHeader = `<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  // Construct full Android VectorDrawable XML with required XML declaration
+  const xmlHeader = `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
 ${indentStr}android:width="${targetWidthDp}dp"
 ${indentStr}android:height="${targetHeightDp}dp"
 ${indentStr}android:viewportWidth="${vbWidth}"
@@ -323,7 +328,23 @@ ${pathsXml.join('\n\n')}
 
 </vector>`;
 
-  // Generate Jetpack Compose ImageVector Kotlin snippet for Android developers
+  // Construct Alight Motion Project Preset XML format
+  const alightXmlCode = `<?xml version="1.0" encoding="utf-8"?>
+<scene width="${targetWidthDp}" height="${targetHeightDp}" fps="30" backgroundColor="#FF000000">
+  <shape name="${options.vectorName || 'Vector_Layer'}" type="vector">
+    <vector xmlns:android="http://schemas.android.com/apk/res/android"
+      android:width="${targetWidthDp}dp"
+      android:height="${targetHeightDp}dp"
+      android:viewportWidth="${vbWidth}"
+      android:viewportHeight="${vbHeight}">
+
+${pathsXml.map(p => '    ' + p).join('\n\n')}
+
+    </vector>
+  </shape>
+</scene>`;
+
+  // Generate Jetpack Compose ImageVector Kotlin snippet
   const composeSnippet = `// Jetpack Compose ImageVector Snippet
 val CustomVectorIcon: ImageVector
     get() {
@@ -343,10 +364,11 @@ val CustomVectorIcon: ImageVector
     }
 private var _customVectorIcon: ImageVector? = null`;
 
-  const fileSizeBytes = new Blob([xmlHeader], { type: 'text/xml' }).size;
+  const fileSizeBytes = new Blob([xmlHeader], { type: 'application/xml;charset=utf-8' }).size;
 
   return {
     xmlCode: xmlHeader,
+    alightXmlCode,
     composeCode: composeSnippet,
     widthDp: targetWidthDp,
     heightDp: targetHeightDp,
