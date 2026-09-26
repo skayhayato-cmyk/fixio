@@ -44,7 +44,6 @@ export function normalizeAndroidColor(colorStr: string | null | undefined, svgDo
       const gradId = match[1];
       const gradEl = svgDoc.getElementById(gradId) || svgDoc.querySelector(`[id="${gradId}"]`);
       if (gradEl) {
-        // Find first stop element
         const stopEl = gradEl.querySelector('stop');
         if (stopEl) {
           const stopColor = stopEl.getAttribute('stop-color') || parseStyleAttr(stopEl.getAttribute('style'))['stop-color'];
@@ -54,7 +53,6 @@ export function normalizeAndroidColor(colorStr: string | null | undefined, svgDo
         }
       }
     }
-    // Default fallback for unresolved gradient
     return '#FF007AFF';
   }
 
@@ -62,14 +60,12 @@ export function normalizeAndroidColor(colorStr: string | null | undefined, svgDo
   if (str.startsWith('#')) {
     const hex = str.substring(1);
     if (hex.length === 3) {
-      // #RGB -> #FFRRGGBB
       const r = hex[0] + hex[0];
       const g = hex[1] + hex[1];
       const b = hex[2] + hex[2];
       return `#FF${r}${g}${b}`.toUpperCase();
     }
     if (hex.length === 4) {
-      // #ARGB -> #AARRGGBB
       const a = hex[0] + hex[0];
       const r = hex[1] + hex[1];
       const g = hex[2] + hex[2];
@@ -77,11 +73,9 @@ export function normalizeAndroidColor(colorStr: string | null | undefined, svgDo
       return `#${a}${r}${g}${b}`.toUpperCase();
     }
     if (hex.length === 6) {
-      // #RRGGBB -> #FFRRGGBB
       return `#FF${hex}`.toUpperCase();
     }
     if (hex.length === 8) {
-      // SVG #RRGGBBAA -> Android #AARRGGBB
       const rr = hex.substring(0, 2);
       const gg = hex.substring(2, 4);
       const bb = hex.substring(4, 6);
@@ -164,7 +158,6 @@ function parseCssStyleBlocks(doc: Document): Record<string, Record<string, strin
 
   styleElements.forEach((styleEl) => {
     const cssText = styleEl.textContent || '';
-    // Match rule blocks: .className { prop: val; }
     const ruleRegex = /\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}/g;
     let match;
     while ((match = ruleRegex.exec(cssText)) !== null) {
@@ -189,15 +182,12 @@ function getInheritedProperty(
   let curr: Element | null = element;
 
   while (curr && curr.tagName.toLowerCase() !== 'svg') {
-    // 1. Direct Attribute
     const attrVal = curr.getAttribute(propName);
     if (attrVal) return attrVal;
 
-    // 2. Inline Style attribute
     const styleMap = parseStyleAttr(curr.getAttribute('style'));
     if (styleMap[propName]) return styleMap[propName];
 
-    // 3. CSS Class rule
     const className = curr.getAttribute('class');
     if (className) {
       const classes = className.split(/\s+/);
@@ -208,11 +198,9 @@ function getInheritedProperty(
       }
     }
 
-    // Walk up parent tree
     curr = curr.parentElement;
   }
 
-  // Check root <svg> tag as last resort
   if (curr) {
     const svgAttr = curr.getAttribute(propName);
     if (svgAttr) return svgAttr;
@@ -223,9 +211,6 @@ function getInheritedProperty(
   return null;
 }
 
-/**
- * Parses transform="translate(x,y) rotate(a) scale(sx,sy)" attribute into Android Group attributes
- */
 interface TransformAttrs {
   translateX?: number;
   translateY?: number;
@@ -241,14 +226,12 @@ function parseGroupTransform(transformStr: string | null): TransformAttrs | null
 
   const result: TransformAttrs = {};
 
-  // translate(x [, y])
   const translateMatch = transformStr.match(/translate\(\s*([-\d.]+)(?:[\s,]+([-\d.]+))?\s*\)/i);
   if (translateMatch) {
     result.translateX = parseFloat(translateMatch[1]);
     result.translateY = translateMatch[2] ? parseFloat(translateMatch[2]) : 0;
   }
 
-  // rotate(angle [, cx, cy])
   const rotateMatch = transformStr.match(/rotate\(\s*([-\d.]+)(?:[\s,]+([-\d.]+))?(?:[\s,]+([-\d.]+))?\s*\)/i);
   if (rotateMatch) {
     result.rotation = parseFloat(rotateMatch[1]);
@@ -258,7 +241,6 @@ function parseGroupTransform(transformStr: string | null): TransformAttrs | null
     }
   }
 
-  // scale(sx [, sy])
   const scaleMatch = transformStr.match(/scale\(\s*([-\d.]+)(?:[\s,]+([-\d.]+))?\s*\)/i);
   if (scaleMatch) {
     result.scaleX = parseFloat(scaleMatch[1]);
@@ -269,28 +251,20 @@ function parseGroupTransform(transformStr: string | null): TransformAttrs | null
   return result;
 }
 
-/**
- * Sanitizes path data string for Android Vector & Alight Motion parser
- */
 function sanitizePathData(d: string): string {
   if (!d) return '';
-  // Convert scientific notation (1.23e-4 -> 0.000123)
   let clean = d.replace(/([-\d.]+)[eE]([-\d]+)/g, (_, num, exp) => {
     return (parseFloat(num) * Math.pow(10, parseInt(exp, 10))).toFixed(6);
   });
-  // Replace newlines and excessive spaces
   clean = clean.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
   return clean;
 }
 
-/**
- * Converts basic SVG shapes (<rect>, <circle>, <ellipse>, <line>, <polygon>, <polyline>) to path data string
- */
 export function shapeToPathData(element: Element): string | null {
   const tagName = element.tagName.toLowerCase();
 
   if (tagName === 'path') {
-    const d = element.getAttribute('d');
+    const d = element.getAttribute('d') || element.getAttribute('android:pathData');
     return d ? sanitizePathData(d) : null;
   }
 
@@ -362,41 +336,69 @@ export function shapeToPathData(element: Element): string | null {
 }
 
 /**
- * Converts SVG String markup into Android VectorDrawable XML String
+ * Converts SVG or Vector XML String markup into Android VectorDrawable XML String
  */
 export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptions = {}): SvgToXmlResult {
   const warnings: string[] = [];
 
+  if (!svgContent || !svgContent.trim()) {
+    throw new Error('Sintaks berkas kosong.');
+  }
+
+  // Clean BOM and trim
+  let cleanInput = svgContent.replace(/^\uFEFF/, '').trim();
+
+  // If input doesn't have <svg> wrapper but has path/vector/shapes, wrap it in <svg>
+  if (!cleanInput.toLowerCase().includes('<svg') && !cleanInput.toLowerCase().includes('<vector')) {
+    cleanInput = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">${cleanInput}</svg>`;
+  }
+
   const parser = new DOMParser();
-  const doc = parser.parseFromString(svgContent, 'image/svg+xml');
+  let doc = parser.parseFromString(cleanInput, 'image/svg+xml');
 
-  const parserError = doc.querySelector('parsererror');
+  // Fallback to text/xml or text/html if DOMParser error
+  let parserError = doc.querySelector('parsererror');
   if (parserError) {
-    throw new Error('Format SVG tidak valid atau korup. Silakan periksa kembali sintaks SVG.');
+    try {
+      doc = parser.parseFromString(cleanInput, 'text/xml');
+      parserError = doc.querySelector('parsererror');
+    } catch {
+      // ignore
+    }
   }
 
-  const svgEl = doc.querySelector('svg');
+  let svgEl = doc.querySelector('svg');
+  let isAndroidVector = false;
+
   if (!svgEl) {
-    throw new Error('Elemen <svg> tidak ditemukan dalam berkas.');
+    const vectorEl = doc.querySelector('vector');
+    if (vectorEl) {
+      isAndroidVector = true;
+    } else {
+      // Emergency wrapping if DOM parser failed to find root element
+      const wrapped = `<svg xmlns="http://www.w3.org/2000/svg">${cleanInput}</svg>`;
+      doc = parser.parseFromString(wrapped, 'image/svg+xml');
+      svgEl = doc.querySelector('svg');
+    }
   }
 
-  // Parse CSS <style> rules
+  const rootEl = svgEl || doc.querySelector('vector') || doc.documentElement;
   const cssClassMap = parseCssStyleBlocks(doc);
 
   // Extract ViewBox or Width/Height
-  let viewBox = svgEl.getAttribute('viewBox');
+  let viewBox = rootEl ? (rootEl.getAttribute('viewBox') || rootEl.getAttribute('android:viewportWidth')) : null;
   let vbWidth = 24;
   let vbHeight = 24;
 
-  if (viewBox) {
+  if (viewBox && rootEl?.getAttribute('viewBox')) {
     const parts = viewBox.trim().split(/[\s,]+/).map(parseFloat);
     if (parts.length >= 4) {
       vbWidth = parts[2] || 24;
       vbHeight = parts[3] || 24;
     }
   } else {
-    const wAttr = svgEl.getAttribute('width');
-    const hAttr = svgEl.getAttribute('height');
+    const wAttr = rootEl ? (rootEl.getAttribute('width') || rootEl.getAttribute('android:viewportWidth')) : null;
+    const hAttr = rootEl ? (rootEl.getAttribute('height') || rootEl.getAttribute('android:viewportHeight')) : null;
     if (wAttr) vbWidth = parseFloat(wAttr) || 24;
     if (hAttr) vbHeight = parseFloat(hAttr) || 24;
   }
@@ -408,8 +410,7 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
   let pathCount = 0;
   const pathsXml: string[] = [];
 
-  // Find all drawable shape elements
-  const shapeElements = Array.from(svgEl.querySelectorAll('path, rect, circle, ellipse, line, polyline, polygon'));
+  const shapeElements = Array.from(rootEl ? rootEl.querySelectorAll('path, rect, circle, ellipse, line, polyline, polygon') : []);
 
   shapeElements.forEach((el, index) => {
     const pathData = shapeToPathData(el);
@@ -417,23 +418,20 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
 
     pathCount++;
 
-    // Inherited property resolution
-    const rawFill = getInheritedProperty(el, 'fill', cssClassMap);
-    const rawStroke = getInheritedProperty(el, 'stroke', cssClassMap);
-    const rawStrokeWidth = getInheritedProperty(el, 'stroke-width', cssClassMap);
-    const rawFillType = getInheritedProperty(el, 'fill-rule', cssClassMap) || getInheritedProperty(el, 'clip-rule', cssClassMap);
-    const rawOpacity = getInheritedProperty(el, 'opacity', cssClassMap) || getInheritedProperty(el, 'fill-opacity', cssClassMap);
-    const rawStrokeOpacity = getInheritedProperty(el, 'stroke-opacity', cssClassMap);
+    const rawFill = getInheritedProperty(el, 'fill', cssClassMap) || el.getAttribute('android:fillColor');
+    const rawStroke = getInheritedProperty(el, 'stroke', cssClassMap) || el.getAttribute('android:strokeColor');
+    const rawStrokeWidth = getInheritedProperty(el, 'stroke-width', cssClassMap) || el.getAttribute('android:strokeWidth');
+    const rawFillType = getInheritedProperty(el, 'fill-rule', cssClassMap) || getInheritedProperty(el, 'clip-rule', cssClassMap) || el.getAttribute('android:fillType');
+    const rawOpacity = getInheritedProperty(el, 'opacity', cssClassMap) || getInheritedProperty(el, 'fill-opacity', cssClassMap) || el.getAttribute('android:fillAlpha');
+    const rawStrokeOpacity = getInheritedProperty(el, 'stroke-opacity', cssClassMap) || el.getAttribute('android:strokeAlpha');
 
     let fillColor = normalizeAndroidColor(rawFill, doc);
     let strokeColor = normalizeAndroidColor(rawStroke, doc);
 
-    // Default fill if neither fill nor stroke is defined
     if (!fillColor && !strokeColor && rawFill !== 'none') {
-      fillColor = '#FF000000'; // Default black fill
+      fillColor = '#FF000000';
     }
 
-    // Color tint override if option enabled
     if (options.tintColor && options.tintColor.trim()) {
       const tint = normalizeAndroidColor(options.tintColor, doc);
       if (tint) {
@@ -444,25 +442,20 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
 
     const attrs: string[] = [];
 
-    // Path Data
     attrs.push(`${indentStr}${indentStr}android:pathData="${pathData.trim()}"`);
 
-    // Fill Color
     if (fillColor) {
       attrs.push(`${indentStr}${indentStr}android:fillColor="${fillColor}"`);
     }
 
-    // Fill Alpha
     if (rawOpacity && parseFloat(rawOpacity) < 1) {
       attrs.push(`${indentStr}${indentStr}android:fillAlpha="${parseFloat(rawOpacity)}"`);
     }
 
-    // Fill Type (EvenOdd / NonZero)
-    if (rawFillType === 'evenodd') {
+    if (rawFillType === 'evenodd' || rawFillType === 'evenOdd') {
       attrs.push(`${indentStr}${indentStr}android:fillType="evenOdd"`);
     }
 
-    // Stroke Color & Width
     if (strokeColor) {
       attrs.push(`${indentStr}${indentStr}android:strokeColor="${strokeColor}"`);
       const sw = rawStrokeWidth ? parseFloat(rawStrokeWidth) : 1;
@@ -472,18 +465,17 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
         attrs.push(`${indentStr}${indentStr}android:strokeAlpha="${parseFloat(rawStrokeOpacity)}"`);
       }
 
-      const strokeLineCap = getInheritedProperty(el, 'stroke-linecap', cssClassMap);
+      const strokeLineCap = getInheritedProperty(el, 'stroke-linecap', cssClassMap) || el.getAttribute('android:strokeLineCap');
       if (strokeLineCap) {
         attrs.push(`${indentStr}${indentStr}android:strokeLineCap="${strokeLineCap}"`);
       }
 
-      const strokeLineJoin = getInheritedProperty(el, 'stroke-linejoin', cssClassMap);
+      const strokeLineJoin = getInheritedProperty(el, 'stroke-linejoin', cssClassMap) || el.getAttribute('android:strokeLineJoin');
       if (strokeLineJoin) {
         attrs.push(`${indentStr}${indentStr}android:strokeLineJoin="${strokeLineJoin}"`);
       }
     }
 
-    // Check parent <g> transform if present
     const parentG = el.closest('g');
     const transformStr = parentG ? parentG.getAttribute('transform') : el.getAttribute('transform');
     const groupTransforms = parseGroupTransform(transformStr);
@@ -508,10 +500,9 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
   });
 
   if (pathsXml.length === 0) {
-    warnings.push('Tidak ditemukan kurva path atau elemen bentuk yang valid pada SVG.');
+    warnings.push('Tidak ditemukan kurva path atau elemen bentuk yang valid.');
   }
 
-  // Construct full Android VectorDrawable XML with required XML declaration
   const xmlHeader = `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
 ${indentStr}android:width="${targetWidthDp}dp"
@@ -523,7 +514,6 @@ ${pathsXml.join('\n\n')}
 
 </vector>`;
 
-  // Construct Alight Motion Project Preset XML format
   const alightXmlCode = `<?xml version="1.0" encoding="utf-8"?>
 <scene width="${targetWidthDp}" height="${targetHeightDp}" fps="30" backgroundColor="#FF000000">
   <shape name="${options.vectorName || 'Vector_Layer'}" type="vector">
@@ -539,7 +529,6 @@ ${pathsXml.map(p => '    ' + p).join('\n\n')}
   </shape>
 </scene>`;
 
-  // Generate Jetpack Compose ImageVector Kotlin snippet
   const composeSnippet = `// Jetpack Compose ImageVector Snippet
 val CustomVectorIcon: ImageVector
     get() {

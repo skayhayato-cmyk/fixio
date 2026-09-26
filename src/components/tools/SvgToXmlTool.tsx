@@ -17,6 +17,8 @@ import {
   Smartphone,
   RefreshCw,
   FileType,
+  X,
+  FileCheck,
 } from "lucide-react";
 import {
   convertSvgToVectorXml,
@@ -28,6 +30,7 @@ export const SvgToXmlTool: React.FC = () => {
   const [svgInputMode, setSvgInputMode] = useState<"upload" | "paste">("upload");
   const [rawSvgText, setRawSvgText] = useState<string>("");
   const [fileName, setFileName] = useState<string>("ic_vector_drawable");
+  const [uploadedFileInfo, setUploadedFileInfo] = useState<{ name: string; size: number } | null>(null);
   
   // Custom Options
   const [options, setOptions] = useState<SvgToXmlOptions>({
@@ -54,7 +57,7 @@ export const SvgToXmlTool: React.FC = () => {
 
   const handleConvert = (textToConvert: string = rawSvgText, opts: SvgToXmlOptions = options) => {
     if (!textToConvert || !textToConvert.trim()) {
-      setError("Silakan unggah atau tempelkan sintaks SVG terlebih dahulu.");
+      setError("Silakan unggah atau tempelkan sintaks SVG/XML terlebih dahulu.");
       return;
     }
 
@@ -71,34 +74,55 @@ export const SvgToXmlTool: React.FC = () => {
     }
   };
 
-  // Handle File Upload (.svg)
+  // Handle File Upload (Accepts ANY SVG / XML / Text file from Mobile / Android)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith(".svg") && file.type !== "image/svg+xml") {
-      setError("Berkas yang dipilih harus berformat .svg");
-      return;
-    }
+    // Sanitize filename for Android Vector XML name conventions (alphanumeric & underscores)
+    let rawName = file.name || "ic_vector_drawable";
+    const cleanName = rawName
+      .replace(/\.(svg|xml|txt)$/i, "")
+      .replace(/[^a-zA-Z0-9_]/g, "_")
+      .toLowerCase();
 
-    const cleanName = file.name.replace(/\.svg$/i, "").replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase();
-    setFileName(cleanName || "ic_vector_drawable");
+    const finalVectorName = cleanName ? (cleanName.startsWith("ic_") ? cleanName : `ic_${cleanName}`) : "ic_vector_drawable";
+
+    setFileName(finalVectorName);
+    setUploadedFileInfo({ name: file.name, size: file.size });
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
-      if (content) {
+      if (content && content.trim()) {
         setRawSvgText(content);
-        handleConvert(content, { ...options, vectorName: cleanName });
+        const updatedOpts = { ...options, vectorName: finalVectorName };
+        setOptions(updatedOpts);
+        handleConvert(content, updatedOpts);
+      } else {
+        setError("Berkas yang dipilih kosong atau tidak memiliki isi teks.");
       }
+    };
+    reader.onerror = () => {
+      setError("Gagal membaca berkas dari penyimpanan perangkat Anda.");
     };
     reader.readAsText(file);
   };
 
+  const handleClearFile = () => {
+    setUploadedFileInfo(null);
+    setRawSvgText("");
+    setResult(null);
+    setError(null);
+  };
+
   const handleUseSample = () => {
+    setUploadedFileInfo({ name: "sample_layers.svg", size: 340 });
     setRawSvgText(sampleSvg);
     setFileName("ic_layers_vector");
-    handleConvert(sampleSvg, { ...options, vectorName: "ic_layers_vector" });
+    const updatedOpts = { ...options, vectorName: "ic_layers_vector" };
+    setOptions(updatedOpts);
+    handleConvert(sampleSvg, updatedOpts);
   };
 
   const handleCopy = (text: string, key: string) => {
@@ -114,7 +138,6 @@ export const SvgToXmlTool: React.FC = () => {
       ? `${fileName || "alight_vector"}_preset.xml` 
       : `${fileName || "ic_vector_drawable"}.xml`;
 
-    // Strict application/xml MIME type ensures mobile browsers & file managers download as .xml file
     const blob = new Blob([codeToDownload], { type: "application/xml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -194,24 +217,52 @@ export const SvgToXmlTool: React.FC = () => {
 
         {/* Input Field: Upload vs Paste */}
         {svgInputMode === "upload" ? (
-          <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-[#007aff] dark:hover:border-[#0a84ff] bg-white dark:bg-[#1c1c1e] rounded-2xl p-6 text-center transition-all relative">
+          <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-[#007aff] dark:hover:border-[#0a84ff] bg-white dark:bg-[#1c1c1e] rounded-2xl p-5 text-center transition-all relative">
             <input
               type="file"
-              accept=".svg,image/svg+xml"
+              accept=".svg,.xml,.txt,image/svg+xml,text/xml,application/xml,text/plain,*/*"
               onChange={handleFileUpload}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
             />
-            <div className="space-y-2 pointer-events-none">
-              <div className="w-12 h-12 bg-[#007aff]/10 text-[#007aff] rounded-2xl flex items-center justify-center mx-auto">
-                <UploadCloud className="w-6 h-6" />
+            
+            {uploadedFileInfo ? (
+              <div className="flex items-center justify-between gap-3 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-left relative z-20">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <FileCheck className="w-5 h-5" />
+                  </div>
+                  <div className="overflow-hidden">
+                    <p className="text-xs font-bold text-black dark:text-white truncate">
+                      {uploadedFileInfo.name}
+                    </p>
+                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                      Berkas Berhasil Dimuat ({formatFileSize(uploadedFileInfo.size)})
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleClearFile}
+                  className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
+                  title="Hapus / Ganti Berkas"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <p className="text-sm font-semibold text-black dark:text-white">
-                Klik atau Drag & Drop Berkas `.svg` di sini
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Mendukung standar file SVG dari Figma, Illustrator, Canva, atau IconFinder.
-              </p>
-            </div>
+            ) : (
+              <div className="space-y-2 pointer-events-none">
+                <div className="w-12 h-12 bg-[#007aff]/10 text-[#007aff] rounded-2xl flex items-center justify-center mx-auto">
+                  <UploadCloud className="w-6 h-6" />
+                </div>
+                <p className="text-sm font-semibold text-black dark:text-white">
+                  Klik atau Drag & Drop Berkas `.svg` di sini
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Mendukung berkas SVG/XML dari Galeri HP, Figma, Illustrator, Canva, atau IconFinder.
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
@@ -247,7 +298,9 @@ export const SvgToXmlTool: React.FC = () => {
                 onChange={(e) => {
                   const val = e.target.value.replace(/[^a-zA-Z0-9_]/g, "_");
                   setFileName(val);
-                  setOptions({ ...options, vectorName: val });
+                  const newOpts = { ...options, vectorName: val };
+                  setOptions(newOpts);
+                  if (rawSvgText) handleConvert(rawSvgText, newOpts);
                 }}
                 className="w-full bg-slate-50 dark:bg-[#2c2c2e] px-3 py-2 rounded-lg border border-black/5 dark:border-white/10 font-mono text-xs focus:outline-none focus:border-[#007aff]"
                 placeholder="ic_vector_drawable"
