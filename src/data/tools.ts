@@ -38,6 +38,15 @@ export const TOOLS_LIST: ToolDefinition[] = [
     popular: true,
   },
   {
+    id: "image-vectorizer",
+    title: "Image Vectorizer (Auto Trace)",
+    description: "Konversi foto atau gambar bitmap (PNG, JPG) menjadi file vektor SVG jernih tanpa pecah.",
+    category: "image",
+    iconName: "Layers",
+    badge: "Auto Trace SVG",
+    popular: true,
+  },
+  {
     id: "ss-web",
     title: "Web Screenshot Multi-Device",
     description: "Ambil screenshot website seketika dalam 3 viewport: Desktop, Tablet, & Phone.",
@@ -215,6 +224,15 @@ export const TOOLS_LIST: ToolDefinition[] = [
     category: "utility",
     iconName: "UploadCloud",
     badge: "CDN Host",
+  },
+  {
+    id: "svg-to-xml",
+    title: "SVG to XML Vector Converter",
+    description: "Konversi berkas SVG atau kode vektor menjadi Android VectorDrawable XML resmi & Jetpack Compose.",
+    category: "utility",
+    iconName: "FileCode",
+    badge: "Android XML",
+    popular: true,
   },
   {
     id: "to-qr",

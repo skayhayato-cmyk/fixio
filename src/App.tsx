@@ -16,6 +16,7 @@ import { ReminiTool } from "./components/tools/ReminiTool";
 import { ImgToPromptTool } from "./components/tools/ImgToPromptTool";
 import { WinkHdTool } from "./components/tools/WinkHdTool";
 import { RemoveBgTool } from "./components/tools/RemoveBgTool";
+import { ImageVectorizerTool } from "./components/tools/ImageVectorizerTool";
 import { WebScreenshotTool } from "./components/tools/WebScreenshotTool";
 import { InstagramStalkerTool } from "./components/tools/InstagramStalkerTool";
 import { TikTokStalkerTool } from "./components/tools/TikTokStalkerTool";
@@ -37,6 +38,7 @@ import { TikTokDownloaderV2Tool } from "./components/tools/TikTokDownloaderV2Too
 import { InstagramDownloaderTool } from "./components/tools/InstagramDownloaderTool";
 import { InstagramDownloaderV2Tool } from "./components/tools/InstagramDownloaderV2Tool";
 import { SpotifyDownloaderTool } from "./components/tools/SpotifyDownloaderTool";
+import { SvgToXmlTool } from "./components/tools/SvgToXmlTool";
 import { ToQrTool } from "./components/tools/ToQrTool";
 
 import { 
@@ -118,6 +120,8 @@ export default function App() {
         return <WinkHdTool />;
       case "remove-bg":
         return <RemoveBgTool />;
+      case "image-vectorizer":
+        return <ImageVectorizerTool onSelectTool={(id) => setActiveToolId(id)} />;
       case "ss-web":
         return <WebScreenshotTool />;
       case "ig-stalker":
@@ -160,6 +164,8 @@ export default function App() {
         return null;
       case "uploader":
         return <StandaloneUploaderTool onSelectTool={(id) => setActiveToolId(id)} />;
+      case "svg-to-xml":
+        return <SvgToXmlTool />;
       case "to-qr":
         return <ToQrTool onSelectTool={(id) => setActiveToolId(id)} />;
       default:
