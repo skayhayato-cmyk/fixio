@@ -23,6 +23,7 @@ export interface VectorizerOptions {
   monochrome: boolean;
   strokeWidth: number;
   maxDimension: number; // Max canvas dimension (e.g. 1024px) for performance
+  separatePaths?: boolean; // Splits compound paths into individual <path> elements for Alight Motion Trace
 }
 
 export const VECTORIZER_PRESETS: VectorizerPreset[] = [
@@ -126,6 +127,7 @@ export const DEFAULT_VECTORIZER_OPTIONS: VectorizerOptions = {
   monochrome: false,
   strokeWidth: 0,
   maxDimension: 1200,
+  separatePaths: true,
 };
 
 /**
@@ -307,6 +309,122 @@ function preprocessImageData(imageData: ImageData, options: VectorizerOptions): 
   return newImgData;
 }
 
+/**
+ * Splits compound paths in an SVG into individual, clean <path> elements.
+ * This ensures each closed or open contour becomes its own distinct vector path,
+ * which is required for Alight Motion Trace XML import so each shape can be traced individually.
+ */
+export function separateSvgCompoundPaths(svgString: string): { svg: string; separatedCount: number } {
+  if (!svgString || !svgString.trim()) {
+    return { svg: svgString, separatedCount: 0 };
+  }
+
+  // 1. Browser DOMParser method for pristine DOM manipulation
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(svgString, 'image/svg+xml');
+      const parserError = doc.querySelector('parsererror');
+
+      if (!parserError) {
+        const pathElements = Array.from(doc.querySelectorAll('path'));
+        let modified = false;
+        let totalPaths = 0;
+
+        pathElements.forEach((pathEl, pIdx) => {
+          const d = pathEl.getAttribute('d');
+          if (!d) return;
+
+          const mMatches = d.match(/[Mm]/g);
+          if (mMatches && mMatches.length > 1) {
+            const subpaths: string[] = [];
+            const subpathRegex = /([Mm][^Mm]+)/g;
+            let match: RegExpExecArray | null;
+
+            while ((match = subpathRegex.exec(d)) !== null) {
+              const sp = match[1].trim();
+              if (sp && sp.length > 3) {
+                subpaths.push(sp);
+              }
+            }
+
+            if (subpaths.length > 1) {
+              modified = true;
+              const parent = pathEl.parentNode;
+              if (parent) {
+                subpaths.forEach((subD, sIdx) => {
+                  totalPaths++;
+                  const newPath = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+                  Array.from(pathEl.attributes).forEach((attr) => {
+                    newPath.setAttribute(attr.name, attr.value);
+                  });
+                  newPath.setAttribute('d', subD);
+                  newPath.setAttribute('id', `trace_path_${totalPaths}`);
+                  parent.insertBefore(newPath, pathEl);
+                });
+                parent.removeChild(pathEl);
+                return;
+              }
+            }
+          }
+          totalPaths++;
+        });
+
+        if (modified) {
+          const serializer = new XMLSerializer();
+          const cleanSvg = serializer.serializeToString(doc);
+          return { svg: cleanSvg, separatedCount: totalPaths };
+        }
+      }
+    } catch (e) {
+      console.warn('DOMParser path separation failed, using fallback:', e);
+    }
+  }
+
+  // 2. Safe Regex fallback
+  let pathCount = 0;
+  const cleanSvg = svgString.replace(/<path\b([^>]*?)\/?>/gi, (fullMatch, attrs) => {
+    const dMatch = attrs.match(/\bd\s*=\s*(["'])([\s\S]*?)\1/i);
+    if (!dMatch) {
+      pathCount++;
+      return fullMatch;
+    }
+
+    const dVal = dMatch[2].trim();
+    const mMatches = dVal.match(/[Mm]/g);
+    if (!mMatches || mMatches.length <= 1) {
+      pathCount++;
+      return fullMatch;
+    }
+
+    const subpaths: string[] = [];
+    const subpathRegex = /([Mm][^Mm]+)/g;
+    let match: RegExpExecArray | null;
+    while ((match = subpathRegex.exec(dVal)) !== null) {
+      const sp = match[1].trim();
+      if (sp && sp.length > 3) {
+        subpaths.push(sp);
+      }
+    }
+
+    if (subpaths.length <= 1) {
+      pathCount++;
+      return fullMatch;
+    }
+
+    const quote = dMatch[1];
+    return subpaths
+      .map((subD) => {
+        pathCount++;
+        const newAttrs = attrs.replace(/\bd\s*=\s*(["'])[\s\S]*?\1/i, `d=${quote}${subD}${quote}`);
+        return `<path${newAttrs} id="trace_path_${pathCount}" />`;
+      })
+      .join('\n  ');
+  });
+
+  return { svg: cleanSvg, separatedCount: pathCount };
+}
+
 export interface VectorizeResult {
   svgCode: string;
   svgDataUrl: string;
@@ -317,6 +435,7 @@ export interface VectorizeResult {
   tracedWidth: number;
   tracedHeight: number;
   colorsUsed: number;
+  separatedPaths: boolean;
 }
 
 /**
@@ -378,6 +497,13 @@ export async function vectorizeImage(
     finalSvg = finalSvg.replace(/<path[^>]*fill="white"[^>]*\/>/gi, '');
   }
 
+  // Separate compound paths if requested (default: true for Alight Motion trace compatibility)
+  const shouldSeparate = options.separatePaths !== false;
+  if (shouldSeparate) {
+    const sep = separateSvgCompoundPaths(finalSvg);
+    finalSvg = sep.svg;
+  }
+
   // Calculate stats
   const pathMatches = finalSvg.match(/<path/g);
   const pathCount = pathMatches ? pathMatches.length : 0;
@@ -400,5 +526,6 @@ export async function vectorizeImage(
     tracedWidth: scaledWidth,
     tracedHeight: scaledHeight,
     colorsUsed,
+    separatedPaths: shouldSeparate,
   };
 }

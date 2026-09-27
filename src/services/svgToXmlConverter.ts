@@ -343,6 +343,26 @@ export function convertShapesToPaths(element: Element): string | null {
 }
 
 /**
+ * Splits a compound SVG path string into individual subpaths (each starting with M/m).
+ * This ensures every shape in Alight Motion has a single, clean contour for flawless tracing.
+ */
+export function splitPathIntoSubpaths(d: string): string[] {
+  if (!d || !d.trim()) return [];
+  const subpaths: string[] = [];
+  const subpathRegex = /([Mm][^Mm]+)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = subpathRegex.exec(d)) !== null) {
+    const sp = match[1].trim();
+    if (sp && sp.length > 3) {
+      subpaths.push(sp);
+    }
+  }
+
+  return subpaths.length > 0 ? subpaths : [d.trim()];
+}
+
+/**
  * 5. CONVERT PATH COMMANDS: Normalizes commands to absolute (M, L, C, S, Q, T, A, Z) and bakes 2D matrix
  */
 export function convertPathCommands(d: string, matrix: Matrix2D): { pathData: string; bounds: { minX: number; minY: number; maxX: number; maxY: number } } {
@@ -935,16 +955,22 @@ export function generateAlightMotionXml(
   options: SvgToXmlOptions = {}
 ): string {
   const indent = options.indentation === '4' ? '    ' : '  ';
+  const projTitle = (options.vectorName || 'Alight_Motion_Trace').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const totalDuration = 5000;
+  const fps = 30;
+  const sceneWidth = Math.round(viewport.width) || 1080;
+  const sceneHeight = Math.round(viewport.height) || 1080;
 
   const shapeElements = layers.map((layer, index) => {
     const id = index + 1;
-    const label = `${options.vectorName || 'Trace'}_Layer_${id}`;
+    const label = `${projTitle}_Path_${id}`;
     const fill = layer.fillColor || '#FF000000';
     const stroke = layer.strokeColor || 'none';
     const strokeW = layer.strokeWidth || 1;
-    const opacityVal = (layer.opacity || 1).toFixed(2);
+    const opacityVal = (layer.opacity ?? 1).toFixed(2);
+    const fillType = layer.fillColor ? 'color' : 'none';
 
-    return `${indent}<shape id="${id}" label="${label}" startTime="0" endTime="5000" fillType="${layer.fillColor ? 'color' : 'none'}" s=".path">
+    return `${indent}<shape id="${id}" label="${label}" startTime="0" endTime="${totalDuration}" fillType="${fillType}" s=".path">
 ${indent}${indent}<transform>
 ${indent}${indent}${indent}<location x="0.0" y="0.0" />
 ${indent}${indent}${indent}<scale x="1.0" y="1.0" />
@@ -957,7 +983,7 @@ ${indent}</shape>`;
   });
 
   return `<?xml version="1.0" encoding="utf-8"?>
-<scene width="${viewport.width}" height="${viewport.height}" fps="30" totalTime="5000" exportQuality="0" backgroundColor="#FF000000">
+<scene title="${projTitle}" width="${sceneWidth}" height="${sceneHeight}" exportWidth="${sceneWidth}" exportHeight="${sceneHeight}" fps="${fps}" totalTime="${totalDuration}" bgcolor="#FF000000" backgroundColor="#FF000000" exportQuality="0" amver="1002351" ffver="106" am="com.alightcreative.motion/5.0.260.1002351">
 
 ${shapeElements.join('\n\n')}
 
@@ -969,7 +995,7 @@ ${shapeElements.join('\n\n')}
  *
  * Re-parses actual generated Alight Motion XML with DOMParser:
  * - Confirms well-formedness (no parsererror)
- * - Confirms root <scene> with width, height, fps
+ * - Confirms root <scene> with width, height, fps, amver, and am package
  * - Confirms every path is an individual <shape>
  * - Confirms every <shape> has valid <transform> and <path d="...">
  * - Confirms no NaN / Infinity
@@ -985,7 +1011,7 @@ export function validateAlightMotionXml(
 
   const checks: AlightValidationCheck[] = [
     { id: 'xml_structure', label: 'Struktur XML Valid & Well-Formed (Re-parse DOMParser)', passed: true },
-    { id: 'scene_root', label: 'Root Tag Scene Alight Motion (<scene width height fps>)', passed: true },
+    { id: 'scene_root', label: 'Root Tag Scene Alight Motion (<scene amver am width height>)', passed: true },
     { id: 'shape_layers', label: `Setiap Path Menjadi Object Scene (${expectedLayerCount} Layer Shape)`, passed: true },
     { id: 'transforms_flattened', label: 'Flattened Transforms (Baking Koordinat Matrix)', passed: true },
     { id: 'path_data_valid', label: 'Data Path Bebas NaN / Infinity', passed: true },
@@ -1015,6 +1041,12 @@ export function validateAlightMotionXml(
     if (w <= 0 || h <= 0) {
       checks[1].passed = false;
       errors.push('Dimensi <scene> width/height harus lebih besar dari 0.');
+    }
+    const amver = root.getAttribute('amver');
+    const am = root.getAttribute('am');
+    if (!amver || !am) {
+      checks[1].passed = false;
+      errors.push('Tag <scene> wajib memiliki atribut amver dan am (identifier aplikasi Alight Motion).');
     }
   }
 
@@ -1103,7 +1135,7 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
 
   const processedLayers: ProcessedLayer[] = [];
 
-  shapeElements.forEach((el, index) => {
+  shapeElements.forEach((el) => {
     // Convert shape to raw path string
     const rawPathData = convertShapesToPaths(el);
     if (!rawPathData || !rawPathData.trim()) return;
@@ -1111,14 +1143,8 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
     // Flatten cumulative matrix
     const matrix = flattenTransforms(el);
 
-    // Convert path commands and bake matrix coordinates
-    const { pathData, bounds } = convertPathCommands(rawPathData, matrix);
-    if (!pathData || !pathData.trim()) return;
-
-    if (bounds.minX < globalMinX) globalMinX = bounds.minX;
-    if (bounds.minY < globalMinY) globalMinY = bounds.minY;
-    if (bounds.maxX > globalMaxX) globalMaxX = bounds.maxX;
-    if (bounds.maxY > globalMaxY) globalMaxY = bounds.maxY;
+    // Split compound path into individual subpaths so each Alight Motion shape has a single closed/open contour
+    const subpaths = splitPathIntoSubpaths(rawPathData);
 
     // Resolve inherited styling
     const rawFill = getInheritedProperty(el, 'fill', cssClassMap) || el.getAttribute('android:fillColor');
@@ -1144,18 +1170,30 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
       }
     }
 
-    processedLayers.push({
-      id: `path_${index + 1}`,
-      label: `Layer ${index + 1}`,
-      pathData,
-      fillColor,
-      strokeColor,
-      strokeWidth: rawStrokeWidth ? parseFloat(rawStrokeWidth) : 1,
-      opacity: rawOpacity ? parseFloat(rawOpacity) : 1,
-      fillOpacity: rawFillOpacity ? parseFloat(rawFillOpacity) : 1,
-      strokeOpacity: rawStrokeOpacity ? parseFloat(rawStrokeOpacity) : 1,
-      fillRule: rawFillRule === 'evenodd' ? 'evenodd' : 'nonzero',
-      bounds,
+    subpaths.forEach((subpath) => {
+      // Convert path commands and bake matrix coordinates
+      const { pathData, bounds } = convertPathCommands(subpath, matrix);
+      if (!pathData || !pathData.trim()) return;
+
+      if (bounds.minX < globalMinX) globalMinX = bounds.minX;
+      if (bounds.minY < globalMinY) globalMinY = bounds.minY;
+      if (bounds.maxX > globalMaxX) globalMaxX = bounds.maxX;
+      if (bounds.maxY > globalMaxY) globalMaxY = bounds.maxY;
+
+      const layerIndex = processedLayers.length + 1;
+      processedLayers.push({
+        id: `path_${layerIndex}`,
+        label: `${options.vectorName || 'Trace'}_Layer_${layerIndex}`,
+        pathData,
+        fillColor,
+        strokeColor,
+        strokeWidth: rawStrokeWidth ? parseFloat(rawStrokeWidth) : 1,
+        opacity: rawOpacity ? parseFloat(rawOpacity) : 1,
+        fillOpacity: rawFillOpacity ? parseFloat(rawFillOpacity) : 1,
+        strokeOpacity: rawStrokeOpacity ? parseFloat(rawStrokeOpacity) : 1,
+        fillRule: rawFillRule === 'evenodd' ? 'evenodd' : 'nonzero',
+        bounds,
+      });
     });
   });
 

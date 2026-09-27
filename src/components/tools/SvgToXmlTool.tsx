@@ -51,6 +51,7 @@ export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SvgToXmlResult | null>(null);
   const [activeCopiedKey, setActiveCopiedKey] = useState<string | null>(null);
+  const [transferredNotice, setTransferredNotice] = useState<string | null>(null);
 
   // Active Code Tab (Default to Alight Motion XML)
   const [activeTab, setActiveTab] = useState<"xml" | "alight" | "compose" | "preview">("alight");
@@ -79,6 +80,29 @@ export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
       setIsLoading(false);
     }
   };
+
+  // Auto-load transferred SVG from Auto Trace (Image Vectorizer)
+  useEffect(() => {
+    try {
+      const transferredSvg = sessionStorage.getItem("fixio_transfer_svg");
+      if (transferredSvg && transferredSvg.trim()) {
+        sessionStorage.removeItem("fixio_transfer_svg");
+        const transferredName = sessionStorage.getItem("fixio_transfer_svg_name") || "trace_alight_motion";
+        sessionStorage.removeItem("fixio_transfer_svg_name");
+
+        setRawSvgText(transferredSvg);
+        setFileName(transferredName);
+        setSvgInputMode("paste");
+        setActiveTab("alight");
+        setTransferredNotice(
+          "Berkas SVG hasil Auto Trace (dengan path terpisah) berhasil dimuat secara otomatis! Siap di-export & di-trace pada Alight Motion."
+        );
+        handleConvert(transferredSvg, { ...options, vectorName: transferredName });
+      }
+    } catch (e) {
+      console.warn("Error reading transferred SVG from sessionStorage:", e);
+    }
+  }, []);
 
   // Handle File Upload (Accepts ANY SVG / XML / Text file from Mobile / Android)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -211,6 +235,24 @@ export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
           Konversi file gambar SVG atau kode markup SVG menjadi berkas Android `VectorDrawable` XML resmi (`res/drawable/ic_vector.xml`) & kode Jetpack Compose `ImageVector`.
         </p>
       </div>
+
+      {/* Auto Trace Transferred Notice */}
+      {transferredNotice && (
+        <div className="p-3.5 bg-purple-500/10 border border-purple-500/25 rounded-2xl flex items-center justify-between text-purple-700 dark:text-purple-300 text-xs sm:text-sm animate-ios-fade">
+          <div className="flex items-center gap-2.5">
+            <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0" />
+            <span className="font-medium">{transferredNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setTransferredNotice(null)}
+            className="p-1 hover:bg-purple-500/20 rounded-lg text-purple-600 dark:text-purple-400 cursor-pointer"
+            title="Tutup pemberitahuan"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Input Section */}
       <div className="space-y-4 bg-slate-50/50 dark:bg-[#121214] p-4 sm:p-5 rounded-2xl border border-black/5 dark:border-white/10">

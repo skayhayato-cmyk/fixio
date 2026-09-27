@@ -33,6 +33,7 @@ import {
   VectorizerPresetKey,
   VectorizeResult,
 } from "../../services/imageVectorizer";
+import { convertSvgToVectorXml } from "../../services/svgToXmlConverter";
 
 interface ImageVectorizerToolProps {
   onSelectTool?: (toolId: string) => void;
@@ -128,6 +129,37 @@ export const ImageVectorizerTool: React.FC<ImageVectorizerToolProps> = ({ onSele
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadAlightXml = () => {
+    if (!result) return;
+    try {
+      const res = convertSvgToVectorXml(result.svgCode, { vectorName: "alight_trace" });
+      const blob = new Blob([res.alightXmlCode], { type: "application/xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `alight_motion_trace_${Date.now()}.xml`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError("Gagal membuat berkas Alight Motion XML: " + (e.message || "Error"));
+    }
+  };
+
+  const handleSendToSvgToXml = () => {
+    if (!result) return;
+    try {
+      sessionStorage.setItem("fixio_transfer_svg", result.svgCode);
+      sessionStorage.setItem("fixio_transfer_svg_name", "trace_alight_motion");
+    } catch (e) {
+      console.warn("Storage error", e);
+    }
+    if (onSelectTool) {
+      onSelectTool("svg-to-xml");
+    }
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -329,6 +361,18 @@ export const ImageVectorizerTool: React.FC<ImageVectorizerToolProps> = ({ onSele
                   />
                   <span className="font-medium text-slate-700 dark:text-slate-300">Hapus Warna Background Putih</span>
                 </label>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={options.separatePaths !== false}
+                    onChange={(e) => setOptions({ ...options, separatePaths: e.target.checked })}
+                    className="rounded accent-emerald-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                    Pisahkan Path SVG (Auto-Split untuk Alight Motion Trace)
+                  </span>
+                </label>
               </div>
             </div>
           </div>
@@ -376,51 +420,69 @@ export const ImageVectorizerTool: React.FC<ImageVectorizerToolProps> = ({ onSele
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
               <div>
-                <h3 className="text-base font-bold text-black dark:text-white">Hasil Vektor SVG Selesai</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-black dark:text-white">Hasil Vektor SVG Selesai</h3>
+                  {result.separatedPaths && (
+                    <span className="px-2 py-0.5 text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-full border border-purple-500/20">
+                      Path Terpisah (Trace-Ready)
+                    </span>
+                  )}
+                </div>
                 <span className="text-xs text-slate-500 dark:text-slate-400">
-                  {result.pathCount} Kurva Bezier Path • {result.colorsUsed} Warna • {formatFileSize(result.fileSizeBytes)}
+                  {result.pathCount} Path Vektor Terpisah • {result.colorsUsed} Warna • {formatFileSize(result.fileSizeBytes)}
                 </span>
               </div>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              {onSelectTool && (
+                <button
+                  type="button"
+                  onClick={handleSendToSvgToXml}
+                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md cursor-pointer transition-all active:scale-95"
+                  title="Kirim SVG terpisah langsung ke SVG to XML converter"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Kirim ke SVG to XML (Alight Trace)</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={handleDownloadAlightXml}
+                className="px-3.5 py-2 bg-slate-900 hover:bg-black dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95 border border-white/10"
+                title="Langsung unduh Alight Motion project trace XML"
+              >
+                <FileType className="w-4 h-4 text-purple-400" />
+                <span>Unduh Alight XML</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleDownloadSvg}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95"
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95"
               >
                 <Download className="w-4 h-4" />
-                <span>Unduh File SVG</span>
+                <span>Unduh SVG</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleCopy(result.svgCode, "svg-code")}
-                className="px-3.5 py-2 bg-slate-100 dark:bg-[#2c2c2e] hover:bg-slate-200 dark:hover:bg-[#3a3a3c] text-black dark:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 border border-black/5 dark:border-white/10"
+                className="px-3 py-2 bg-slate-100 dark:bg-[#2c2c2e] hover:bg-slate-200 dark:hover:bg-[#3a3a3c] text-black dark:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 border border-black/5 dark:border-white/10"
               >
                 {activeCopiedKey === "svg-code" ? (
                   <>
                     <Check className="w-4 h-4 text-emerald-500" />
-                    <span className="text-emerald-500 font-bold">Kode SVG Tersalin!</span>
+                    <span className="text-emerald-500 font-bold">Tersalin!</span>
                   </>
                 ) : (
                   <>
                     <Copy className="w-4 h-4" />
-                    <span>Salin Kode SVG</span>
+                    <span>Salin SVG</span>
                   </>
                 )}
               </button>
-
-              {onSelectTool && (
-                <button
-                  type="button"
-                  onClick={() => onSelectTool("svg-to-xml")}
-                  className="px-3.5 py-2 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 border border-indigo-200 dark:border-indigo-800"
-                >
-                  <FileCode className="w-4 h-4" />
-                  <span>Konversi ke Android XML</span>
-                </button>
-              )}
 
               <button
                 type="button"
