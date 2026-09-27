@@ -1,8 +1,10 @@
 /**
  * Alight Motion & Android VectorDrawable Converter Engine
  *
- * Implements 100% Flattened Matrix Transformations, Shape-to-Path Conversions,
- * Strict ARGB 8-digit Color Normalization, and Alight Motion XML Validation Pipeline.
+ * Implements 100% Distinct Scene Generators:
+ * - generateAndroidVectorXml() -> Official Android VectorDrawable (<vector><path .../></vector>)
+ * - generateAlightMotionXml()  -> Native Alight Motion Project Scene (<scene><shape ...><transform/><property/><path d="..."/></shape></scene>)
+ * - validateAlightMotionXml()   -> Re-parses actual generated Alight Motion XML with DOMParser to verify structure
  */
 
 export interface Matrix2D {
@@ -47,6 +49,31 @@ export interface SvgToXmlOptions {
   alightMotionPreset?: boolean;
 }
 
+export interface ProcessedLayer {
+  id: string;
+  label: string;
+  pathData: string;
+  fillColor: string | null;
+  strokeColor: string | null;
+  strokeWidth: number;
+  opacity: number;
+  fillOpacity: number;
+  strokeOpacity: number;
+  fillRule: 'nonzero' | 'evenodd';
+  bounds: { minX: number; minY: number; maxX: number; maxY: number };
+}
+
+export interface ViewportCalculation {
+  width: number;
+  height: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
 export interface AlightValidationCheck {
   id: string;
   label: string;
@@ -60,16 +87,7 @@ export interface AlightValidationResult {
   errors: string[];
   warnings: string[];
   pathCount: number;
-  viewportInfo: {
-    width: number;
-    height: number;
-    viewportWidth: number;
-    viewportHeight: number;
-    minX: number;
-    minY: number;
-    maxX: number;
-    maxY: number;
-  };
+  viewportInfo: ViewportCalculation;
 }
 
 export interface SvgToXmlResult {
@@ -94,7 +112,53 @@ export interface SvgToXmlResult {
 }
 
 /**
- * Parses SVG transform string into Matrix2D
+ * 1. NORMALIZE SVG INPUT
+ * Strips comments, BOM, illegal entities, and wraps bare shape tags
+ */
+export function normalizeSvg(svgContent: string): string {
+  if (!svgContent || !svgContent.trim()) {
+    throw new Error('Sintaks berkas SVG/XML kosong.');
+  }
+
+  let clean = svgContent.replace(/^\uFEFF/, '').trim();
+  // Strip comments
+  clean = clean.replace(/<!--[\s\S]*?-->/g, '');
+  // Clean illegal control characters
+  clean = clean.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+  if (!clean.toLowerCase().includes('<svg') && !clean.toLowerCase().includes('<vector')) {
+    clean = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">${clean}</svg>`;
+  }
+
+  return clean;
+}
+
+/**
+ * 2. PARSE SVG STRING TO DOM
+ */
+export function parseSvg(svgString: string): Document {
+  const parser = new DOMParser();
+  let doc = parser.parseFromString(svgString, 'image/svg+xml');
+
+  let parserError = doc.querySelector('parsererror');
+  if (parserError) {
+    try {
+      doc = parser.parseFromString(svgString, 'text/xml');
+      parserError = doc.querySelector('parsererror');
+    } catch {
+      // ignore
+    }
+  }
+
+  if (parserError) {
+    throw new Error('Gagal mem-parse sintaks SVG. Format XML tidak valid: ' + (parserError.textContent || 'Unknown syntax error'));
+  }
+
+  return doc;
+}
+
+/**
+ * Parses affine matrix transforms: translate, scale, rotate, skewX, skewY, matrix
  */
 export function parseAffineMatrix(transformStr: string | null | undefined): Matrix2D {
   if (!transformStr || !transformStr.trim()) {
@@ -130,7 +194,6 @@ export function parseAffineMatrix(transformStr: string | null | undefined): Matr
       if (args.length >= 3) {
         const cx = args[1];
         const cy = args[2];
-        // translate(cx, cy) * rotate(angle) * translate(-cx, -cy)
         const t1: Matrix2D = { a: 1, b: 0, c: 0, d: 1, e: cx, f: cy };
         const rot: Matrix2D = { a: cos, b: sin, c: -sin, d: cos, e: 0, f: 0 };
         const t2: Matrix2D = { a: 1, b: 0, c: 0, d: 1, e: -cx, f: -cy };
@@ -153,6 +216,30 @@ export function parseAffineMatrix(transformStr: string | null | undefined): Matr
 }
 
 /**
+ * 3. FLATTEN TRANSFORMS: Computes cumulative 2D matrix from element up to root <svg>
+ */
+export function flattenTransforms(element: Element): Matrix2D {
+  const matrices: Matrix2D[] = [];
+  let curr: Element | null = element;
+
+  while (curr) {
+    const transformStr = curr.getAttribute('transform') || curr.getAttribute('android:transform');
+    if (transformStr) {
+      matrices.unshift(parseAffineMatrix(transformStr));
+    }
+    if (curr.tagName.toLowerCase() === 'svg') break;
+    curr = curr.parentElement;
+  }
+
+  let finalMatrix = identityMatrix();
+  matrices.forEach((m) => {
+    finalMatrix = multiplyMatrix(finalMatrix, m);
+  });
+
+  return finalMatrix;
+}
+
+/**
  * Formats float to max 3 decimal places without trailing zeroes or scientific notation
  */
 export function formatCoordinate(num: number): string {
@@ -162,20 +249,113 @@ export function formatCoordinate(num: number): string {
 }
 
 /**
- * SVG Path Command Normalizer & Matrix Transformer
- * Converts relative commands (m,l,h,v,c,s,q,t,a) to absolute, flattens matrix, and formats cleanly
+ * Sanitizes path data string, removes scientific notation (e.g. 1.2e-4 -> 0.00012)
+ */
+export function sanitizePathData(d: string): string {
+  if (!d) return '';
+  let clean = d.replace(/([+-]?\d+(?:\.\d+)?)[eE]([+-]?\d+)/g, (_, num, exp) => {
+    const val = parseFloat(num) * Math.pow(10, parseInt(exp, 10));
+    return formatCoordinate(val);
+  });
+  clean = clean.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return clean;
+}
+
+/**
+ * 4. CONVERT SHAPES TO PATHS (<rect>, <circle>, <ellipse>, <line>, <polyline>, <polygon>)
+ */
+export function convertShapesToPaths(element: Element): string | null {
+  const tagName = element.tagName.toLowerCase();
+
+  if (tagName === 'path') {
+    const d = element.getAttribute('d') || element.getAttribute('android:pathData');
+    return d ? sanitizePathData(d) : null;
+  }
+
+  if (tagName === 'rect') {
+    const x = parseFloat(element.getAttribute('x') || '0');
+    const y = parseFloat(element.getAttribute('y') || '0');
+    const w = parseFloat(element.getAttribute('width') || '0');
+    const h = parseFloat(element.getAttribute('height') || '0');
+    const rx = parseFloat(element.getAttribute('rx') || '0');
+    const ry = parseFloat(element.getAttribute('ry') || element.getAttribute('rx') || '0');
+
+    if (w <= 0 || h <= 0) return null;
+
+    if (rx > 0 || ry > 0) {
+      const rX = Math.min(rx, w / 2);
+      const rY = Math.min(ry, h / 2);
+      return `M ${x + rX} ${y} h ${w - 2 * rX} a ${rX} ${rY} 0 0 1 ${rX} ${rY} v ${h - 2 * rY} a ${rX} ${rY} 0 0 1 -${rX} ${rY} h -${w - 2 * rX} a ${rX} ${rY} 0 0 1 -${rX} -${rY} v -${h - 2 * rY} a ${rX} ${rY} 0 0 1 ${rX} -${rY} Z`;
+    }
+
+    return `M ${x} ${y} h ${w} v ${h} h -${w} Z`;
+  }
+
+  if (tagName === 'circle') {
+    const cx = parseFloat(element.getAttribute('cx') || '0');
+    const cy = parseFloat(element.getAttribute('cy') || '0');
+    const r = parseFloat(element.getAttribute('r') || '0');
+    if (r <= 0) return null;
+    const k = r * 0.552284749831;
+    return `M ${cx} ${cy - r} C ${cx + k} ${cy - r} ${cx + r} ${cy - k} ${cx + r} ${cy} C ${cx + r} ${cy + k} ${cx + k} ${cy + r} ${cx} ${cy + r} C ${cx - k} ${cy + r} ${cx - r} ${cy + k} ${cx - r} ${cy} C ${cx - r} ${cy - k} ${cx - k} ${cy - r} ${cx} ${cy - r} Z`;
+  }
+
+  if (tagName === 'ellipse') {
+    const cx = parseFloat(element.getAttribute('cx') || '0');
+    const cy = parseFloat(element.getAttribute('cy') || '0');
+    const rx = parseFloat(element.getAttribute('rx') || '0');
+    const ry = parseFloat(element.getAttribute('ry') || '0');
+    if (rx <= 0 || ry <= 0) return null;
+    const kx = rx * 0.552284749831;
+    const ky = ry * 0.552284749831;
+    return `M ${cx} ${cy - ry} C ${cx + kx} ${cy - ry} ${cx + rx} ${cy - ky} ${cx + rx} ${cy} C ${cx + rx} ${cy + ky} ${cx + kx} ${cy + ry} ${cx} ${cy + ry} C ${cx - kx} ${cy + ry} ${cx - rx} ${cy + ky} ${cx - rx} ${cy} C ${cx - rx} ${cy - ky} ${cx - kx} ${cy - ry} ${cx} ${cy - ry} Z`;
+  }
+
+  if (tagName === 'line') {
+    const x1 = element.getAttribute('x1') || '0';
+    const y1 = element.getAttribute('y1') || '0';
+    const x2 = element.getAttribute('x2') || '0';
+    const y2 = element.getAttribute('y2') || '0';
+    return `M ${x1} ${y1} L ${x2} ${y2}`;
+  }
+
+  if (tagName === 'polyline' || tagName === 'polygon') {
+    const pointsAttr = element.getAttribute('points') || '';
+    const points = pointsAttr
+      .trim()
+      .split(/[\s,]+/)
+      .filter(Boolean);
+    if (points.length < 2) return null;
+
+    let path = `M ${points[0]} ${points[1]}`;
+    for (let i = 2; i < points.length; i += 2) {
+      if (points[i] && points[i + 1]) {
+        path += ` L ${points[i]} ${points[i + 1]}`;
+      }
+    }
+    if (tagName === 'polygon') {
+      path += ' Z';
+    }
+    return path;
+  }
+
+  return null;
+}
+
+/**
+ * 5. CONVERT PATH COMMANDS: Normalizes commands to absolute (M, L, C, S, Q, T, A, Z) and bakes 2D matrix
  */
 export function convertPathCommands(d: string, matrix: Matrix2D): { pathData: string; bounds: { minX: number; minY: number; maxX: number; maxY: number } } {
   if (!d || !d.trim()) {
     return { pathData: '', bounds: { minX: 0, minY: 0, maxX: 0, maxY: 0 } };
   }
 
-  // Tokenize SVG Path d string
+  const cleanD = sanitizePathData(d);
   const tokens: string[] = [];
   const tokenRegex = /([a-zA-Z])|([+-]?(?:\d+\.\d+|\d+\.|\.\d+|\d+)(?:[eE][+-]?\d+)?)/g;
   let match;
 
-  while ((match = tokenRegex.exec(d)) !== null) {
+  while ((match = tokenRegex.exec(cleanD)) !== null) {
     if (match[1]) {
       tokens.push(match[1]);
     } else if (match[2]) {
@@ -203,6 +383,16 @@ export function convertPathCommands(d: string, matrix: Matrix2D): { pathData: st
 
   const outputParts: string[] = [];
 
+  const readArgs = (count: number): number[] => {
+    const args: number[] = [];
+    while (args.length < count && i < tokens.length && !/^[a-zA-Z]$/.test(tokens[i])) {
+      const val = parseFloat(tokens[i]);
+      args.push(isNaN(val) ? 0 : val);
+      i++;
+    }
+    return args;
+  };
+
   while (i < tokens.length) {
     const token = tokens[i];
     if (!/^[a-zA-Z]$/.test(token)) {
@@ -214,17 +404,6 @@ export function convertPathCommands(d: string, matrix: Matrix2D): { pathData: st
     const isRelative = cmd === cmd.toLowerCase();
     const upperCmd = cmd.toUpperCase();
     i++;
-
-    // Helper to read N numbers
-    const readArgs = (count: number): number[] => {
-      const args: number[] = [];
-      while (args.length < count && i < tokens.length && !/^[a-zA-Z]$/.test(tokens[i])) {
-        const val = parseFloat(tokens[i]);
-        args.push(isNaN(val) ? 0 : val);
-        i++;
-      }
-      return args;
-    };
 
     if (upperCmd === 'M') {
       let isFirst = true;
@@ -251,7 +430,6 @@ export function convertPathCommands(d: string, matrix: Matrix2D): { pathData: st
           outputParts.push(`M ${formatCoordinate(pt.x)} ${formatCoordinate(pt.y)}`);
           isFirst = false;
         } else {
-          // Implicit LineTo
           const pt = transformPoint(matrix, x, y);
           updateBounds(pt.x, pt.y);
           outputParts.push(`L ${formatCoordinate(pt.x)} ${formatCoordinate(pt.y)}`);
@@ -437,12 +615,11 @@ export function convertPathCommands(d: string, matrix: Matrix2D): { pathData: st
         currentX = x;
         currentY = y;
 
-        // Scale radii according to matrix scale
-        const scaleX = Math.sqrt(matrix.a * matrix.a + matrix.b * matrix.b);
-        const scaleY = Math.sqrt(matrix.c * matrix.c + matrix.d * matrix.d);
+        const scaleX = Math.sqrt(matrix.a * matrix.a + matrix.b * matrix.b) || 1;
+        const scaleY = Math.sqrt(matrix.c * matrix.c + matrix.d * matrix.d) || 1;
 
-        rx *= scaleX || 1;
-        ry *= scaleY || 1;
+        rx *= scaleX;
+        ry *= scaleY;
 
         const pt = transformPoint(matrix, x, y);
         updateBounds(pt.x, pt.y);
@@ -470,87 +647,6 @@ export function convertPathCommands(d: string, matrix: Matrix2D): { pathData: st
 }
 
 /**
- * Converts SVG shapes (<rect>, <circle>, <ellipse>, <line>, <polygon>, <polyline>) to path string
- */
-export function shapeToPathData(element: Element): string | null {
-  const tagName = element.tagName.toLowerCase();
-
-  if (tagName === 'path') {
-    return element.getAttribute('d') || element.getAttribute('android:pathData');
-  }
-
-  if (tagName === 'rect') {
-    const x = parseFloat(element.getAttribute('x') || '0');
-    const y = parseFloat(element.getAttribute('y') || '0');
-    const w = parseFloat(element.getAttribute('width') || '0');
-    const h = parseFloat(element.getAttribute('height') || '0');
-    const rx = parseFloat(element.getAttribute('rx') || '0');
-    const ry = parseFloat(element.getAttribute('ry') || element.getAttribute('rx') || '0');
-
-    if (w <= 0 || h <= 0) return null;
-
-    if (rx > 0 || ry > 0) {
-      const rX = Math.min(rx, w / 2);
-      const rY = Math.min(ry, h / 2);
-      return `M ${x + rX} ${y} h ${w - 2 * rX} a ${rX} ${rY} 0 0 1 ${rX} ${rY} v ${h - 2 * rY} a ${rX} ${rY} 0 0 1 -${rX} ${rY} h -${w - 2 * rX} a ${rX} ${rY} 0 0 1 -${rX} -${rY} v -${h - 2 * rY} a ${rX} ${rY} 0 0 1 ${rX} -${rY} Z`;
-    }
-
-    return `M ${x} ${y} h ${w} v ${h} h -${w} Z`;
-  }
-
-  if (tagName === 'circle') {
-    const cx = parseFloat(element.getAttribute('cx') || '0');
-    const cy = parseFloat(element.getAttribute('cy') || '0');
-    const r = parseFloat(element.getAttribute('r') || '0');
-    if (r <= 0) return null;
-    // Cubic Bezier approximation for circle kappa = 0.552284749831
-    const k = r * 0.552284749831;
-    return `M ${cx} ${cy - r} C ${cx + k} ${cy - r} ${cx + r} ${cy - k} ${cx + r} ${cy} C ${cx + r} ${cy + k} ${cx + k} ${cy + r} ${cx} ${cy + r} C ${cx - k} ${cy + r} ${cx - r} ${cy + k} ${cx - r} ${cy} C ${cx - r} ${cy - k} ${cx - k} ${cy - r} ${cx} ${cy - r} Z`;
-  }
-
-  if (tagName === 'ellipse') {
-    const cx = parseFloat(element.getAttribute('cx') || '0');
-    const cy = parseFloat(element.getAttribute('cy') || '0');
-    const rx = parseFloat(element.getAttribute('rx') || '0');
-    const ry = parseFloat(element.getAttribute('ry') || '0');
-    if (rx <= 0 || ry <= 0) return null;
-    const kx = rx * 0.552284749831;
-    const ky = ry * 0.552284749831;
-    return `M ${cx} ${cy - ry} C ${cx + kx} ${cy - ry} ${cx + rx} ${cy - ky} ${cx + rx} ${cy} C ${cx + rx} ${cy + ky} ${cx + kx} ${cy + ry} ${cx} ${cy + ry} C ${cx - kx} ${cy + ry} ${cx - rx} ${cy + ky} ${cx - rx} ${cy} C ${cx - rx} ${cy - ky} ${cx - kx} ${cy - ry} ${cx} ${cy - ry} Z`;
-  }
-
-  if (tagName === 'line') {
-    const x1 = element.getAttribute('x1') || '0';
-    const y1 = element.getAttribute('y1') || '0';
-    const x2 = element.getAttribute('x2') || '0';
-    const y2 = element.getAttribute('y2') || '0';
-    return `M ${x1} ${y1} L ${x2} ${y2}`;
-  }
-
-  if (tagName === 'polyline' || tagName === 'polygon') {
-    const pointsAttr = element.getAttribute('points') || '';
-    const points = pointsAttr
-      .trim()
-      .split(/[\s,]+/)
-      .filter(Boolean);
-    if (points.length < 2) return null;
-
-    let path = `M ${points[0]} ${points[1]}`;
-    for (let i = 2; i < points.length; i += 2) {
-      if (points[i] && points[i + 1]) {
-        path += ` L ${points[i]} ${points[i + 1]}`;
-      }
-    }
-    if (tagName === 'polygon') {
-      path += ' Z';
-    }
-    return path;
-  }
-
-  return null;
-}
-
-/**
  * Converts any SVG color string to strict Alight Motion / Android ARGB #AARRGGBB hex
  */
 export function normalizeAndroidColor(colorStr: string | null | undefined, svgDoc?: Document): string | null {
@@ -560,7 +656,6 @@ export function normalizeAndroidColor(colorStr: string | null | undefined, svgDo
 
   const str = colorStr.trim();
 
-  // Gradient url(#id)
   if (str.toLowerCase().startsWith('url(')) {
     const match = str.match(/url\(['"]?#([^'"]+)['"]?\)/i);
     if (match && match[1] && svgDoc) {
@@ -722,171 +817,20 @@ function getInheritedProperty(
 }
 
 /**
- * Calculates cumulative Matrix2D up the DOM tree from element to root SVG
+ * 6. CALCULATE VIEWPORT
+ * Derives width, height, and viewport bounds from viewBox or bounding box
  */
-export function getCumulativeMatrix(element: Element): Matrix2D {
-  const matrices: Matrix2D[] = [];
-  let curr: Element | null = element;
-
-  while (curr) {
-    const transformStr = curr.getAttribute('transform') || curr.getAttribute('android:transform');
-    if (transformStr) {
-      matrices.unshift(parseAffineMatrix(transformStr));
-    }
-    if (curr.tagName.toLowerCase() === 'svg') break;
-    curr = curr.parentElement;
-  }
-
-  let finalMatrix = identityMatrix();
-  matrices.forEach((m) => {
-    finalMatrix = multiplyMatrix(finalMatrix, m);
-  });
-
-  return finalMatrix;
-}
-
-/**
- * Alight Motion Pre-Download Checklist Validator
- */
-export function validateAlightMotionXml(
-  xmlCode: string,
-  alightXmlCode: string,
-  pathCount: number,
-  viewportInfo: { width: number; height: number; viewportWidth: number; viewportHeight: number; minX: number; minY: number; maxX: number; maxY: number }
-): AlightValidationResult {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  const checks: AlightValidationCheck[] = [
-    { id: 'xml_structure', label: 'Struktur XML Valid & Well-Formed', passed: true },
-    { id: 'path_count', label: 'Kurva Path Ditemukan (>0)', passed: true },
-    { id: 'transforms_flattened', label: 'Flattened Transforms (Baking Koordinat Matrix)', passed: true },
-    { id: 'path_data_valid', label: 'Data Path Bebas NaN / Infinity', passed: true },
-    { id: 'viewport_valid', label: 'Viewport & Bounding Box Dihitung Sesuai', passed: true },
-    { id: 'argb_colors', label: 'Format Warna ARGB 8-Digit (#AARRGGBB)', passed: true },
-    { id: 'multi_path', label: 'Multi-Path & Hierarki Layer Utuh', passed: true },
-    { id: 'alight_spec', label: 'Struktur XML Kompatibel Import Trace Alight Motion', passed: true },
-  ];
-
-  // 1. Check XML Structure
-  if (!xmlCode || !xmlCode.includes('<?xml version="1.0" encoding="utf-8"?>')) {
-    checks[0].passed = false;
-    errors.push('Deklarasi XML `<?xml version="1.0" encoding="utf-8"?>` tidak ditemukan.');
-  }
-
-  // 2. Path Count Check
-  if (pathCount <= 0) {
-    checks[1].passed = false;
-    errors.push('Tidak ditemukan kurva path yang valid pada berkas SVG/XML.');
-  }
-
-  // 3. Un-flattened Transforms Check
-  if (/transform\s*=\s*["']/i.test(xmlCode)) {
-    checks[2].passed = false;
-    errors.push('Masih terdapat atribut transform mentah yang belum di-flatten.');
-  }
-
-  // 4. NaN / Infinity Check
-  if (xmlCode.includes('NaN') || xmlCode.includes('Infinity') || xmlCode.includes('undefined')) {
-    checks[3].passed = false;
-    errors.push('Path data mengandung nilai invalid NaN / Infinity.');
-  }
-
-  // 5. Viewport Check
-  if (viewportInfo.viewportWidth <= 0 || viewportInfo.viewportHeight <= 0) {
-    checks[4].passed = false;
-    errors.push('Ukuran viewport tidak valid (width/height <= 0).');
-  }
-
-  // 6. Color Check
-  const colorMatches = xmlCode.match(/android:(fillColor|strokeColor)="([^"]+)"/g) || [];
-  for (const match of colorMatches) {
-    const hexVal = match.split('"')[1];
-    if (hexVal && hexVal.startsWith('#') && hexVal.length !== 9) {
-      checks[5].passed = false;
-      warnings.push(`Format warna "${hexVal}" bukan 8-digit ARGB. Alight Motion membutuhkan format #AARRGGBB.`);
-    }
-  }
-
-  // 7. Multi path check
-  checks[6].passed = pathCount > 0;
-
-  // 8. Alight Spec check
-  const hasScene = /<scene\b[^>]*>/i.test(alightXmlCode);
-  const hasShape = /<shape\b[^>]*>/i.test(alightXmlCode);
-  const hasVector = /<vector\b[^>]*>/i.test(alightXmlCode);
-
-  if (!hasScene || !hasShape || !hasVector) {
-    checks[7].passed = false;
-    errors.push('Struktur scene Alight Motion tidak terbentuk dengan benar.');
-  } else {
-    checks[7].passed = true;
-  }
-
-  const isValid = checks.every((c) => c.passed) && errors.length === 0;
-
-  return {
-    isValid,
-    checks,
-    errors,
-    warnings,
-    pathCount,
-    viewportInfo,
-  };
-}
-
-/**
- * Main Converter Engine
- */
-export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptions = {}): SvgToXmlResult {
-  const warnings: string[] = [];
-
-  if (!svgContent || !svgContent.trim()) {
-    throw new Error('Sintaks berkas SVG/XML kosong.');
-  }
-
-  let cleanInput = svgContent.replace(/^\uFEFF/, '').trim();
-
-  // Strip XML comments
-  cleanInput = cleanInput.replace(/<!--[\s\S]*?-->/g, '');
-
-  if (!cleanInput.toLowerCase().includes('<svg') && !cleanInput.toLowerCase().includes('<vector')) {
-    cleanInput = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">${cleanInput}</svg>`;
-  }
-
-  const parser = new DOMParser();
-  let doc = parser.parseFromString(cleanInput, 'image/svg+xml');
-
-  let parserError = doc.querySelector('parsererror');
-  if (parserError) {
-    try {
-      doc = parser.parseFromString(cleanInput, 'text/xml');
-      parserError = doc.querySelector('parsererror');
-    } catch {
-      // ignore
-    }
-  }
-
-  let svgEl = doc.querySelector('svg');
-
-  if (!svgEl) {
-    const vectorEl = doc.querySelector('vector');
-    if (!vectorEl) {
-      const wrapped = `<svg xmlns="http://www.w3.org/2000/svg">${cleanInput}</svg>`;
-      doc = parser.parseFromString(wrapped, 'image/svg+xml');
-      svgEl = doc.querySelector('svg');
-    }
-  }
-
-  const rootEl = svgEl || doc.querySelector('vector') || doc.documentElement;
-  const cssClassMap = parseCssStyleBlocks(doc);
-
-  // Determine ViewBox or calculate bounding box
-  let viewBoxAttr = rootEl ? rootEl.getAttribute('viewBox') : null;
+export function calculateViewport(
+  rootEl: Element | null,
+  globalBounds: { minX: number; minY: number; maxX: number; maxY: number },
+  options: SvgToXmlOptions = {}
+): ViewportCalculation {
   let vbMinX = 0;
   let vbMinY = 0;
   let vbWidth = 24;
   let vbHeight = 24;
+
+  const viewBoxAttr = rootEl ? rootEl.getAttribute('viewBox') : null;
 
   if (viewBoxAttr) {
     const parts = viewBoxAttr.trim().split(/[\s,]+/).map(parseFloat);
@@ -901,34 +845,274 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
     const hAttr = rootEl ? rootEl.getAttribute('height') : null;
     if (wAttr) vbWidth = parseFloat(wAttr) || 24;
     if (hAttr) vbHeight = parseFloat(hAttr) || 24;
+
+    if (!wAttr && !hAttr && Number.isFinite(globalBounds.maxX) && globalBounds.maxX > 0) {
+      vbMinX = Math.floor(globalBounds.minX);
+      vbMinY = Math.floor(globalBounds.minY);
+      vbWidth = Math.ceil(globalBounds.maxX - globalBounds.minX) || 24;
+      vbHeight = Math.ceil(globalBounds.maxY - globalBounds.minY) || 24;
+    }
   }
 
-  const indentStr = options.indentation === '4' ? '    ' : '  ';
+  const targetWidth = options.widthDp && options.widthDp > 0 ? options.widthDp : Math.round(vbWidth) || 24;
+  const targetHeight = options.heightDp && options.heightDp > 0 ? options.heightDp : Math.round(vbHeight) || 24;
 
-  let pathCount = 0;
-  const pathsXml: string[] = [];
-  const pathsSummary: Array<{ id: string; fillColor: string | null; strokeColor: string | null; strokeWidth: number; pathLength: number }> = [];
+  return {
+    width: targetWidth,
+    height: targetHeight,
+    viewportWidth: vbWidth,
+    viewportHeight: vbHeight,
+    minX: vbMinX,
+    minY: vbMinY,
+    maxX: Number.isFinite(globalBounds.maxX) ? globalBounds.maxX : vbWidth,
+    maxY: Number.isFinite(globalBounds.maxY) ? globalBounds.maxY : vbHeight,
+  };
+}
+
+/**
+ * 7. GENERATE ANDROID VECTOR XML
+ * Official Android VectorDrawable format (<vector><path .../></vector>)
+ */
+export function generateAndroidVectorXml(
+  layers: ProcessedLayer[],
+  viewport: ViewportCalculation,
+  options: SvgToXmlOptions = {}
+): string {
+  const indent = options.indentation === '4' ? '    ' : '  ';
+
+  const pathsXml = layers.map((layer) => {
+    const attrs: string[] = [];
+    attrs.push(`${indent}${indent}android:pathData="${layer.pathData}"`);
+
+    if (layer.fillColor) {
+      attrs.push(`${indent}${indent}android:fillColor="${layer.fillColor}"`);
+    }
+
+    if (layer.fillOpacity < 1) {
+      attrs.push(`${indent}${indent}android:fillAlpha="${layer.fillOpacity}"`);
+    }
+
+    if (layer.fillRule === 'evenodd') {
+      attrs.push(`${indent}${indent}android:fillType="evenOdd"`);
+    }
+
+    if (layer.strokeColor) {
+      attrs.push(`${indent}${indent}android:strokeColor="${layer.strokeColor}"`);
+      attrs.push(`${indent}${indent}android:strokeWidth="${layer.strokeWidth}"`);
+
+      if (layer.strokeOpacity < 1) {
+        attrs.push(`${indent}${indent}android:strokeAlpha="${layer.strokeOpacity}"`);
+      }
+    }
+
+    return `${indent}<path\n${attrs.join('\n')} />`;
+  });
+
+  return `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+${indent}android:width="${viewport.width}dp"
+${indent}android:height="${viewport.height}dp"
+${indent}android:viewportWidth="${viewport.viewportWidth}"
+${indent}android:viewportHeight="${viewport.viewportHeight}">
+
+${pathsXml.join('\n\n')}
+
+</vector>`;
+}
+
+/**
+ * 8. GENERATE ALIGHT MOTION PROJECT SCENE XML
+ *
+ * Distinct Alight Motion project scene format:
+ * - Root element is <scene> with width, height, fps, totalTime
+ * - Each SVG path is a separate timeline <shape> layer
+ * - Shapes include <transform> (location, scale, rotation, opacity), <property> tags, and <path d="..." />
+ * - NO Android VectorDrawable namespace
+ */
+export function generateAlightMotionXml(
+  layers: ProcessedLayer[],
+  viewport: ViewportCalculation,
+  options: SvgToXmlOptions = {}
+): string {
+  const indent = options.indentation === '4' ? '    ' : '  ';
+
+  const shapeElements = layers.map((layer, index) => {
+    const id = index + 1;
+    const label = `${options.vectorName || 'Trace'}_Layer_${id}`;
+    const fill = layer.fillColor || '#FF000000';
+    const stroke = layer.strokeColor || 'none';
+    const strokeW = layer.strokeWidth || 1;
+    const opacityVal = (layer.opacity || 1).toFixed(2);
+
+    return `${indent}<shape id="${id}" label="${label}" startTime="0" endTime="5000" fillType="${layer.fillColor ? 'color' : 'none'}" s=".path">
+${indent}${indent}<transform>
+${indent}${indent}${indent}<location x="0.0" y="0.0" />
+${indent}${indent}${indent}<scale x="1.0" y="1.0" />
+${indent}${indent}${indent}<rotation value="0.0" />
+${indent}${indent}${indent}<opacity value="${opacityVal}" />
+${indent}${indent}</transform>
+${indent}${indent}<property name="fillColor" type="color" value="${fill}" />
+${layer.strokeColor ? `${indent}${indent}<property name="strokeColor" type="color" value="${layer.strokeColor}" />\n${indent}${indent}<property name="strokeWidth" type="float" value="${strokeW}" />\n` : ''}${indent}${indent}<path d="${layer.pathData}" fill="${layer.fillColor ? fill : 'none'}" stroke="${stroke}" stroke-width="${strokeW}" />
+${indent}</shape>`;
+  });
+
+  return `<?xml version="1.0" encoding="utf-8"?>
+<scene width="${viewport.width}" height="${viewport.height}" fps="30" totalTime="5000" exportQuality="0" backgroundColor="#FF000000">
+
+${shapeElements.join('\n\n')}
+
+</scene>`;
+}
+
+/**
+ * 9. VALIDATE ALIGHT MOTION XML
+ *
+ * Re-parses actual generated Alight Motion XML with DOMParser:
+ * - Confirms well-formedness (no parsererror)
+ * - Confirms root <scene> with width, height, fps
+ * - Confirms every path is an individual <shape>
+ * - Confirms every <shape> has valid <transform> and <path d="...">
+ * - Confirms no NaN / Infinity
+ * - Confirms no Android VectorDrawable leakage
+ */
+export function validateAlightMotionXml(
+  alightXmlCode: string,
+  expectedLayerCount: number,
+  viewportInfo: ViewportCalculation
+): AlightValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const checks: AlightValidationCheck[] = [
+    { id: 'xml_structure', label: 'Struktur XML Valid & Well-Formed (Re-parse DOMParser)', passed: true },
+    { id: 'scene_root', label: 'Root Tag Scene Alight Motion (<scene width height fps>)', passed: true },
+    { id: 'shape_layers', label: `Setiap Path Menjadi Object Scene (${expectedLayerCount} Layer Shape)`, passed: true },
+    { id: 'transforms_flattened', label: 'Flattened Transforms (Baking Koordinat Matrix)', passed: true },
+    { id: 'path_data_valid', label: 'Data Path Bebas NaN / Infinity', passed: true },
+    { id: 'viewport_valid', label: 'Viewport & Bounding Box Dihitung Sesuai', passed: true },
+    { id: 'no_android_leak', label: 'Bukan Android VectorDrawable (Murni Schema Alight Motion)', passed: true },
+    { id: 'alight_spec', label: 'Struktur XML Kompatibel Import Trace Alight Motion', passed: true },
+  ];
+
+  // 1. Re-parse XML string via DOMParser
+  const parser = new DOMParser();
+  const parsedDoc = parser.parseFromString(alightXmlCode, 'text/xml');
+  const parserError = parsedDoc.querySelector('parsererror');
+
+  if (parserError) {
+    checks[0].passed = false;
+    errors.push('Sintaks XML Alight Motion tidak valid: ' + (parserError.textContent || 'Syntax error'));
+  }
+
+  // 2. Scene Root Check
+  const root = parsedDoc.documentElement;
+  if (!root || root.tagName.toLowerCase() !== 'scene') {
+    checks[1].passed = false;
+    errors.push('Elemen root harus berupa tag <scene>.');
+  } else {
+    const w = parseFloat(root.getAttribute('width') || '0');
+    const h = parseFloat(root.getAttribute('height') || '0');
+    if (w <= 0 || h <= 0) {
+      checks[1].passed = false;
+      errors.push('Dimensi <scene> width/height harus lebih besar dari 0.');
+    }
+  }
+
+  // 3. Shape Layers Check
+  const shapeElements = Array.from(parsedDoc.querySelectorAll('shape'));
+  if (shapeElements.length === 0) {
+    checks[2].passed = false;
+    errors.push('Tidak ditemukan elemen <shape> di dalam <scene>.');
+  } else if (shapeElements.length !== expectedLayerCount) {
+    checks[2].passed = false;
+    errors.push(`Jumlah layer shape (${shapeElements.length}) tidak sesuai dengan jumlah path asli (${expectedLayerCount}).`);
+  }
+
+  // 4. Transforms Flattened Check
+  if (/transform\s*=\s*["'](translate|rotate|scale|matrix)/i.test(alightXmlCode)) {
+    checks[3].passed = false;
+    errors.push('Masih terdapat atribut transform SVG mentah yang belum di-flatten.');
+  }
+
+  // 5. NaN / Infinity Check
+  if (alightXmlCode.includes('NaN') || alightXmlCode.includes('Infinity') || alightXmlCode.includes('undefined')) {
+    checks[4].passed = false;
+    errors.push('Path data mengandung nilai invalid NaN, Infinity, atau undefined.');
+  }
+
+  // 6. Viewport Check
+  if (viewportInfo.width <= 0 || viewportInfo.height <= 0) {
+    checks[5].passed = false;
+    errors.push('Ukuran viewport tidak valid (width/height <= 0).');
+  }
+
+  // 7. No Android VectorDrawable Leak Check
+  if (alightXmlCode.includes('android:pathData') || alightXmlCode.includes('schemas.android.com')) {
+    checks[6].passed = false;
+    errors.push('Alight Motion XML tidak boleh berisi namespace atau tag Android VectorDrawable (android:pathData).');
+  }
+
+  // 8. Individual Shape & Path Structure Check
+  shapeElements.forEach((shapeEl, idx) => {
+    const pathEl = shapeEl.querySelector('path');
+    if (!pathEl) {
+      checks[7].passed = false;
+      errors.push(`Shape #${idx + 1} tidak memiliki elemen kurva <path>.`);
+    } else {
+      const d = pathEl.getAttribute('d');
+      if (!d || !d.trim()) {
+        checks[7].passed = false;
+        errors.push(`Shape #${idx + 1} memiliki atribut path 'd' yang kosong.`);
+      }
+    }
+  });
+
+  const isValid = checks.every((c) => c.passed) && errors.length === 0;
+
+  return {
+    isValid,
+    checks,
+    errors,
+    warnings,
+    pathCount: shapeElements.length,
+    viewportInfo,
+  };
+}
+
+/**
+ * 10. MAIN CONVERTER PIPELINE
+ */
+export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptions = {}): SvgToXmlResult {
+  const warnings: string[] = [];
+
+  // 1. Normalize
+  const normalizedInput = normalizeSvg(svgContent);
+
+  // 2. Parse SVG
+  const doc = parseSvg(normalizedInput);
+  const rootEl = doc.querySelector('svg') || doc.querySelector('vector') || doc.documentElement;
+  const cssClassMap = parseCssStyleBlocks(doc);
+
+  // 3. Find and process all shape elements
+  const shapeElements = Array.from(rootEl ? rootEl.querySelectorAll('path, rect, circle, ellipse, line, polyline, polygon') : []);
 
   let globalMinX = Infinity;
   let globalMinY = Infinity;
   let globalMaxX = -Infinity;
   let globalMaxY = -Infinity;
 
-  // Find all shape elements
-  const shapeElements = Array.from(rootEl ? rootEl.querySelectorAll('path, rect, circle, ellipse, line, polyline, polygon') : []);
+  const processedLayers: ProcessedLayer[] = [];
 
   shapeElements.forEach((el, index) => {
-    const rawPathData = shapeToPathData(el);
+    // Convert shape to raw path string
+    const rawPathData = convertShapesToPaths(el);
     if (!rawPathData || !rawPathData.trim()) return;
 
-    pathCount++;
-
-    // Calculate cumulative matrix for element
-    const matrix = getCumulativeMatrix(el);
+    // Flatten cumulative matrix
+    const matrix = flattenTransforms(el);
 
     // Convert path commands and bake matrix coordinates
     const { pathData, bounds } = convertPathCommands(rawPathData, matrix);
-
     if (!pathData || !pathData.trim()) return;
 
     if (bounds.minX < globalMinX) globalMinX = bounds.minX;
@@ -936,13 +1120,14 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
     if (bounds.maxX > globalMaxX) globalMaxX = bounds.maxX;
     if (bounds.maxY > globalMaxY) globalMaxY = bounds.maxY;
 
-    // Inherited styling resolution
+    // Resolve inherited styling
     const rawFill = getInheritedProperty(el, 'fill', cssClassMap) || el.getAttribute('android:fillColor');
     const rawStroke = getInheritedProperty(el, 'stroke', cssClassMap) || el.getAttribute('android:strokeColor');
     const rawStrokeWidth = getInheritedProperty(el, 'stroke-width', cssClassMap) || el.getAttribute('android:strokeWidth');
-    const rawFillType = getInheritedProperty(el, 'fill-rule', cssClassMap) || getInheritedProperty(el, 'clip-rule', cssClassMap) || el.getAttribute('android:fillType');
-    const rawOpacity = getInheritedProperty(el, 'opacity', cssClassMap) || getInheritedProperty(el, 'fill-opacity', cssClassMap) || el.getAttribute('android:fillAlpha');
-    const rawStrokeOpacity = getInheritedProperty(el, 'stroke-opacity', cssClassMap) || el.getAttribute('android:strokeAlpha');
+    const rawFillRule = getInheritedProperty(el, 'fill-rule', cssClassMap) || getInheritedProperty(el, 'clip-rule', cssClassMap);
+    const rawOpacity = getInheritedProperty(el, 'opacity', cssClassMap);
+    const rawFillOpacity = getInheritedProperty(el, 'fill-opacity', cssClassMap);
+    const rawStrokeOpacity = getInheritedProperty(el, 'stroke-opacity', cssClassMap);
 
     let fillColor = normalizeAndroidColor(rawFill, doc);
     let strokeColor = normalizeAndroidColor(rawStroke, doc);
@@ -959,114 +1144,38 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
       }
     }
 
-    const attrs: string[] = [];
-
-    // Clean Path Data
-    attrs.push(`${indentStr}${indentStr}android:pathData="${pathData.trim()}"`);
-
-    if (fillColor) {
-      attrs.push(`${indentStr}${indentStr}android:fillColor="${fillColor}"`);
-    }
-
-    if (rawOpacity && parseFloat(rawOpacity) < 1) {
-      attrs.push(`${indentStr}${indentStr}android:fillAlpha="${parseFloat(rawOpacity)}"`);
-    }
-
-    if (rawFillType === 'evenodd' || rawFillType === 'evenOdd') {
-      attrs.push(`${indentStr}${indentStr}android:fillType="evenOdd"`);
-    }
-
-    if (strokeColor) {
-      attrs.push(`${indentStr}${indentStr}android:strokeColor="${strokeColor}"`);
-      const sw = rawStrokeWidth ? parseFloat(rawStrokeWidth) : 1;
-      attrs.push(`${indentStr}${indentStr}android:strokeWidth="${sw}"`);
-
-      if (rawStrokeOpacity && parseFloat(rawStrokeOpacity) < 1) {
-        attrs.push(`${indentStr}${indentStr}android:strokeAlpha="${parseFloat(rawStrokeOpacity)}"`);
-      }
-
-      const strokeLineCap = getInheritedProperty(el, 'stroke-linecap', cssClassMap) || el.getAttribute('android:strokeLineCap');
-      if (strokeLineCap) {
-        attrs.push(`${indentStr}${indentStr}android:strokeLineCap="${strokeLineCap}"`);
-      }
-
-      const strokeLineJoin = getInheritedProperty(el, 'stroke-linejoin', cssClassMap) || el.getAttribute('android:strokeLineJoin');
-      if (strokeLineJoin) {
-        attrs.push(`${indentStr}${indentStr}android:strokeLineJoin="${strokeLineJoin}"`);
-      }
-    }
-
-    pathsXml.push(`${indentStr}<path\n${attrs.join('\n')} />`);
-
-    pathsSummary.push({
+    processedLayers.push({
       id: `path_${index + 1}`,
+      label: `Layer ${index + 1}`,
+      pathData,
       fillColor,
       strokeColor,
       strokeWidth: rawStrokeWidth ? parseFloat(rawStrokeWidth) : 1,
-      pathLength: pathData.length,
+      opacity: rawOpacity ? parseFloat(rawOpacity) : 1,
+      fillOpacity: rawFillOpacity ? parseFloat(rawFillOpacity) : 1,
+      strokeOpacity: rawStrokeOpacity ? parseFloat(rawStrokeOpacity) : 1,
+      fillRule: rawFillRule === 'evenodd' ? 'evenodd' : 'nonzero',
+      bounds,
     });
   });
 
-  if (pathsXml.length === 0) {
-    warnings.push('Tidak ditemukan kurva path atau bentuk yang valid pada SVG.');
+  if (processedLayers.length === 0) {
+    warnings.push('Tidak ditemukan kurva path atau elemen bentuk yang valid pada SVG.');
   }
 
-  // Adjust viewport bounds if viewBox was missing
-  if (!viewBoxAttr && Number.isFinite(globalMaxX) && globalMaxX > 0) {
-    vbMinX = Math.floor(globalMinX);
-    vbMinY = Math.floor(globalMinY);
-    vbWidth = Math.ceil(globalMaxX - globalMinX) || 24;
-    vbHeight = Math.ceil(globalMaxY - globalMinY) || 24;
-  }
+  // 4. Calculate Viewport
+  const viewport = calculateViewport(rootEl, { minX: globalMinX, minY: globalMinY, maxX: globalMaxX, maxY: globalMaxY }, options);
 
-  const targetWidthDp = options.widthDp && options.widthDp > 0 ? options.widthDp : (Math.round(vbWidth) || 24);
-  const targetHeightDp = options.heightDp && options.heightDp > 0 ? options.heightDp : (Math.round(vbHeight) || 24);
+  // 5. Generate Android Vector XML
+  const xmlCode = generateAndroidVectorXml(processedLayers, viewport, options);
 
-  const viewportInfo = {
-    width: targetWidthDp,
-    height: targetHeightDp,
-    viewportWidth: vbWidth,
-    viewportHeight: vbHeight,
-    minX: vbMinX,
-    minY: vbMinY,
-    maxX: Number.isFinite(globalMaxX) ? globalMaxX : vbWidth,
-    maxY: Number.isFinite(globalMaxY) ? globalMaxY : vbHeight,
-  };
+  // 6. Generate Alight Motion Scene XML
+  const alightXmlCode = generateAlightMotionXml(processedLayers, viewport, options);
 
-  // Construct VectorDrawable XML
-  const xmlCode = `<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-${indentStr}android:width="${targetWidthDp}dp"
-${indentStr}android:height="${targetHeightDp}dp"
-${indentStr}android:viewportWidth="${vbWidth}"
-${indentStr}android:viewportHeight="${vbHeight}">
+  // 7. Validate Alight Motion XML by re-parsing actual output
+  const validation = validateAlightMotionXml(alightXmlCode, processedLayers.length, viewport);
 
-${pathsXml.join('\n\n')}
-
-</vector>`;
-
-  // Construct Alight Motion Native Preset XML (with required timeline totalTime & transform specs)
-  const alightXmlCode = `<?xml version="1.0" encoding="utf-8"?>
-<scene width="${targetWidthDp}" height="${targetHeightDp}" fps="30" totalTime="5000" exportQuality="0" backgroundColor="#FF000000">
-  <shape type="vector" name="${options.vectorName || 'Vector_Trace_Layer'}" startTime="0" endTime="5000" width="${targetWidthDp}.0" height="${targetHeightDp}.0">
-    <transform>
-      <translation x="0.0" y="0.0" />
-      <scale x="1.0" y="1.0" />
-      <rotation value="0.0" />
-    </transform>
-    <vector xmlns:android="http://schemas.android.com/apk/res/android"
-      android:width="${targetWidthDp}dp"
-      android:height="${targetHeightDp}dp"
-      android:viewportWidth="${vbWidth}"
-      android:viewportHeight="${vbHeight}">
-
-${pathsXml.map((p) => '    ' + p).join('\n\n')}
-
-    </vector>
-  </shape>
-</scene>`;
-
-  // Generate Jetpack Compose snippet
+  // 8. Generate Jetpack Compose snippet
   const composeCode = `// Jetpack Compose ImageVector Snippet
 val CustomVectorIcon: ImageVector
     get() {
@@ -1075,30 +1184,36 @@ val CustomVectorIcon: ImageVector
         }
         _customVectorIcon = ImageVector.Builder(
             name = "${options.vectorName || 'IcCustomVector'}",
-            defaultWidth = ${targetWidthDp}.dp,
-            defaultHeight = ${targetHeightDp}.dp,
-            viewportWidth = ${vbWidth}f,
-            viewportHeight = ${vbHeight}f
+            defaultWidth = ${viewport.width}.dp,
+            defaultHeight = ${viewport.height}.dp,
+            viewportWidth = ${viewport.viewportWidth}f,
+            viewportHeight = ${viewport.viewportHeight}f
         ).apply {
-            // Contains ${pathCount} paths converted from SVG
+            // Contains ${processedLayers.length} paths converted from SVG
         }.build()
         return _customVectorIcon!!
     }
 private var _customVectorIcon: ImageVector? = null`;
 
-  const validation = validateAlightMotionXml(xmlCode, alightXmlCode, pathCount, viewportInfo);
+  const pathsSummary = processedLayers.map((l) => ({
+    id: l.label,
+    fillColor: l.fillColor,
+    strokeColor: l.strokeColor,
+    strokeWidth: l.strokeWidth,
+    pathLength: l.pathData.length,
+  }));
 
-  const fileSizeBytes = new Blob([xmlCode], { type: 'application/xml;charset=utf-8' }).size;
+  const fileSizeBytes = new Blob([alightXmlCode], { type: 'application/xml;charset=utf-8' }).size;
 
   return {
     xmlCode,
     alightXmlCode,
     composeCode,
-    widthDp: targetWidthDp,
-    heightDp: targetHeightDp,
-    viewportWidth: vbWidth,
-    viewportHeight: vbHeight,
-    pathCount,
+    widthDp: viewport.width,
+    heightDp: viewport.height,
+    viewportWidth: viewport.viewportWidth,
+    viewportHeight: viewport.viewportHeight,
+    pathCount: processedLayers.length,
     fileSizeBytes,
     validation,
     warnings,
