@@ -168,11 +168,11 @@ export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
     setTimeout(() => setActiveCopiedKey(null), 2000);
   };
 
-  const handleDownloadXml = (formatType: "vector" | "alight" = "vector") => {
+  const handleDownloadXml = (formatType: "vector" | "alight" = "alight") => {
     if (!result) return;
     const codeToDownload = formatType === "alight" ? result.alightXmlCode : result.xmlCode;
     const finalFileName = formatType === "alight" 
-      ? `${fileName || "alight_vector"}_preset.xml` 
+      ? (fileName && fileName !== "ic_vector_drawable" ? `${fileName}_alight.xml` : "alight_motion_trace.xml")
       : `${fileName || "ic_vector_drawable"}.xml`;
 
     const blob = new Blob([codeToDownload], { type: "application/xml;charset=utf-8" });
@@ -473,31 +473,32 @@ export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
           {/* Header Metrics */}
           <div className="flex items-center justify-between flex-wrap gap-3 pb-2 border-b border-black/5 dark:border-white/10">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
               <div>
-                <h3 className="text-base font-bold text-black dark:text-white">Android VectorDrawable XML Siap Paket</h3>
+                <h3 className="text-base font-bold text-black dark:text-white">Alight Motion & Android Vector Siap Paket</h3>
                 <span className="text-xs text-slate-500 dark:text-slate-400">
                   {result.widthDp}dp × {result.heightDp}dp • Viewport: {result.viewportWidth} × {result.viewportHeight} • {result.pathCount} Path • {formatFileSize(result.fileSizeBytes)}
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
-                onClick={() => handleDownloadXml("vector")}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95"
+                onClick={() => handleDownloadXml("alight")}
+                disabled={!result.validation.isValid}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
               >
                 <Download className="w-4 h-4" />
-                <span>Unduh {fileName || "ic_vector_drawable"}.xml</span>
+                <span>Unduh Alight Trace XML (.xml)</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleCopy(result.xmlCode, "xml-code")}
+                onClick={() => handleCopy(result.alightXmlCode, "alight-code")}
                 className="px-3.5 py-2 bg-slate-100 dark:bg-[#2c2c2e] hover:bg-slate-200 dark:hover:bg-[#3a3a3c] text-black dark:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 border border-black/5 dark:border-white/10"
               >
-                {activeCopiedKey === "xml-code" ? (
+                {activeCopiedKey === "alight-code" ? (
                   <>
                     <Check className="w-4 h-4 text-emerald-500" />
                     <span className="text-emerald-500 font-bold">Tersalin!</span>
@@ -505,27 +506,62 @@ export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
                 ) : (
                   <>
                     <Copy className="w-4 h-4" />
-                    <span>Salin Kode XML</span>
+                    <span>Salin Alight XML</span>
                   </>
                 )}
               </button>
             </div>
           </div>
 
+          {/* Validation Checklist Panel */}
+          <div className="p-4 bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/10 dark:border-white/10 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className={`w-4 h-4 ${result.validation.isValid ? 'text-emerald-500' : 'text-amber-500'}`} />
+                <h4 className="text-xs font-bold text-black dark:text-white uppercase tracking-wider">
+                  Checklist Validasi Kompatibilitas Alight Motion Trace
+                </h4>
+              </div>
+              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                result.validation.isValid 
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' 
+                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+              }`}>
+                {result.validation.isValid ? '✓ 100% Lulus Validasi Import' : '⚠ Perlu Perhatian'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1 text-xs">
+              {result.validation.checks.map((check) => (
+                <div 
+                  key={check.id}
+                  className={`p-2.5 rounded-xl border flex items-center gap-2 ${
+                    check.passed 
+                      ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-700 dark:text-emerald-300' 
+                      : 'bg-rose-500/5 border-rose-500/20 text-rose-700 dark:text-rose-300'
+                  }`}
+                >
+                  <Check className={`w-3.5 h-3.5 shrink-0 ${check.passed ? 'text-emerald-500' : 'text-rose-500'}`} />
+                  <span className="text-[11px] font-medium leading-snug">{check.label}</span>
+                </div>
+              ))}
+            </div>
+
+            {result.validation.errors.length > 0 && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-600 dark:text-rose-400 text-xs space-y-1">
+                <p className="font-bold">Error Fatal Menghalangi Download:</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  {result.validation.errors.map((err, idx) => (
+                    <li key={idx}>{err}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
           {/* View Tab Switcher */}
           <div className="flex items-center justify-between flex-wrap gap-2 p-2 bg-slate-100 dark:bg-[#1c1c1e] rounded-xl border border-black/5 dark:border-white/10 text-xs font-medium">
             <div className="flex items-center gap-1 bg-white dark:bg-[#2c2c2e] p-1 rounded-lg border border-black/5 dark:border-white/10 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setActiveTab("xml")}
-                className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
-                  activeTab === "xml"
-                    ? "bg-[#007aff] text-white font-semibold shadow-xs"
-                    : "text-slate-600 dark:text-slate-300 hover:text-black"
-                }`}
-              >
-                <FileCode className="w-3.5 h-3.5" /> Android Vector XML
-              </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("alight")}
@@ -536,6 +572,17 @@ export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" /> Alight Motion XML
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("xml")}
+                className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeTab === "xml"
+                    ? "bg-[#007aff] text-white font-semibold shadow-xs"
+                    : "text-slate-600 dark:text-slate-300 hover:text-black"
+                }`}
+              >
+                <FileCode className="w-3.5 h-3.5" /> Android Vector XML
               </button>
               <button
                 type="button"
@@ -557,21 +604,46 @@ export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
                     : "text-slate-600 dark:text-slate-300 hover:text-black"
                 }`}
               >
-                <Eye className="w-3.5 h-3.5" /> Pratinjau Visual
+                <Eye className="w-3.5 h-3.5" /> Pratinjau Trace & Bounding Box
               </button>
             </div>
           </div>
 
-          {/* Compatibility Banner */}
-          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
-            <span>
-              <strong>Alight Motion & Android Compatible:</strong> Menggunakan deklarasi <code className="font-mono bg-emerald-500/20 px-1 py-0.5 rounded">&lt;?xml version="1.0" encoding="utf-8"?&gt;</code> & format warna ARGB 8-Digit (<code className="font-mono bg-emerald-500/20 px-1 py-0.5 rounded">#FF...</code>) 100% bebas error saat di-import.
-            </span>
-          </div>
-
           {/* Code Viewer / Preview Render */}
-          {activeTab === "xml" ? (
+          {activeTab === "alight" ? (
+            <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl border border-slate-800 space-y-3 font-mono text-xs relative">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="text-purple-400 font-semibold flex items-center gap-1.5">
+                  <Layers className="w-4 h-4" /> alight_motion_trace.xml (Format Scene Alight Motion)
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadXml("alight")}
+                    className="px-3 py-1 bg-purple-700 hover:bg-purple-600 text-white text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Unduh .xml</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(result.alightXmlCode, "alight-box")}
+                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
+                  >
+                    {activeCopiedKey === "alight-box" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{activeCopiedKey === "alight-box" ? "Tersalin!" : "Salin"}</span>
+                  </button>
+                </div>
+              </div>
+
+              <textarea
+                readOnly
+                value={result.alightXmlCode}
+                rows={14}
+                className="w-full bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-purple-200 font-mono text-xs focus:outline-none resize-y"
+              />
+            </div>
+          ) : activeTab === "xml" ? (
             <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl border border-slate-800 space-y-3 font-mono text-xs relative">
               <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                 <span className="text-emerald-400 font-semibold flex items-center gap-1.5">
@@ -604,39 +676,6 @@ export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
                 className="w-full bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-slate-200 font-mono text-xs focus:outline-none resize-y"
               />
             </div>
-          ) : activeTab === "alight" ? (
-            <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl border border-slate-800 space-y-3 font-mono text-xs relative">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <span className="text-purple-400 font-semibold flex items-center gap-1.5">
-                  <Layers className="w-4 h-4" /> {fileName || "alight_vector"}_preset.xml (Alight Motion Format)
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleDownloadXml("alight")}
-                    className="px-3 py-1 bg-purple-700 hover:bg-purple-600 text-white text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Unduh Alight .xml</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(result.alightXmlCode, "alight-box")}
-                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
-                  >
-                    {activeCopiedKey === "alight-box" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{activeCopiedKey === "alight-box" ? "Tersalin!" : "Salin"}</span>
-                  </button>
-                </div>
-              </div>
-
-              <textarea
-                readOnly
-                value={result.alightXmlCode}
-                rows={14}
-                className="w-full bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-purple-200 font-mono text-xs focus:outline-none resize-y"
-              />
-            </div>
           ) : activeTab === "compose" ? (
             <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl border border-slate-800 space-y-3 font-mono text-xs relative">
               <div className="flex items-center justify-between border-b border-slate-800 pb-2">
@@ -661,16 +700,52 @@ export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
               />
             </div>
           ) : (
-            <div className="p-6 bg-slate-50 dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 space-y-4 text-center">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                Render Pratinjau SVG Original vs Format Vector
-              </span>
+            <div className="p-5 bg-slate-50 dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 space-y-4 text-xs">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                  Pratinjau Bounding Box & Struktur Trace Layer
+                </span>
+                <span className="text-slate-500 font-mono">
+                  Bounding Box: [{result.validation.viewportInfo.minX}, {result.validation.viewportInfo.minY}] s/d [{result.validation.viewportInfo.maxX}, {result.validation.viewportInfo.maxY}]
+                </span>
+              </div>
 
-              <div className="w-48 h-48 mx-auto p-4 bg-white dark:bg-[#121214] rounded-2xl border border-black/10 dark:border-white/10 flex items-center justify-center shadow-xs">
-                <div
-                  dangerouslySetInnerHTML={{ __html: rawSvgText }}
-                  className="w-full h-full flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>svg]:max-w-full [&>svg]:max-h-full"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                {/* Visual SVG render */}
+                <div className="w-full h-56 p-4 bg-white dark:bg-[#121214] rounded-2xl border border-black/10 dark:border-white/10 flex items-center justify-center shadow-xs relative">
+                  <div
+                    dangerouslySetInnerHTML={{ __html: rawSvgText }}
+                    className="w-full h-full flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>svg]:max-w-full [&>svg]:max-h-full"
+                  />
+                  <div className="absolute top-2 left-2 px-2 py-1 bg-black/70 text-white font-mono text-[10px] rounded-md">
+                    {result.widthDp}dp x {result.heightDp}dp
+                  </div>
+                </div>
+
+                {/* Path Summary List */}
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  <span className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Daftar {result.pathsSummary.length} Layer Path Ter-Bake Matrix:
+                  </span>
+                  {result.pathsSummary.map((p, idx) => (
+                    <div key={idx} className="p-2.5 bg-white dark:bg-[#2c2c2e] rounded-xl border border-black/5 dark:border-white/10 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-slate-400 text-[11px]">#{idx + 1}</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">{p.id}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-[11px]">
+                        {p.fillColor && (
+                          <span className="flex items-center gap-1 font-mono">
+                            <span className="w-3 h-3 rounded-full border border-black/20" style={{ backgroundColor: p.fillColor }} />
+                            {p.fillColor}
+                          </span>
+                        )}
+                        <span className="text-slate-400">{p.pathLength} chars</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
