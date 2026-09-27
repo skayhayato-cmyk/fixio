@@ -40,8 +40,8 @@ export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
   
   // Custom Options
   const [options, setOptions] = useState<SvgToXmlOptions>({
-    widthDp: 24,
-    heightDp: 24,
+    widthDp: undefined,
+    heightDp: undefined,
     tintColor: "",
     indentation: "2",
     vectorName: "ic_vector_drawable",
@@ -52,8 +52,8 @@ export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
   const [result, setResult] = useState<SvgToXmlResult | null>(null);
   const [activeCopiedKey, setActiveCopiedKey] = useState<string | null>(null);
 
-  // Active Code Tab
-  const [activeTab, setActiveTab] = useState<"xml" | "alight" | "compose" | "preview">("xml");
+  // Active Code Tab (Default to Alight Motion XML)
+  const [activeTab, setActiveTab] = useState<"xml" | "alight" | "compose" | "preview">("alight");
 
   const sampleSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#007aff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M12 2L2 7l10 5 10-5-10-5z" />
@@ -385,9 +385,11 @@ export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
               <label className="font-semibold text-slate-600 dark:text-slate-400">Width Target (dp):</label>
               <input
                 type="number"
-                value={options.widthDp}
+                value={options.widthDp !== undefined ? options.widthDp : (result ? result.widthDp : "")}
+                placeholder={result ? `${result.widthDp} (Auto)` : "Auto (dari SVG)"}
                 onChange={(e) => {
-                  const num = parseInt(e.target.value) || 24;
+                  const val = e.target.value.trim();
+                  const num = val ? parseInt(val) : undefined;
                   const newOpts = { ...options, widthDp: num };
                   setOptions(newOpts);
                   if (rawSvgText) handleConvert(rawSvgText, newOpts);
@@ -401,9 +403,11 @@ export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
               <label className="font-semibold text-slate-600 dark:text-slate-400">Height Target (dp):</label>
               <input
                 type="number"
-                value={options.heightDp}
+                value={options.heightDp !== undefined ? options.heightDp : (result ? result.heightDp : "")}
+                placeholder={result ? `${result.heightDp} (Auto)` : "Auto (dari SVG)"}
                 onChange={(e) => {
-                  const num = parseInt(e.target.value) || 24;
+                  const val = e.target.value.trim();
+                  const num = val ? parseInt(val) : undefined;
                   const newOpts = { ...options, heightDp: num };
                   setOptions(newOpts);
                   if (rawSvgText) handleConvert(rawSvgText, newOpts);

@@ -812,9 +812,15 @@ export function validateAlightMotionXml(
   checks[6].passed = pathCount > 0;
 
   // 8. Alight Spec check
-  if (!alightXmlCode.includes('<scene') || !alightXmlCode.includes('<shape type="vector"')) {
+  const hasScene = /<scene\b[^>]*>/i.test(alightXmlCode);
+  const hasShape = /<shape\b[^>]*>/i.test(alightXmlCode);
+  const hasVector = /<vector\b[^>]*>/i.test(alightXmlCode);
+
+  if (!hasScene || !hasShape || !hasVector) {
     checks[7].passed = false;
     errors.push('Struktur scene Alight Motion tidak terbentuk dengan benar.');
+  } else {
+    checks[7].passed = true;
   }
 
   const isValid = checks.every((c) => c.passed) && errors.length === 0;
@@ -1013,8 +1019,8 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
     vbHeight = Math.ceil(globalMaxY - globalMinY) || 24;
   }
 
-  const targetWidthDp = options.widthDp || Math.round(vbWidth) || 24;
-  const targetHeightDp = options.heightDp || Math.round(vbHeight) || 24;
+  const targetWidthDp = options.widthDp && options.widthDp > 0 ? options.widthDp : (Math.round(vbWidth) || 24);
+  const targetHeightDp = options.heightDp && options.heightDp > 0 ? options.heightDp : (Math.round(vbHeight) || 24);
 
   const viewportInfo = {
     width: targetWidthDp,
@@ -1039,12 +1045,14 @@ ${pathsXml.join('\n\n')}
 
 </vector>`;
 
-  // Construct Alight Motion Native Preset XML
+  // Construct Alight Motion Native Preset XML (with required timeline totalTime & transform specs)
   const alightXmlCode = `<?xml version="1.0" encoding="utf-8"?>
-<scene width="${targetWidthDp}" height="${targetHeightDp}" fps="30" backgroundColor="#FF000000">
-  <shape name="${options.vectorName || 'Vector_Trace_Layer'}" type="vector" width="${targetWidthDp}.0" height="${targetHeightDp}.0">
+<scene width="${targetWidthDp}" height="${targetHeightDp}" fps="30" totalTime="5000" exportQuality="0" backgroundColor="#FF000000">
+  <shape type="vector" name="${options.vectorName || 'Vector_Trace_Layer'}" startTime="0" endTime="5000" width="${targetWidthDp}.0" height="${targetHeightDp}.0">
     <transform>
       <translation x="0.0" y="0.0" />
+      <scale x="1.0" y="1.0" />
+      <rotation value="0.0" />
     </transform>
     <vector xmlns:android="http://schemas.android.com/apk/res/android"
       android:width="${targetWidthDp}dp"
