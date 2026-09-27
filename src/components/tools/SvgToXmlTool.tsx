@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   FileCode,
   Sparkles,
@@ -26,11 +26,17 @@ import {
   SvgToXmlResult,
 } from "../../services/svgToXmlConverter";
 
-export const SvgToXmlTool: React.FC = () => {
+interface SvgToXmlToolProps {
+  onSelectTool?: (toolId: string) => void;
+}
+
+export const SvgToXmlTool: React.FC<SvgToXmlToolProps> = ({ onSelectTool }) => {
   const [svgInputMode, setSvgInputMode] = useState<"upload" | "paste">("upload");
   const [rawSvgText, setRawSvgText] = useState<string>("");
   const [fileName, setFileName] = useState<string>("ic_vector_drawable");
   const [uploadedFileInfo, setUploadedFileInfo] = useState<{ name: string; size: number } | null>(null);
+  const [bitmapWarning, setBitmapWarning] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Custom Options
   const [options, setOptions] = useState<SvgToXmlOptions>({
@@ -76,44 +82,75 @@ export const SvgToXmlTool: React.FC = () => {
 
   // Handle File Upload (Accepts ANY SVG / XML / Text file from Mobile / Android)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    try {
+      const file = e.target.files?.[0];
+      if (!file) return;
 
-    // Sanitize filename for Android Vector XML name conventions (alphanumeric & underscores)
-    let rawName = file.name || "ic_vector_drawable";
-    const cleanName = rawName
-      .replace(/\.(svg|xml|txt)$/i, "")
-      .replace(/[^a-zA-Z0-9_]/g, "_")
-      .toLowerCase();
+      setBitmapWarning(null);
+      setError(null);
 
-    const finalVectorName = cleanName ? (cleanName.startsWith("ic_") ? cleanName : `ic_${cleanName}`) : "ic_vector_drawable";
+      // Check if user uploaded a bitmap image (PNG/JPG/WebP/GIF) instead of SVG/XML
+      const isBitmapImage = file.type.startsWith("image/") && !file.type.includes("svg");
+      const hasImageExtension = /\.(png|jpe?g|webp|gif|bmp)$/i.test(file.name);
 
-    setFileName(finalVectorName);
-    setUploadedFileInfo({ name: file.name, size: file.size });
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (content && content.trim()) {
-        setRawSvgText(content);
-        const updatedOpts = { ...options, vectorName: finalVectorName };
-        setOptions(updatedOpts);
-        handleConvert(content, updatedOpts);
-      } else {
-        setError("Berkas yang dipilih kosong atau tidak memiliki isi teks.");
+      if (isBitmapImage || hasImageExtension) {
+        setBitmapWarning(`Berkas "${file.name}" adalah foto/gambar bitmap (PNG/JPG). Alat ini membutuhkan file berkode vektor (SVG/XML). Silakan gunakan alat "Image Vectorizer (Auto Trace)" untuk mengubah foto ini menjadi vektor SVG terlebih dahulu!`);
+        if (e.target) e.target.value = "";
+        return;
       }
-    };
-    reader.onerror = () => {
-      setError("Gagal membaca berkas dari penyimpanan perangkat Anda.");
-    };
-    reader.readAsText(file);
+
+      // Sanitize filename for Android Vector XML name conventions (alphanumeric & underscores)
+      let rawName = file.name || "ic_vector_drawable";
+      const cleanName = rawName
+        .replace(/\.(svg|xml|txt)$/i, "")
+        .replace(/[^a-zA-Z0-9_]/g, "_")
+        .toLowerCase();
+
+      const finalVectorName = cleanName ? (cleanName.startsWith("ic_") ? cleanName : `ic_${cleanName}`) : "ic_vector_drawable";
+
+      setFileName(finalVectorName);
+      setUploadedFileInfo({ name: file.name, size: file.size });
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const content = event.target?.result as string;
+          if (content && content.trim()) {
+            // Additional check if content contains binary chars or PNG header
+            if (content.includes("\uFFFD") || content.startsWith("\x89PNG") || content.startsWith("\xFF\xD8")) {
+              setBitmapWarning(`Berkas "${file.name}" berisi data gambar biner PNG/JPG. Silakan gunakan "Image Vectorizer (Auto Trace)" untuk men-trace foto ini menjadi SVG.`);
+              return;
+            }
+
+            setRawSvgText(content);
+            const updatedOpts = { ...options, vectorName: finalVectorName };
+            setOptions(updatedOpts);
+            handleConvert(content, updatedOpts);
+          } else {
+            setError("Berkas yang dipilih kosong atau tidak memiliki isi teks.");
+          }
+        } catch (readErr: any) {
+          setError(readErr.message || "Gagal memproses teks berkas.");
+        }
+      };
+      reader.onerror = () => {
+        setError("Gagal membaca berkas dari penyimpanan perangkat Anda.");
+      };
+      reader.readAsText(file);
+    } catch (outerErr: any) {
+      setError(outerErr.message || "Terjadi kesalahan saat memilih berkas.");
+    } finally {
+      if (e.target) e.target.value = "";
+    }
   };
 
   const handleClearFile = () => {
     setUploadedFileInfo(null);
+    setBitmapWarning(null);
     setRawSvgText("");
     setResult(null);
     setError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleUseSample = () => {
@@ -217,50 +254,86 @@ export const SvgToXmlTool: React.FC = () => {
 
         {/* Input Field: Upload vs Paste */}
         {svgInputMode === "upload" ? (
-          <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-[#007aff] dark:hover:border-[#0a84ff] bg-white dark:bg-[#1c1c1e] rounded-2xl p-5 text-center transition-all relative">
-            <input
-              type="file"
-              accept=".svg,.xml,.txt,image/svg+xml,text/xml,application/xml,text/plain,*/*"
-              onChange={handleFileUpload}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-            />
-            
-            {uploadedFileInfo ? (
-              <div className="flex items-center justify-between gap-3 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-left relative z-20">
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                    <FileCheck className="w-5 h-5" />
+          <div className="space-y-3">
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-[#007aff] dark:hover:border-[#0a84ff] bg-white dark:bg-[#1c1c1e] rounded-2xl p-5 text-center transition-all relative cursor-pointer group"
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".svg,.xml,.txt,image/svg+xml,text/xml,application/xml,text/plain,*/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              
+              {uploadedFileInfo ? (
+                <div className="flex items-center justify-between gap-3 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-left">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                      <FileCheck className="w-5 h-5" />
+                    </div>
+                    <div className="overflow-hidden">
+                      <p className="text-xs font-bold text-black dark:text-white truncate">
+                        {uploadedFileInfo.name}
+                      </p>
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                        Berkas Berhasil Dimuat ({formatFileSize(uploadedFileInfo.size)})
+                      </span>
+                    </div>
                   </div>
-                  <div className="overflow-hidden">
-                    <p className="text-xs font-bold text-black dark:text-white truncate">
-                      {uploadedFileInfo.name}
-                    </p>
-                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                      Berkas Berhasil Dimuat ({formatFileSize(uploadedFileInfo.size)})
-                    </span>
-                  </div>
-                </div>
 
-                <button
-                  type="button"
-                  onClick={handleClearFile}
-                  className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
-                  title="Hapus / Ganti Berkas"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2 pointer-events-none">
-                <div className="w-12 h-12 bg-[#007aff]/10 text-[#007aff] rounded-2xl flex items-center justify-center mx-auto">
-                  <UploadCloud className="w-6 h-6" />
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold rounded-lg transition-colors cursor-pointer"
+                    >
+                      Ganti File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearFile}
+                      className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                      title="Hapus Berkas"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-                <p className="text-sm font-semibold text-black dark:text-white">
-                  Klik atau Drag & Drop Berkas `.svg` di sini
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Mendukung berkas SVG/XML dari Galeri HP, Figma, Illustrator, Canva, atau IconFinder.
-                </p>
+              ) : (
+                <div className="space-y-2">
+                  <div className="w-12 h-12 bg-[#007aff]/10 text-[#007aff] dark:text-[#0a84ff] rounded-2xl flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
+                    <UploadCloud className="w-6 h-6" />
+                  </div>
+                  <p className="text-sm font-semibold text-black dark:text-white">
+                    Klik untuk pilih atau <span className="text-[#007aff] dark:text-[#0a84ff]">Drag & Drop</span> berkas `.svg` / `.xml`
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Mendukung berkas SVG/XML dari Galeri/Penyimpanan HP, Figma, Illustrator, Canva, atau IconFinder.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Bitmap Image Warning Banner */}
+            {bitmapWarning && (
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-700 dark:text-amber-300 text-xs flex items-start gap-3 animate-ios-fade">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-amber-500" />
+                <div className="space-y-2 flex-1">
+                  <p className="font-semibold text-amber-800 dark:text-amber-200">Berkas Foto / Gambar Bitmap Terdeteksi</p>
+                  <p className="opacity-90 leading-relaxed">{bitmapWarning}</p>
+                  {onSelectTool && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectTool("image-vectorizer")}
+                      className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-all active:scale-95 mt-1"
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Buka Alat Image Vectorizer (Auto Trace)</span>
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>

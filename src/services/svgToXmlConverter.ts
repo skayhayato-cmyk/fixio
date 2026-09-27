@@ -221,6 +221,26 @@ interface TransformAttrs {
   pivotY?: number;
 }
 
+function findParentGroup(element: Element): Element | null {
+  try {
+    if (element && typeof element.closest === 'function') {
+      const g = element.closest('g');
+      if (g) return g;
+    }
+  } catch {
+    // ignore
+  }
+
+  let curr: Element | null = element ? element.parentElement : null;
+  while (curr) {
+    const tag = curr.tagName ? curr.tagName.toLowerCase() : '';
+    if (tag === 'g') return curr;
+    if (tag === 'svg' || tag === 'vector') break;
+    curr = curr.parentElement;
+  }
+  return null;
+}
+
 function parseGroupTransform(transformStr: string | null): TransformAttrs | null {
   if (!transformStr) return null;
 
@@ -476,7 +496,7 @@ export function convertSvgToVectorXml(svgContent: string, options: SvgToXmlOptio
       }
     }
 
-    const parentG = el.closest('g');
+    const parentG = findParentGroup(el);
     const transformStr = parentG ? parentG.getAttribute('transform') : el.getAttribute('transform');
     const groupTransforms = parseGroupTransform(transformStr);
 

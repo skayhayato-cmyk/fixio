@@ -165,7 +165,7 @@ export default function App() {
       case "uploader":
         return <StandaloneUploaderTool onSelectTool={(id) => setActiveToolId(id)} />;
       case "svg-to-xml":
-        return <SvgToXmlTool />;
+        return <SvgToXmlTool onSelectTool={(id) => setActiveToolId(id)} />;
       case "to-qr":
         return <ToQrTool onSelectTool={(id) => setActiveToolId(id)} />;
       default:
