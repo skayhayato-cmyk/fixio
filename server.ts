@@ -884,23 +884,78 @@ const handleSpotifyDownload = async (req: any, res: any) => {
   try {
     const targetUrl = (req.query.url as string)?.trim();
     if (!targetUrl) {
-      return res.status(400).json({ ok: false, message: "URL track Spotify diperlukan" });
+      return res.status(400).json({ status: false, ok: false, message: "URL track Spotify diperlukan" });
     }
-    const apiUrl = `https://api.nexaadev.my.id/api/spotify?url=${encodeURIComponent(targetUrl)}`;
+    const apiUrl = `https://api.nexadev.my.id/api/spotify?url=${encodeURIComponent(targetUrl)}`;
     const response = await axios.get(apiUrl, {
-      timeout: 30000,
+      timeout: 35000,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
         Accept: "application/json, text/plain, */*",
       },
     });
-    if (response.data && typeof response.data === "object") {
-      return res.json(response.data);
+
+    const body = response.data;
+    if (body && typeof body === "object") {
+      // Check if NexaDev returned an error or failure
+      if (body.status === false) {
+        return res.status(400).json({
+          author: body.author || "NexaDev",
+          status: false,
+          ok: false,
+          message: body.message || "Gagal mengambil data lagu dari Spotify.",
+        });
+      }
+
+      // If NexaDev format: { author, status, data: { thumbnail, title, artist, duration, preview, url } }
+      if (body.data) {
+        const d = body.data;
+        const track = {
+          index: 1,
+          name: d.title || "Unknown Track",
+          artist: d.artist || "Unknown Artist",
+          cover: d.thumbnail || "",
+          thumbnail: d.thumbnail || "",
+          duration: d.duration || "",
+          preview: d.preview || "",
+          mp3_url: d.url || "",
+          url: d.url || "",
+        };
+
+        return res.json({
+          author: body.author || "NexaDev",
+          status: true,
+          ok: true,
+          data: d,
+          tracks: [track],
+        });
+      }
+
+      // If tracks array format is already present
+      if (Array.isArray(body.tracks) && body.tracks.length > 0) {
+        return res.json({
+          author: body.author || "NexaDev",
+          status: true,
+          ok: true,
+          tracks: body.tracks,
+          data: {
+            title: body.tracks[0]?.name,
+            artist: body.tracks[0]?.artist,
+            thumbnail: body.tracks[0]?.cover,
+            duration: body.tracks[0]?.duration,
+            preview: body.tracks[0]?.preview,
+            url: body.tracks[0]?.mp3_url,
+          },
+        });
+      }
+
+      return res.json(body);
     }
-    return res.status(502).json({ ok: false, message: "Format respons dari server Spotify tidak sesuai." });
+    return res.status(502).json({ status: false, ok: false, message: "Format respons dari server Spotify tidak sesuai." });
   } catch (error: any) {
     console.warn("Spotify downloader failed:", extractErrorMessage(error, "Spotify API error"));
     return res.status(error?.response?.status || 502).json({
+      status: false,
       ok: false,
       message: extractErrorMessage(error, "Gagal mengambil data lagu Spotify. Pastikan link track valid."),
     });

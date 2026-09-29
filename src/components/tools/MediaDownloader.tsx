@@ -410,21 +410,38 @@ export const MediaDownloader: React.FC<MediaDownloaderProps> = ({
   const processSpotify = async (targetUrl: string): Promise<MediaItem[]> => {
     let res: any = null;
     try {
-      const resp = await axios.get<any>("/api/spotify-dl", {
+      const resp = await axios.get<any>("/api/spotify", {
         params: { url: targetUrl },
-        timeout: 35000,
+        timeout: 45000,
       });
       res = resp.data;
     } catch {
-      res = await fetchProxiedJson<any>(`https://api.nexaadev.my.id/api/spotify?url=${encodeURIComponent(targetUrl)}`);
+      res = await fetchProxiedJson<any>(`https://api.nexadev.my.id/api/spotify?url=${encodeURIComponent(targetUrl)}`);
     }
     const items: MediaItem[] = [];
 
-    if (!res || !Array.isArray(res.tracks) || res.tracks.length === 0) {
-      throw new Error("Lagu Spotify tidak ditemukan atau link tidak valid.");
+    // Normalize either { status, data: { thumbnail, title, artist, duration, preview, url } } or { tracks: [...] }
+    let tracksList: any[] = [];
+    if (res?.data && res?.status) {
+      tracksList = [
+        {
+          name: res.data.title || "Spotify Track",
+          artist: res.data.artist || "Spotify",
+          cover: res.data.thumbnail,
+          duration: res.data.duration,
+          preview: res.data.preview,
+          mp3_url: res.data.url,
+        },
+      ];
+    } else if (Array.isArray(res?.tracks) && res.tracks.length > 0) {
+      tracksList = res.tracks;
     }
 
-    const firstTrack = res.tracks[0];
+    if (tracksList.length === 0) {
+      throw new Error(res?.message || "Lagu Spotify tidak ditemukan atau link tidak valid.");
+    }
+
+    const firstTrack = tracksList[0];
     setMetaInfo({
       platform: "Spotify",
       title: firstTrack.name,
@@ -433,14 +450,15 @@ export const MediaDownloader: React.FC<MediaDownloaderProps> = ({
       cover: firstTrack.cover,
     });
 
-    res.tracks.forEach((track: any, idx: number) => {
-      if (track?.mp3_url) {
+    tracksList.forEach((track: any, idx: number) => {
+      const mp3DownloadUrl = track.mp3_url || track.url;
+      if (mp3DownloadUrl) {
         const trackTitle = track.name || `Track ${idx + 1}`;
         const artist = track.artist || "Artist";
         items.push({
           id: `spotify-track-${idx}`,
           type: "audio",
-          url: track.mp3_url,
+          url: mp3DownloadUrl,
           quality: "320kbps MP3",
           thumbnail: track.cover,
           filename: `${artist} - ${trackTitle}.mp3`,

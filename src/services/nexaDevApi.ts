@@ -1001,3 +1001,86 @@ export async function getImageToPrompt(
   throw new Error(mapNexaError(lastError, "Gagal menganalisis gambar menjadi deskripsi prompt."));
 }
 
+/**
+ * 15. Spotify Downloader
+ * Endpoint: https://api.nexadev.my.id/api/spotify?url={SPOTIFY_TRACK_URL}
+ * 
+ * Returns:
+ * {
+ *   author: "NexaDev",
+ *   status: true,
+ *   data: {
+ *     thumbnail: "https://i.scdn.co/image/...",
+ *     title: "Track Title - Artist",
+ *     artist: "Artist",
+ *     duration: "03:58",
+ *     preview: "https://p.scdn.co/mp3-preview/...",
+ *     url: "https://secure-signed.pages.dev/token/..."
+ *   }
+ * }
+ */
+export async function getSpotifyDownload(
+  spotifyUrl: string,
+  signal?: AbortSignal
+): Promise<{
+  author: string;
+  status: boolean;
+  data: {
+    thumbnail?: string;
+    title: string;
+    artist: string;
+    duration?: string;
+    preview?: string;
+    url: string;
+  };
+}> {
+  if (!spotifyUrl || typeof spotifyUrl !== "string") {
+    throw new Error("URL track Spotify tidak boleh kosong.");
+  }
+
+  const cleanUrl = spotifyUrl.trim();
+  const directEndpoint = `${NEXA_API_HOST}/api/spotify?url=${encodeURIComponent(cleanUrl)}`;
+
+  // 1. Try dedicated Next.js API route first
+  try {
+    const res = await axios.get("/api/spotify", {
+      params: { url: cleanUrl },
+      signal,
+      timeout: 45000,
+    });
+    if (res.data && res.data.status && res.data.data?.url) {
+      return res.data;
+    }
+    if (res.data?.message) {
+      throw new Error(res.data.message);
+    }
+  } catch (err: any) {
+    if (axios.isCancel(err) || err.name === "CanceledError") {
+      throw new Error("Permintaan dibatalkan.");
+    }
+    // Continue to proxy-json fallback
+  }
+
+  // 2. Fallback to /api/proxy-json
+  try {
+    const res = await axios.get("/api/proxy-json", {
+      params: { url: directEndpoint },
+      signal,
+      timeout: 45000,
+    });
+    if (res.data && res.data.status && res.data.data?.url) {
+      return res.data;
+    }
+    if (res.data?.message) {
+      throw new Error(res.data.message);
+    }
+    throw new Error("Format respons Spotify tidak valid.");
+  } catch (err: any) {
+    if (axios.isCancel(err) || err.name === "CanceledError") {
+      throw new Error("Permintaan dibatalkan.");
+    }
+    throw new Error(mapNexaError(err, "Gagal mengambil lagu dari Spotify. Pastikan link lagu Spotify benar dan publik."));
+  }
+}
+
+

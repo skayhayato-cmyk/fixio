@@ -182,22 +182,43 @@ export interface InstagramDownloadV2Response {
   message?: string;
 }
 
+export interface NexaSpotifyData {
+  thumbnail?: string;
+  title: string;
+  artist: string;
+  duration?: string;
+  preview?: string;
+  url: string; // The MP3 file stream / download URL
+}
+
+export interface NexaSpotifyResponse {
+  author: string;
+  status: boolean;
+  data?: NexaSpotifyData;
+  message?: string;
+}
+
 export interface SpotifyTrack {
   index: number;
   name: string;
   artist: string;
   cover?: string;
+  thumbnail?: string;
   album?: string;
   duration?: string;
   year?: number;
+  preview?: string;
   mp3_url?: string;
+  url?: string;
 }
 
 export interface SpotifyDownloadResponse {
-  author: string;
-  service: string;
+  author?: string;
+  service?: string;
+  status?: boolean;
   ok: boolean;
-  url: string;
+  url?: string;
+  data?: NexaSpotifyData;
   total?: number;
   downloaded?: number;
   tracks?: SpotifyTrack[];

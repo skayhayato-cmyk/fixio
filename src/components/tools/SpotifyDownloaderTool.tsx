@@ -10,26 +10,27 @@ import {
   CheckCircle2,
   Disc3,
   Clock,
-  Calendar,
   Copy,
   Check,
   Sparkles,
+  ExternalLink,
+  Volume2,
 } from "lucide-react";
 import { getProxiedImageUrl, triggerDownload } from "../../services/api";
-import { SpotifyDownloadResponse, SpotifyTrack } from "../../types";
+import { NexaSpotifyData, NexaSpotifyResponse } from "../../types";
 
 const SAMPLE_TRACKS = [
   {
+    title: "Westlife - Where We Are",
+    url: "https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT",
+  },
+  {
     title: "Hindia - everything u are",
-    url: "https://open.spotify.com/track/5WOSNVChcadlsCRiqXE45K?si=medCM_2XT5-7ewU5h2yr0g&utm_source=copy-link",
+    url: "https://open.spotify.com/track/5WOSNVChcadlsCRiqXE45K",
   },
   {
-    title: "Nadhif - penjaga hati",
-    url: "https://open.spotify.com/track/5vQSU3pxA9atqN6zMrcTU7?si=XtbNv3PmQ4Gtbz8Ts1tIAQ",
-  },
-  {
-    title: "Bernadya - Satu Bulan",
-    url: "https://open.spotify.com/track/2yN6U3k5oD1i9BvYk4g1rA",
+    title: "Coldplay - Yellow",
+    url: "https://open.spotify.com/track/3AJwUDP919kvQ9QcozQPxg",
   },
 ];
 
@@ -37,12 +38,13 @@ export const SpotifyDownloaderTool: React.FC = () => {
   const [url, setUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tracks, setTracks] = useState<SpotifyTrack[]>([]);
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
+  const [trackData, setTrackData] = useState<NexaSpotifyData | null>(null);
+  const [authorName, setAuthorName] = useState<string>("NexaDev");
+  const [copiedMp3, setCopiedMp3] = useState(false);
+  const [copiedPreview, setCopiedPreview] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const handleDownload = async (targetUrlOverride?: string) => {
-    // Jika tidak ada url, gunakan contoh default (bisa tanpa url manual)
     const rawUrl = (targetUrlOverride || url).trim();
     const cleanUrl = rawUrl || SAMPLE_TRACKS[0].url;
 
@@ -54,53 +56,80 @@ export const SpotifyDownloaderTool: React.FC = () => {
 
     setError(null);
     setIsLoading(true);
-    setTracks([]);
+    setTrackData(null);
 
     try {
-      let data: SpotifyDownloadResponse | null = null;
+      let result: NexaSpotifyResponse | null = null;
+
+      // 1. Call dedicated proxy route /api/spotify
       try {
-        const res = await axios.get<SpotifyDownloadResponse>("/api/spotify-dl", {
+        const res = await axios.get<any>("/api/spotify", {
           params: { url: cleanUrl },
           timeout: 45000,
         });
-        data = res.data;
+        result = res.data;
       } catch (localErr: any) {
-        // Direct fallback to API if local route encounters issues
-        const fallbackUrl = `https://api.nexaadev.my.id/api/spotify?url=${encodeURIComponent(cleanUrl)}`;
-        const fallbackRes = await axios.get<SpotifyDownloadResponse>(fallbackUrl, { timeout: 45000 });
-        data = fallbackRes.data;
+        // Fallback to /api/proxy-json with official NexaDev Spotify endpoint
+        const targetEndpoint = `https://api.nexadev.my.id/api/spotify?url=${encodeURIComponent(cleanUrl)}`;
+        const fallbackRes = await axios.get<any>("/api/proxy-json", {
+          params: { url: targetEndpoint },
+          timeout: 45000,
+        });
+        result = fallbackRes.data;
       }
 
-      if (data?.ok && data.tracks && data.tracks.length > 0) {
-        setTracks(data.tracks);
+      if (result?.status && result.data?.url) {
+        setTrackData(result.data);
+        if (result.author) setAuthorName(result.author);
+      } else if ((result as any)?.tracks?.[0]?.mp3_url) {
+        // Compatibility with normalized track item
+        const first = (result as any).tracks[0];
+        setTrackData({
+          title: first.name,
+          artist: first.artist,
+          thumbnail: first.cover || first.thumbnail,
+          duration: first.duration,
+          preview: first.preview,
+          url: first.mp3_url || first.url,
+        });
+        if (result?.author) setAuthorName(result.author);
       } else {
-        setError(data?.message || "Gagal mengambil lagu. Pastikan link track Spotify valid.");
+        setError(result?.message || "Gagal mengambil data lagu. Pastikan link track Spotify valid.");
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || "Terjadi kesalahan saat menghubungi server Spotify.");
+      setError(
+        err?.response?.data?.message ||
+          err.message ||
+          "Terjadi kesalahan saat menghubungi API Spotify NexaDev."
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleCopyLink = async (mp3Url: string, idx: number) => {
+  const handleCopyLink = async (textToCopy: string, isPreview: boolean = false) => {
     try {
-      await navigator.clipboard.writeText(mp3Url);
-      setCopiedIndex(idx);
-      setTimeout(() => setCopiedIndex(null), 2000);
+      await navigator.clipboard.writeText(textToCopy);
+      if (isPreview) {
+        setCopiedPreview(true);
+        setTimeout(() => setCopiedPreview(false), 2000);
+      } else {
+        setCopiedMp3(true);
+        setTimeout(() => setCopiedMp3(false), 2000);
+      }
     } catch {
       // Ignore
     }
   };
 
-  const handleTriggerMp3 = async (track: SpotifyTrack, idx: number) => {
-    if (!track.mp3_url) return;
-    setDownloadingIndex(idx);
+  const handleTriggerMp3 = async () => {
+    if (!trackData?.url) return;
+    setIsDownloading(true);
     try {
-      const filename = `${track.artist || "Spotify"} - ${track.name || "Track"}.mp3`;
-      await triggerDownload(track.mp3_url, filename);
+      const filename = `${trackData.artist || "Spotify"} - ${trackData.title || "Track"}.mp3`;
+      await triggerDownload(trackData.url, filename);
     } finally {
-      setTimeout(() => setDownloadingIndex(null), 1200);
+      setTimeout(() => setIsDownloading(false), 1200);
     }
   };
 
@@ -110,13 +139,13 @@ export const SpotifyDownloaderTool: React.FC = () => {
       <div className="border-b border-black/5 dark:border-white/10 pb-4">
         <div className="flex items-center gap-2 text-[#007aff] dark:text-[#0a84ff] font-semibold text-xs mb-1">
           <Music2 className="w-4 h-4" />
-          <span>Spotify Music Downloader</span>
+          <span>NexaDev Spotify Downloader</span>
         </div>
         <h2 className="text-xl sm:text-2xl font-bold text-black dark:text-white tracking-tight">
           Spotify Track & MP3 Converter
         </h2>
         <p className="text-[#8e8e93] dark:text-[#98989d] text-xs sm:text-sm mt-1">
-          Unduh lagu Spotify berkualitas tinggi 320kbps MP3 lengkap dengan album cover thumbnail, nama lagu, artis, album, durasi, dan tahun rilis.
+          Unduh lagu Spotify berkualitas tinggi 320kbps MP3 lengkap dengan album cover art, judul, artis, durasi, dan audio stream.
         </p>
       </div>
 
@@ -130,13 +159,13 @@ export const SpotifyDownloaderTool: React.FC = () => {
       >
         <div>
           <label className="block text-xs sm:text-sm font-semibold text-black dark:text-white mb-1.5">
-            Link Track Spotify (Atau pilih lagu contoh di bawah tanpa perlu copy link)
+            Link Track Spotify (Atau pilih lagu contoh di bawah)
           </label>
           <div className="relative">
             <LinkIcon className="w-4 h-4 text-[#8e8e93] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="https://open.spotify.com/track/xxxxx (Kosongkan untuk lagu contoh)"
+              placeholder="https://open.spotify.com/track/xxxxx"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               className="w-full pl-10 pr-3.5 py-2.5 bg-white dark:bg-[#1c1c1e] border border-black/10 dark:border-white/10 rounded-xl text-xs sm:text-sm text-black dark:text-white placeholder-[#8e8e93] focus:outline-none focus:ring-2 focus:ring-[#007aff] transition-all"
@@ -145,7 +174,7 @@ export const SpotifyDownloaderTool: React.FC = () => {
 
           {/* Quick preset chips */}
           <div className="flex flex-wrap items-center gap-2 mt-2.5">
-            <span className="text-[11px] text-slate-400 font-medium">Contoh Siap Pakai:</span>
+            <span className="text-[11px] text-slate-400 font-medium">Contoh Lagu:</span>
             {SAMPLE_TRACKS.map((sample, sIdx) => (
               <button
                 key={sIdx}
@@ -192,13 +221,13 @@ export const SpotifyDownloaderTool: React.FC = () => {
         </div>
       )}
 
-      {/* Result */}
-      {tracks.length > 0 && (
+      {/* Result Card */}
+      {trackData && (
         <div className="space-y-4 pt-2 animate-ios-fade">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
             <h3 className="text-base font-bold text-black dark:text-white flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              {tracks.length > 1 ? `${tracks.length} Lagu Ditemukan` : "Lagu Berhasil Diproses"}
+              <span>Lagu Berhasil Diproses</span>
             </h3>
             <button
               onClick={() => handleDownload()}
@@ -209,135 +238,150 @@ export const SpotifyDownloaderTool: React.FC = () => {
             </button>
           </div>
 
-          {tracks.map((track, idx) => (
-            <div
-              key={idx}
-              className="bg-white dark:bg-[#1c1c1e] p-4 sm:p-5 rounded-3xl border border-black/5 dark:border-white/10 shadow-sm space-y-4"
-            >
-              {/* Cover Thumbnail, Artist, Name, Album, Duration, Year */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                {/* Cover Thumbnail */}
-                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border border-black/10 dark:border-white/15 bg-slate-100 dark:bg-[#121214] shrink-0 shadow-md">
-                  {track.cover ? (
-                    <img
-                      src={getProxiedImageUrl(track.cover)}
-                      alt={track.name}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[#8e8e93]">
-                      <Disc3 className="w-10 h-10" />
-                    </div>
+          <div className="bg-white dark:bg-[#1c1c1e] p-5 sm:p-6 rounded-3xl border border-black/5 dark:border-white/10 shadow-sm space-y-5">
+            {/* Cover Thumbnail, Artist, Name, Duration */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
+              {/* Cover Thumbnail */}
+              <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl overflow-hidden border border-black/10 dark:border-white/15 bg-slate-100 dark:bg-[#121214] shrink-0 shadow-md relative group">
+                {trackData.thumbnail ? (
+                  <img
+                    src={getProxiedImageUrl(trackData.thumbnail)}
+                    alt={trackData.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-[#8e8e93]">
+                    <Disc3 className="w-10 h-10" />
+                  </div>
+                )}
+              </div>
+
+              {/* Metadata Details */}
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold rounded-full border border-emerald-500/20">
+                    320kbps MP3
+                  </span>
+                  <span className="px-2 py-0.5 bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-semibold rounded-full border border-sky-500/20">
+                    {authorName}
+                  </span>
+                  {trackData.duration && (
+                    <span className="px-2 py-0.5 bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 text-[10px] font-semibold rounded-full flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-slate-400" />
+                      {trackData.duration}
+                    </span>
                   )}
                 </div>
 
-                {/* Metadata Details */}
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold rounded-full border border-emerald-500/20">
-                      320kbps MP3
-                    </span>
-                    {track.year && (
-                      <span className="px-2 py-0.5 bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 text-[10px] font-semibold rounded-full">
-                        {track.year}
-                      </span>
-                    )}
-                  </div>
+                <h4 className="text-base sm:text-lg font-bold text-black dark:text-white leading-tight">
+                  {trackData.title || "Unknown Track"}
+                </h4>
 
-                  <h4 className="text-base sm:text-lg font-bold text-black dark:text-white truncate">
-                    {track.name || "Unknown Track"}
-                  </h4>
+                <p className="text-xs sm:text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                  {trackData.artist || "Unknown Artist"}
+                </p>
 
-                  <p className="text-xs sm:text-sm font-semibold text-emerald-600 dark:text-emerald-400 truncate">
-                    {track.artist || "Unknown Artist"}
+                {trackData.preview && (
+                  <p className="text-[11px] text-[#8e8e93] dark:text-[#98989d] flex items-center gap-1 pt-0.5">
+                    <Volume2 className="w-3 h-3 text-emerald-500" />
+                    <span>Termasuk Spotify 30s Audio Preview & Full MP3 Download</span>
                   </p>
+                )}
+              </div>
+            </div>
 
-                  {track.album && (
-                    <p className="text-xs text-[#8e8e93] dark:text-[#98989d] truncate">
-                      Album: <span className="font-medium text-slate-800 dark:text-slate-200">{track.album}</span>
-                    </p>
+            {/* MP3 Audio Player & Actions */}
+            <div className="space-y-3 pt-3 border-t border-black/5 dark:border-white/10">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-black dark:text-white flex items-center gap-1.5">
+                  <Music2 className="w-3.5 h-3.5 text-emerald-500" />
+                  Pemutar Audio MP3
+                </span>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyLink(trackData.url, false)}
+                    className="px-3 py-1.5 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl flex items-center gap-1 cursor-pointer transition-all shadow-xs"
+                  >
+                    {copiedMp3 ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-500" />
+                        <span className="text-emerald-500">Link MP3 Tersalin</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>Salin Link MP3</span>
+                      </>
+                    )}
+                  </button>
+
+                  {trackData.preview && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyLink(trackData.preview!, true)}
+                      className="px-3 py-1.5 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl flex items-center gap-1 cursor-pointer transition-all shadow-xs"
+                    >
+                      {copiedPreview ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-500" />
+                          <span className="text-emerald-500">Preview Tersalin</span>
+                        </>
+                      ) : (
+                        <>
+                          <Volume2 className="w-3 h-3 text-sky-500" />
+                          <span>Salin Preview</span>
+                        </>
+                      )}
+                    </button>
                   )}
 
-                  <div className="flex items-center gap-4 pt-1 text-xs text-[#8e8e93] dark:text-[#98989d]">
-                    {track.duration && (
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Durasi: {track.duration}</span>
-                      </span>
+                  <button
+                    type="button"
+                    disabled={isDownloading}
+                    onClick={handleTriggerMp3}
+                    className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 active:scale-98 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md transition-all disabled:opacity-50"
+                  >
+                    {isDownloading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Mengunduh...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Unduh File MP3</span>
+                      </>
                     )}
-                    {track.year && (
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Rilis: {track.year}</span>
-                      </span>
-                    )}
-                  </div>
+                  </button>
                 </div>
               </div>
 
-              {/* MP3 Audio Player & Download Actions */}
-              {track.mp3_url && (
-                <div className="space-y-3 pt-3 border-t border-black/5 dark:border-white/10">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-black dark:text-white flex items-center gap-1.5">
-                      <Music2 className="w-3.5 h-3.5 text-emerald-500" />
-                      Audio Preview (Stream)
-                    </span>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleCopyLink(track.mp3_url!, idx)}
-                        className="px-3 py-1.5 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl flex items-center gap-1 cursor-pointer transition-all shadow-xs"
-                      >
-                        {copiedIndex === idx ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-500" />
-                            <span className="text-emerald-500">Tersalin</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            <span>Salin Link MP3</span>
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={downloadingIndex === idx}
-                        onClick={() => handleTriggerMp3(track, idx)}
-                        className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 active:scale-98 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md transition-all disabled:opacity-50"
-                      >
-                        {downloadingIndex === idx ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Mengunduh...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Unduh File MP3</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* HTML5 Audio Player */}
-                  <div className="p-2 bg-slate-50 dark:bg-[#121214] rounded-xl border border-black/5 dark:border-white/10">
-                    <audio
-                      controls
-                      preload="metadata"
-                      className="w-full h-9"
-                      src={`/api/audio-proxy?url=${encodeURIComponent(track.mp3_url)}`}
-                    />
-                  </div>
+              {/* HTML5 Audio Player */}
+              <div className="p-3 bg-slate-50 dark:bg-[#121214] rounded-2xl border border-black/5 dark:border-white/10 space-y-2">
+                <audio
+                  controls
+                  preload="metadata"
+                  className="w-full h-10"
+                  src={`/api/proxy-image?url=${encodeURIComponent(trackData.url)}`}
+                />
+                <div className="flex items-center justify-between text-[11px] text-[#8e8e93] dark:text-[#98989d] px-1">
+                  <span>Audio Stream (MP3 320kbps)</span>
+                  <a
+                    href={trackData.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[#007aff] dark:text-[#0a84ff] hover:underline"
+                  >
+                    <span>Direct Link</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
                 </div>
-              )}
+              </div>
             </div>
-          ))}
+          </div>
         </div>
       )}
     </div>
