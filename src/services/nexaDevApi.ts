@@ -1038,8 +1038,12 @@ export async function getSpotifyDownload(
     throw new Error("URL track Spotify tidak boleh kosong.");
   }
 
-  const cleanUrl = spotifyUrl.trim();
-  const directEndpoint = `${NEXA_API_HOST}/api/spotify?url=${encodeURIComponent(cleanUrl)}`;
+  let cleanUrl = spotifyUrl.trim();
+  const trackIdMatch = cleanUrl.match(/(?:track\/|track:|^)([a-zA-Z0-9]{22})(?:[/?#\s]|$)/);
+  if (trackIdMatch && trackIdMatch[1]) {
+    cleanUrl = `https://open.spotify.com/track/${trackIdMatch[1]}`;
+  }
+  const directEndpoint = `${NEXA_API_HOST}/api/spotify/?url=${encodeURIComponent(cleanUrl)}`;
 
   // 1. Try dedicated Next.js API route first
   try {

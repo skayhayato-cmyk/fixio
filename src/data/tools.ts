@@ -133,6 +133,15 @@ export const TOOLS_LIST: ToolDefinition[] = [
     badge: "Audio Call",
   },
   {
+    id: "story-edit",
+    title: "Story Edit Typography",
+    description: "Render animasi tipografi story aesthetic di atas video MP4 dengan judul, tags, search bar, dan foto melayang.",
+    category: "meme",
+    iconName: "Type",
+    badge: "Typography MP4",
+    popular: true,
+  },
+  {
     id: "bratvid",
     title: "Brat Video Generator",
     description: "Buat video animasi kinetik Brat aesthetic dengan latar hijau khas format MP4.",

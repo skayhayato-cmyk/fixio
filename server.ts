@@ -882,79 +882,114 @@ app.get("/api/instagram-dl-v2", async (req, res) => {
 // Spotify Downloader Proxy — returns track metadata + mp3_url
 const handleSpotifyDownload = async (req: any, res: any) => {
   try {
-    const targetUrl = (req.query.url as string)?.trim();
-    if (!targetUrl) {
-      return res.status(400).json({ status: false, ok: false, message: "URL track Spotify diperlukan" });
+    const rawUrl = (req.query.url as string)?.trim();
+    if (!rawUrl) {
+      return res.status(200).json({ status: false, ok: false, message: "URL track Spotify diperlukan" });
     }
-    const apiUrl = `https://api.nexadev.my.id/api/spotify?url=${encodeURIComponent(targetUrl)}`;
-    const response = await axios.get(apiUrl, {
-      timeout: 35000,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-        Accept: "application/json, text/plain, */*",
-      },
-    });
 
-    const body = response.data;
-    if (body && typeof body === "object") {
-      // Check if NexaDev returned an error or failure
-      if (body.status === false) {
-        return res.status(400).json({
-          author: body.author || "NexaDev",
-          status: false,
-          ok: false,
-          message: body.message || "Gagal mengambil data lagu dari Spotify.",
-        });
+    // Clean track ID or URL
+    let cleanUrl = rawUrl;
+    const trackIdMatch = rawUrl.match(/(?:track\/|track:|^)([a-zA-Z0-9]{22})(?:[/?#\s]|$)/);
+    if (trackIdMatch && trackIdMatch[1]) {
+      cleanUrl = `https://open.spotify.com/track/${trackIdMatch[1]}`;
+    } else {
+      try {
+        if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+          const u = new URL(rawUrl);
+          if (u.hostname.includes("spotify.com")) {
+            u.search = "";
+            u.hash = "";
+            u.pathname = u.pathname.replace(/^\/intl-[a-z]{2}\/track\//, "/track/");
+            cleanUrl = u.toString();
+          }
+        }
+      } catch {
+        // ignore
       }
+    }
 
-      // If NexaDev format: { author, status, data: { thumbnail, title, artist, duration, preview, url } }
-      if (body.data) {
-        const d = body.data;
-        const track = {
-          index: 1,
-          name: d.title || "Unknown Track",
-          artist: d.artist || "Unknown Artist",
-          cover: d.thumbnail || "",
-          thumbnail: d.thumbnail || "",
-          duration: d.duration || "",
-          preview: d.preview || "",
-          mp3_url: d.url || "",
-          url: d.url || "",
-        };
+    const candidateEndpoints = [
+      `https://api.nexadev.my.id/api/spotify/?url=${encodeURIComponent(cleanUrl)}`,
+      `https://api.nexadev.my.id/api/spotify?url=${encodeURIComponent(cleanUrl)}`,
+    ];
 
-        return res.json({
-          author: body.author || "NexaDev",
-          status: true,
-          ok: true,
-          data: d,
-          tracks: [track],
-        });
-      }
+    let lastBody: any = null;
+    let lastError: any = null;
 
-      // If tracks array format is already present
-      if (Array.isArray(body.tracks) && body.tracks.length > 0) {
-        return res.json({
-          author: body.author || "NexaDev",
-          status: true,
-          ok: true,
-          tracks: body.tracks,
-          data: {
-            title: body.tracks[0]?.name,
-            artist: body.tracks[0]?.artist,
-            thumbnail: body.tracks[0]?.cover,
-            duration: body.tracks[0]?.duration,
-            preview: body.tracks[0]?.preview,
-            url: body.tracks[0]?.mp3_url,
+    for (const apiUrl of candidateEndpoints) {
+      try {
+        const response = await axios.get(apiUrl, {
+          timeout: 25000,
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            Accept: "application/json, text/plain, */*",
           },
+          maxRedirects: 5,
+          validateStatus: () => true,
         });
-      }
 
-      return res.json(body);
+        const body = response.data;
+        if (body && typeof body === "object") {
+          lastBody = body;
+
+          // If NexaDev format: { author, status, data: { thumbnail, title, artist, duration, preview, url } }
+          if (body.status === true && body.data) {
+            const d = body.data;
+            const track = {
+              index: 1,
+              name: d.title || "Unknown Track",
+              artist: d.artist || "Unknown Artist",
+              cover: d.thumbnail || "",
+              thumbnail: d.thumbnail || "",
+              duration: d.duration || "",
+              preview: d.preview || "",
+              mp3_url: d.url || "",
+              url: d.url || "",
+            };
+
+            return res.status(200).json({
+              author: body.author || "NexaDev",
+              status: true,
+              ok: true,
+              data: d,
+              tracks: [track],
+            });
+          }
+
+          if (Array.isArray(body.tracks) && body.tracks.length > 0) {
+            return res.status(200).json({
+              author: body.author || "NexaDev",
+              status: true,
+              ok: true,
+              tracks: body.tracks,
+              data: {
+                title: body.tracks[0]?.name,
+                artist: body.tracks[0]?.artist,
+                thumbnail: body.tracks[0]?.cover,
+                duration: body.tracks[0]?.duration,
+                preview: body.tracks[0]?.preview,
+                url: body.tracks[0]?.mp3_url,
+              },
+            });
+          }
+        }
+      } catch (err: any) {
+        lastError = err;
+      }
     }
-    return res.status(502).json({ status: false, ok: false, message: "Format respons dari server Spotify tidak sesuai." });
+
+    return res.status(200).json({
+      author: lastBody?.author || "NexaDev",
+      status: false,
+      ok: false,
+      message:
+        lastBody?.message ||
+        lastError?.message ||
+        "Gagal memproses lagu Spotify. Pastikan link lagu Spotify aktif dan publik.",
+    });
   } catch (error: any) {
     console.warn("Spotify downloader failed:", extractErrorMessage(error, "Spotify API error"));
-    return res.status(error?.response?.status || 502).json({
+    return res.status(200).json({
       status: false,
       ok: false,
       message: extractErrorMessage(error, "Gagal mengambil data lagu Spotify. Pastikan link track valid."),

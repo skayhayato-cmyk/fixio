@@ -408,15 +408,25 @@ export const MediaDownloader: React.FC<MediaDownloaderProps> = ({
 
   // Process Spotify API
   const processSpotify = async (targetUrl: string): Promise<MediaItem[]> => {
+    let cleanUrl = targetUrl.trim();
+    const trackIdMatch = cleanUrl.match(/(?:track\/|track:|^)([a-zA-Z0-9]{22})(?:[/?#\s]|$)/);
+    if (trackIdMatch && trackIdMatch[1]) {
+      cleanUrl = `https://open.spotify.com/track/${trackIdMatch[1]}`;
+    }
+
     let res: any = null;
     try {
       const resp = await axios.get<any>("/api/spotify", {
-        params: { url: targetUrl },
-        timeout: 45000,
+        params: { url: cleanUrl },
+        timeout: 35000,
       });
       res = resp.data;
     } catch {
-      res = await fetchProxiedJson<any>(`https://api.nexadev.my.id/api/spotify?url=${encodeURIComponent(targetUrl)}`);
+      try {
+        res = await fetchProxiedJson<any>(`https://api.nexadev.my.id/api/spotify/?url=${encodeURIComponent(cleanUrl)}`);
+      } catch {
+        res = null;
+      }
     }
     const items: MediaItem[] = [];
 
@@ -519,11 +529,13 @@ export const MediaDownloader: React.FC<MediaDownloaderProps> = ({
       setMediaItems(extracted);
     } catch (err: any) {
       console.error("Downloader error:", err);
-      setError(
-        err?.response?.data?.message ||
-          err?.message ||
-          "Gagal memproses media. Server penyedia mungkin sedang sibuk atau link kadaluarsa."
-      );
+      let errMsg = "Gagal memproses media. Server penyedia mungkin sedang sibuk atau link kadaluarsa.";
+      if (err?.message === "Network Error") {
+        errMsg = "Gagal terhubung ke server pemroses media. Periksa koneksi internet Anda atau coba beberapa saat lagi.";
+      } else {
+        errMsg = err?.response?.data?.message || err?.message || errMsg;
+      }
+      setError(errMsg);
     } finally {
       setIsLoading(false);
     }

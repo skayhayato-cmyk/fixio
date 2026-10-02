@@ -37,6 +37,7 @@ import { TikTokDownloaderV2Tool } from "./components/tools/TikTokDownloaderV2Too
 import { InstagramDownloaderTool } from "./components/tools/InstagramDownloaderTool";
 import { InstagramDownloaderV2Tool } from "./components/tools/InstagramDownloaderV2Tool";
 import { SpotifyDownloaderTool } from "./components/tools/SpotifyDownloaderTool";
+import { StoryEditTool } from "./components/tools/StoryEditTool";
 import { ToQrTool } from "./components/tools/ToQrTool";
 
 import { 
@@ -144,6 +145,8 @@ export default function App() {
         return <FakeCallTool />;
       case "bratvid":
         return <BratvidTool />;
+      case "story-edit":
+        return <StoryEditTool />;
       case "fake-ff":
         return <FakeFFTool />;
       case "iqc-dark":

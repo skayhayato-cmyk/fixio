@@ -21,16 +21,16 @@ import { NexaSpotifyData, NexaSpotifyResponse } from "../../types";
 
 const SAMPLE_TRACKS = [
   {
-    title: "Westlife - Where We Are",
-    url: "https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT",
-  },
-  {
     title: "Hindia - everything u are",
     url: "https://open.spotify.com/track/5WOSNVChcadlsCRiqXE45K",
   },
   {
     title: "Coldplay - Yellow",
     url: "https://open.spotify.com/track/3AJwUDP919kvQ9QcozQPxg",
+  },
+  {
+    title: "Rick Astley - Never Gonna Give You Up",
+    url: "https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT",
   },
 ];
 
@@ -44,9 +44,19 @@ export const SpotifyDownloaderTool: React.FC = () => {
   const [copiedPreview, setCopiedPreview] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  const cleanSpotifyInput = (input: string): string => {
+    const trimmed = input.trim();
+    if (!trimmed) return "";
+    const trackIdMatch = trimmed.match(/(?:track\/|track:|^)([a-zA-Z0-9]{22})(?:[/?#\s]|$)/);
+    if (trackIdMatch && trackIdMatch[1]) {
+      return `https://open.spotify.com/track/${trackIdMatch[1]}`;
+    }
+    return trimmed;
+  };
+
   const handleDownload = async (targetUrlOverride?: string) => {
-    const rawUrl = (targetUrlOverride || url).trim();
-    const cleanUrl = rawUrl || SAMPLE_TRACKS[0].url;
+    const rawInput = (targetUrlOverride || url).trim();
+    const cleanUrl = cleanSpotifyInput(rawInput || SAMPLE_TRACKS[0].url);
 
     if (!url.trim() && !targetUrlOverride) {
       setUrl(cleanUrl);
@@ -61,28 +71,39 @@ export const SpotifyDownloaderTool: React.FC = () => {
     try {
       let result: NexaSpotifyResponse | null = null;
 
-      // 1. Call dedicated proxy route /api/spotify
+      // 1. Call dedicated route /api/spotify
       try {
-        const res = await axios.get<any>("/api/spotify", {
+        const res = await axios.get<NexaSpotifyResponse>("/api/spotify", {
           params: { url: cleanUrl },
-          timeout: 45000,
+          timeout: 35000,
         });
-        result = res.data;
+        if (res.data) {
+          result = res.data;
+        }
       } catch (localErr: any) {
-        // Fallback to /api/proxy-json with official NexaDev Spotify endpoint
-        const targetEndpoint = `https://api.nexadev.my.id/api/spotify?url=${encodeURIComponent(cleanUrl)}`;
-        const fallbackRes = await axios.get<any>("/api/proxy-json", {
-          params: { url: targetEndpoint },
-          timeout: 45000,
-        });
-        result = fallbackRes.data;
+        console.warn("Primary /api/spotify route error:", localErr?.message);
+      }
+
+      // 2. Safe fallback to /api/proxy-json if needed
+      if (!result?.status || !result?.data?.url) {
+        try {
+          const targetEndpoint = `https://api.nexadev.my.id/api/spotify/?url=${encodeURIComponent(cleanUrl)}`;
+          const fallbackRes = await axios.get<any>("/api/proxy-json", {
+            params: { url: targetEndpoint },
+            timeout: 35000,
+          });
+          if (fallbackRes?.data) {
+            result = fallbackRes.data;
+          }
+        } catch (fbErr: any) {
+          console.warn("Fallback /api/proxy-json error:", fbErr?.message);
+        }
       }
 
       if (result?.status && result.data?.url) {
         setTrackData(result.data);
         if (result.author) setAuthorName(result.author);
       } else if ((result as any)?.tracks?.[0]?.mp3_url) {
-        // Compatibility with normalized track item
         const first = (result as any).tracks[0];
         setTrackData({
           title: first.name,
@@ -94,14 +115,24 @@ export const SpotifyDownloaderTool: React.FC = () => {
         });
         if (result?.author) setAuthorName(result.author);
       } else {
-        setError(result?.message || "Gagal mengambil data lagu. Pastikan link track Spotify valid.");
+        const errMsg =
+          result?.message ||
+          "Gagal memproses lagu Spotify. Pastikan link lagu Spotify benar dan publik, atau gunakan salah satu contoh lagu di bawah.";
+        setError(errMsg);
       }
     } catch (err: any) {
-      setError(
-        err?.response?.data?.message ||
-          err.message ||
-          "Terjadi kesalahan saat menghubungi API Spotify NexaDev."
-      );
+      console.error("Downloader client exception:", err);
+      let friendlyMsg = "Terjadi kendala saat menghubungi server pemroses lagu.";
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        friendlyMsg = "Koneksi internet Anda terputus. Pastikan perangkat online.";
+      } else if (err.code === "ECONNABORTED" || err.message?.toLowerCase().includes("timeout")) {
+        friendlyMsg = "Waktu proses habis (timeout). Server NexaDev sedang padat, silakan coba sebentar lagi.";
+      } else if (err.message === "Network Error") {
+        friendlyMsg = "Gagal terhubung ke server pemroses lagu. Periksa jaringan Anda atau coba beberapa saat lagi.";
+      } else {
+        friendlyMsg = err?.response?.data?.message || err.message || friendlyMsg;
+      }
+      setError(friendlyMsg);
     } finally {
       setIsLoading(false);
     }
@@ -145,55 +176,66 @@ export const SpotifyDownloaderTool: React.FC = () => {
           Spotify Track & MP3 Converter
         </h2>
         <p className="text-[#8e8e93] dark:text-[#98989d] text-xs sm:text-sm mt-1">
-          Unduh lagu Spotify berkualitas tinggi 320kbps MP3 lengkap dengan album cover art, judul, artis, durasi, dan audio stream.
+          Unduh lagu Spotify berkualitas tinggi 320kbps MP3 lengkap dengan album cover art, judul, artis, durasi, dan streaming langsung.
         </p>
       </div>
 
-      {/* Input Section */}
+      {/* Input Form */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           handleDownload();
         }}
-        className="space-y-4 bg-slate-50/50 dark:bg-[#121214] p-4 sm:p-5 rounded-2xl border border-black/5 dark:border-white/10"
+        className="space-y-3"
       >
-        <div>
-          <label className="block text-xs sm:text-sm font-semibold text-black dark:text-white mb-1.5">
-            Link Track Spotify (Atau pilih lagu contoh di bawah)
-          </label>
-          <div className="relative">
-            <LinkIcon className="w-4 h-4 text-[#8e8e93] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="https://open.spotify.com/track/xxxxx"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              className="w-full pl-10 pr-3.5 py-2.5 bg-white dark:bg-[#1c1c1e] border border-black/10 dark:border-white/10 rounded-xl text-xs sm:text-sm text-black dark:text-white placeholder-[#8e8e93] focus:outline-none focus:ring-2 focus:ring-[#007aff] transition-all"
-            />
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#8e8e93] dark:text-[#98989d]">
+            <LinkIcon className="w-4 h-4" />
           </div>
-
-          {/* Quick preset chips */}
-          <div className="flex flex-wrap items-center gap-2 mt-2.5">
-            <span className="text-[11px] text-slate-400 font-medium">Contoh Lagu:</span>
-            {SAMPLE_TRACKS.map((sample, sIdx) => (
-              <button
-                key={sIdx}
-                type="button"
-                onClick={() => handleDownload(sample.url)}
-                className="text-[11px] px-2.5 py-1 bg-white dark:bg-[#1c1c1e] hover:bg-slate-100 dark:hover:bg-[#2c2c2e] text-[#007aff] dark:text-[#0a84ff] border border-black/5 dark:border-white/10 rounded-lg flex items-center gap-1 cursor-pointer transition-all shadow-xs"
-              >
-                <Sparkles className="w-3 h-3 text-amber-500" />
-                <span>{sample.title}</span>
-              </button>
-            ))}
-          </div>
+          <input
+            type="text"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="Tempel tautan lagu Spotify (misal: https://open.spotify.com/track/...)"
+            className="w-full pl-10 pr-24 py-3 bg-[#f2f2f7] dark:bg-[#2c2c2e] border border-black/5 dark:border-white/10 rounded-2xl text-xs sm:text-sm text-black dark:text-white placeholder-[#8e8e93] focus:outline-hidden focus:ring-2 focus:ring-[#007aff]/50 transition-all"
+            disabled={isLoading}
+          />
+          {url && !isLoading && (
+            <button
+              type="button"
+              onClick={() => setUrl("")}
+              className="absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-[#8e8e93] hover:text-black dark:hover:text-white"
+            >
+              Hapus
+            </button>
+          )}
         </div>
 
-        <div className="flex justify-end pt-1">
+        {/* Quick Sample Presets */}
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#8e8e93]">
+          <span className="font-medium flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-amber-500" />
+            Contoh siap coba:
+          </span>
+          {SAMPLE_TRACKS.map((track, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => handleDownload(track.url)}
+              disabled={isLoading}
+              className="px-2.5 py-1 bg-[#f2f2f7] dark:bg-[#2c2c2e] hover:bg-[#e5e5ea] dark:hover:bg-[#3a3a3c] text-black dark:text-white rounded-lg text-[11px] font-medium transition cursor-pointer disabled:opacity-50"
+            >
+              {track.title}
+            </button>
+          ))}
+        </div>
+
+        {/* Action Button */}
+        <div className="pt-2">
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full sm:w-auto px-6 py-2.5 ios-btn-primary text-xs font-semibold rounded-full flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            className="w-full sm:w-auto px-6 py-2.5 bg-[#007aff] hover:bg-[#0062cc] active:scale-98 text-white text-xs sm:text-sm font-semibold rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-sm"
           >
             {isLoading ? (
               <>
@@ -214,9 +256,25 @@ export const SpotifyDownloaderTool: React.FC = () => {
       {error && (
         <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-600 dark:text-rose-400 text-xs sm:text-sm flex items-start gap-3">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-          <div>
+          <div className="space-y-1">
             <p className="font-semibold">Gagal Memproses Lagu</p>
-            <p className="text-xs mt-0.5 opacity-90">{error}</p>
+            <p className="text-xs opacity-90">{error}</p>
+            <div className="pt-1 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => handleDownload(SAMPLE_TRACKS[0].url)}
+                className="text-xs underline font-semibold text-[#007aff] dark:text-[#0a84ff] hover:opacity-80 cursor-pointer"
+              >
+                Coba lagu contoh Hindia
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDownload(SAMPLE_TRACKS[1].url)}
+                className="text-xs underline font-semibold text-[#007aff] dark:text-[#0a84ff] hover:opacity-80 cursor-pointer"
+              >
+                Coba lagu Coldplay
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -285,7 +343,7 @@ export const SpotifyDownloaderTool: React.FC = () => {
                 {trackData.preview && (
                   <p className="text-[11px] text-[#8e8e93] dark:text-[#98989d] flex items-center gap-1 pt-0.5">
                     <Volume2 className="w-3 h-3 text-emerald-500" />
-                    <span>Termasuk Spotify 30s Audio Preview & Full MP3 Download</span>
+                    <span>Tersedia Audio Preview 30 detik & Full MP3 Download</span>
                   </p>
                 )}
               </div>
@@ -365,7 +423,7 @@ export const SpotifyDownloaderTool: React.FC = () => {
                   controls
                   preload="metadata"
                   className="w-full h-10"
-                  src={`/api/proxy-image?url=${encodeURIComponent(trackData.url)}`}
+                  src={`/api/audio-proxy?url=${encodeURIComponent(trackData.url)}`}
                 />
                 <div className="flex items-center justify-between text-[11px] text-[#8e8e93] dark:text-[#98989d] px-1">
                   <span>Audio Stream (MP3 320kbps)</span>
