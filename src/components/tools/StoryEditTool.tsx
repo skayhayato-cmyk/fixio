@@ -1,29 +1,16 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import axios from "axios";
 import {
-  Film,
-  Type,
-  Copy,
-  Check,
   Upload,
   Play,
   Pause,
   RotateCcw,
+  Copy,
+  Check,
   Download,
-  Sparkles,
-  Sliders,
-  Eye,
-  Video,
-  CheckCircle2,
   AlertCircle,
-  FileVideo,
-  Music,
   Loader2,
-  ChevronDown,
-  ChevronUp,
-  Tag,
-  Compass,
-  Palette,
+  Film,
 } from "lucide-react";
 import { parseCommand } from "../../services/storyEditTypes";
 
@@ -80,17 +67,20 @@ export const StoryEditTool: React.FC = () => {
   // Main typography text input
   const [rawText, setRawText] = useState("Nature's whisper | Healing, Serenity, Escapism");
   const [author, setAuthor] = useState("nexadev");
-  const [videoSourceType, setVideoSourceType] = useState<"preset" | "upload" | "url">("preset");
-  const [selectedPresetVideo, setSelectedPresetVideo] = useState("/samples/nature.mp4");
+
+  // Video source state: direct file upload is primary
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string>("");
-  const [customVideoUrl, setCustomVideoUrl] = useState("");
-  
+  const [selectedSampleVideo, setSelectedSampleVideo] = useState<string>("/samples/nature.mp4");
+  const [useSampleMode, setUseSampleMode] = useState<boolean>(false);
+  const [customVideoUrl, setCustomVideoUrl] = useState<string>("");
+  const [showUrlInput, setShowUrlInput] = useState<boolean>(false);
+
   // Customization options
   const [width, setWidth] = useState<number>(540); // 540x960 fast or 720x1280 HD
   const [duration, setDuration] = useState<number>(8);
   const [scriptFirstWord, setScriptFirstWord] = useState<boolean>(true);
-  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
+  const [showSettings, setShowSettings] = useState<boolean>(false);
 
   // Copy feedback state
   const [copiedText, setCopiedText] = useState<boolean>(false);
@@ -113,39 +103,72 @@ export const StoryEditTool: React.FC = () => {
   // Live Canvas Preview state
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [previewTime, setPreviewTime] = useState<number>(3.5);
   const [isPlayingPreview, setIsPlayingPreview] = useState<boolean>(false);
 
-  // Parsed metadata
+  // Parsed metadata from rawText
   const parsedData = useMemo(() => {
     return parseCommand(rawText);
   }, [rawText]);
 
   // Current effective video URL for preview
   const currentVideoSrc = useMemo(() => {
-    if (videoSourceType === "upload" && uploadedVideoUrl) {
+    if (!useSampleMode && uploadedVideoUrl) {
       return uploadedVideoUrl;
     }
-    if (videoSourceType === "url" && customVideoUrl.trim()) {
+    if (showUrlInput && customVideoUrl.trim()) {
       return customVideoUrl.trim();
     }
-    return selectedPresetVideo;
-  }, [videoSourceType, uploadedVideoUrl, customVideoUrl, selectedPresetVideo]);
+    return selectedSampleVideo;
+  }, [useSampleMode, uploadedVideoUrl, showUrlInput, customVideoUrl, selectedSampleVideo]);
 
-  // Handle file upload
+  // Clean up object URL when component unmounts or file changes
+  useEffect(() => {
+    return () => {
+      if (uploadedVideoUrl && uploadedVideoUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(uploadedVideoUrl);
+      }
+    };
+  }, [uploadedVideoUrl]);
+
+  // Handle direct file upload
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.includes("video") && !file.name.toLowerCase().endsWith(".mp4")) {
-        setRenderError("Harap pilih file video dengan format MP4.");
+        setRenderError("Pilih file video MP4 yang valid.");
         return;
       }
       setUploadedFile(file);
       const objUrl = URL.createObjectURL(file);
       setUploadedVideoUrl(objUrl);
-      setVideoSourceType("upload");
+      setUseSampleMode(false);
       setRenderError(null);
     }
+  };
+
+  // Drag and drop handlers
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      if (!file.type.includes("video") && !file.name.toLowerCase().endsWith(".mp4")) {
+        setRenderError("Pilih file video MP4 yang valid.");
+        return;
+      }
+      setUploadedFile(file);
+      const objUrl = URL.createObjectURL(file);
+      setUploadedVideoUrl(objUrl);
+      setUseSampleMode(false);
+      setRenderError(null);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
   };
 
   // Copy raw typography text
@@ -175,8 +198,8 @@ export const StoryEditTool: React.FC = () => {
   const handleSelectPreset = (p: PresetItem) => {
     setRawText(p.rawText);
     setAuthor(p.author);
-    if (videoSourceType === "preset") {
-      setSelectedPresetVideo(p.sampleVideo);
+    if (useSampleMode || !uploadedFile) {
+      setSelectedSampleVideo(p.sampleVideo);
     }
     setRenderError(null);
   };
@@ -227,11 +250,11 @@ export const StoryEditTool: React.FC = () => {
 
     ctx.clearRect(0, 0, W, H);
 
-    // 1. Backdrop
+    // 1. Subtle dark vignette
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, "rgba(0,10,32,0.50)");
-    g.addColorStop(0.5, "rgba(0,10,32,0.12)");
-    g.addColorStop(1, "rgba(0,0,0,0.38)");
+    g.addColorStop(0, "rgba(0,10,32,0.45)");
+    g.addColorStop(0.5, "rgba(0,10,32,0.10)");
+    g.addColorStop(1, "rgba(0,0,0,0.35)");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
 
@@ -247,10 +270,10 @@ export const StoryEditTool: React.FC = () => {
       ctx.translate(-F.cx, -cy);
 
       rrect(F.x, F.y, F.w, F.h, 46 * S);
-      ctx.fillStyle = "rgba(120,160,230,0.08)";
+      ctx.fillStyle = "rgba(120,160,230,0.06)";
       ctx.fill();
 
-      ctx.shadowColor = "rgba(190,220,255,0.7)";
+      ctx.shadowColor = "rgba(190,220,255,0.6)";
       ctx.shadowBlur = 12 * S;
       ctx.lineWidth = 2.5 * S;
       ctx.strokeStyle = "rgba(255,255,255,0.92)";
@@ -375,7 +398,6 @@ export const StoryEditTool: React.FC = () => {
       ctx.strokeStyle = "rgba(255,255,255,0.85)";
       ctx.stroke();
 
-      // Search Icon
       const iconX = F.cx - searchW / 2 + 28 * S;
       ctx.lineWidth = 2 * S;
       ctx.strokeStyle = "#ffffff";
@@ -387,7 +409,6 @@ export const StoryEditTool: React.FC = () => {
       ctx.lineTo(iconX + 10 * S, searchY + 9 * S);
       ctx.stroke();
 
-      // Typing Text
       const queryStr = titleClean.toLowerCase();
       const kType = seg(t, 2.5, 4.0);
       const typedLen = Math.floor(kType * queryStr.length);
@@ -398,102 +419,93 @@ export const StoryEditTool: React.FC = () => {
       ctx.font = `600 ${18 * S}px Poppins, sans-serif`;
       ctx.fillStyle = "#ffffff";
       ctx.fillText(typedStr, iconX + 22 * S, searchY);
-
-      // Blinking Cursor
-      if (t >= 2.5 && t < 5.0 && Math.floor(t * 3) % 2 === 0) {
-        const textW = ctx.measureText(typedStr).width;
-        ctx.fillRect(iconX + 24 * S + textW, searchY - 10 * S, 2 * S, 20 * S);
-      }
       ctx.restore();
     }
 
-    // 7. Floating Photo Cards
-    const cardSpecs = [
-      { dx: -0.28, dy: 0.58, w: 0.22, r: -7 },
-      { dx: 0.28, dy: 0.58, w: 0.22, r: 6 },
-      { dx: -0.16, dy: 0.65, w: 0.26, r: -4 },
-      { dx: 0.16, dy: 0.65, w: 0.26, r: 4 },
-      { dx: 0, dy: 0.71, w: 0.32, r: 0 },
+    // 7. Mini 5 Floating Cards
+    const spec = [
+      { dx: -0.3, dy: 0.625, w: 0.2, r: -7 },
+      { dx: 0.3, dy: 0.622, w: 0.2, r: 6 },
+      { dx: -0.17, dy: 0.683, w: 0.255, r: -4 },
+      { dx: 0.17, dy: 0.683, w: 0.255, r: 4 },
+      { dx: 0, dy: 0.728, w: 0.3, r: 0 },
     ];
-    cardSpecs.forEach((c, idx) => {
-      const a = 4.0 + idx * 0.12;
+    spec.forEach((c, i) => {
+      const a = 3.6 + i * 0.12;
       const pc = seg(t, a, a + 0.55);
       if (pc <= 0) return;
-      const cardW = F.w * c.w;
-      const cardH = cardW * 0.94;
+      const e = easeOutCubic(pc);
+      const cw = F.w * c.w;
+      const ch = cw * 0.94;
       const tx = F.cx + F.w * c.dx;
-      const ty = Y(c.dy);
-      const cx = lerp(F.cx, tx, easeOutCubic(pc));
-      const cy = lerp(Y(0.48), ty, easeOutCubic(pc));
-      const scale = lerp(0.2, 1, easeOutBack(pc));
+      const ty = Y(c.dy) + (i === 4 ? Math.sin(t * 1.8) * 3 * S : 0);
+      const cxPos = lerp(F.cx, tx, e);
+      const cyPos = lerp(Y(0.538), ty, e);
+      const sc = lerp(0.25, 1, easeOutBack(pc));
 
       ctx.save();
       ctx.globalAlpha = clamp(pc * 3);
-      ctx.translate(cx, cy);
-      ctx.rotate(((c.r * Math.PI) / 180) * easeOutCubic(pc));
-      ctx.scale(scale, scale);
-
-      ctx.shadowColor = "rgba(0,0,0,0.45)";
-      ctx.shadowBlur = 12 * S;
-      rrect(-cardW / 2, -cardH / 2, cardW, cardH, 8 * S);
-      ctx.fillStyle = "#ffffff";
+      ctx.translate(cxPos, cyPos);
+      ctx.rotate(((c.r * Math.PI) / 180) * e);
+      ctx.scale(sc, sc);
+      ctx.shadowColor = "rgba(0,0,0,0.35)";
+      ctx.shadowBlur = 14 * S;
+      rrect(-cw / 2, -ch / 2, cw, ch, 8 * S);
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
       ctx.fill();
 
-      // Card Inner Image Mock / Frame
-      ctx.shadowBlur = 0;
-      rrect(-cardW / 2 + 3 * S, -cardH / 2 + 3 * S, cardW - 6 * S, cardH - 6 * S, 6 * S);
-      ctx.fillStyle = ["#1a4332", "#3a2118", "#2d3748", "#1e3a8a", "#0f172a"][idx];
+      // Card inner artwork placeholder
+      const bd = 3 * S;
+      rrect(-cw / 2 + bd, -ch / 2 + bd, cw - bd * 2, ch - bd * 2, 6 * S);
+      ctx.fillStyle = `hsl(${160 + i * 28}, 45%, 38%)`;
       ctx.fill();
       ctx.restore();
     });
 
-    // 8. Music Pill at Bottom
-    const pMusic = seg(t, 4.8, 5.5);
-    if (pMusic > 0) {
-      const eMusic = easeOutCubic(pMusic);
-      const musicW = F.w * 0.78;
-      const musicH = 68 * S;
-      const musicY = Y(0.88) + (1 - eMusic) * 40 * S;
+    // 8. Music Bar at bottom
+    const pMus = seg(t, 4.4, 5.0);
+    if (pMus > 0) {
+      const eMus = easeOutCubic(pMus);
+      const mw = F.w * 0.77;
+      const mh = 70 * S;
+      const my = Y(0.885) + (1 - eMus) * 40 * S;
+      const mx = F.cx - mw / 2;
+
       ctx.save();
-      ctx.globalAlpha = eMusic;
-      rrect(F.cx - musicW / 2, musicY - musicH / 2, musicW, musicH, musicH / 2);
-      ctx.fillStyle = "rgba(12,18,32,0.65)";
+      ctx.globalAlpha = eMus;
+      rrect(mx, my - mh / 2, mw, mh, mh / 2);
+      ctx.fillStyle = "rgba(12,18,32,0.60)";
       ctx.fill();
       ctx.lineWidth = 1.5 * S;
-      ctx.strokeStyle = "rgba(255,255,255,0.8)";
+      ctx.strokeStyle = "rgba(255,255,255,0.75)";
       ctx.stroke();
 
       // Album art disc
-      const artSize = 44 * S;
-      const artX = F.cx - musicW / 2 + 16 * S;
-      rrect(artX, musicY - artSize / 2, artSize, artSize, 8 * S);
-      ctx.fillStyle = "#22c55e";
+      const aw = 46 * S;
+      const ax = mx + 16 * S;
+      ctx.beginPath();
+      ctx.arc(ax + aw / 2, my, aw / 2, 0, Math.PI * 2);
+      ctx.fillStyle = "#1e293b";
       ctx.fill();
+      ctx.lineWidth = 1 * S;
       ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1.5 * S;
       ctx.stroke();
 
-      // Music Icon inside art
-      ctx.fillStyle = "#ffffff";
-      ctx.font = `${14 * S}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("♫", artX + artSize / 2, musicY);
-
-      // Track Title
+      // Track text
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.font = `600 ${18 * S}px Poppins, sans-serif`;
+      ctx.font = `600 ${16 * S}px Poppins, sans-serif`;
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(author, artX + artSize + 12 * S, musicY - 8 * S);
-      ctx.font = `400 ${14 * S}px Poppins, sans-serif`;
+      ctx.fillText(author, ax + aw + 14 * S, my - 8 * S);
+
+      ctx.font = `${12 * S}px Poppins, sans-serif`;
       ctx.fillStyle = "rgba(255,255,255,0.65)";
-      ctx.fillText("suara asli", artX + artSize + 12 * S, musicY + 12 * S);
+      ctx.fillText("suara asli", ax + aw + 14 * S, my + 10 * S);
       ctx.restore();
     }
   }, [previewTime, parsedData, author, scriptFirstWord]);
 
-  // Video preview player time sync
+  // Video timeupdate sync
   const handleVideoTimeUpdate = () => {
     if (videoPreviewRef.current) {
       setPreviewTime(videoPreviewRef.current.currentTime);
@@ -511,19 +523,21 @@ export const StoryEditTool: React.FC = () => {
     }
   };
 
-  // Main Render Action
+  // Main Render Action: Direct File Upload to /api/story-edit
   const handleStartRender = async () => {
     setIsRendering(true);
     setRenderError(null);
     setRenderedResult(null);
     setRenderProgress(10);
-    setRenderStep("Mempersiapkan font tipografi & frame...");
+    setRenderStep("Menyiapkan font tipografi...");
 
     try {
       let res;
-      if (videoSourceType === "upload" && uploadedFile) {
-        setRenderStep("Mengunggah video MP4 Anda...");
-        setRenderProgress(25);
+      // Direct File Upload Logic (no external url needed!)
+      if (!useSampleMode && uploadedFile) {
+        setRenderStep("Mengunggah video MP4...");
+        setRenderProgress(20);
+
         const formData = new FormData();
         formData.append("file", uploadedFile);
         formData.append("rawText", rawText);
@@ -532,21 +546,27 @@ export const StoryEditTool: React.FC = () => {
         formData.append("duration", String(duration));
         formData.append("scriptFirstWord", String(scriptFirstWord));
 
+        // NOTE: Never manually set 'Content-Type: multipart/form-data' in Axios!
+        // Leaving headers empty lets the browser set the boundary parameter correctly.
         res = await axios.post("/api/story-edit", formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-          timeout: 120000,
+          timeout: 180000,
           onUploadProgress: (progressEvent) => {
-            const pct = Math.round((progressEvent.loaded * 40) / (progressEvent.total || 1));
-            setRenderProgress(20 + pct);
+            if (progressEvent.total) {
+              const uploadPct = Math.round((progressEvent.loaded * 40) / progressEvent.total);
+              setRenderProgress(20 + uploadPct);
+              if (uploadPct >= 38) {
+                setRenderStep("Merender frame animasi tipografi dengan FFmpeg...");
+              }
+            }
           },
         });
       } else {
-        setRenderStep("Mengekstrak frame & menganalisis video...");
+        // Sample Video or Direct URL mode
+        setRenderStep("Memproses video...");
         setRenderProgress(35);
-        const targetUrl =
-          videoSourceType === "url" && customVideoUrl.trim()
-            ? customVideoUrl.trim()
-            : selectedPresetVideo;
+        const targetUrl = showUrlInput && customVideoUrl.trim()
+          ? customVideoUrl.trim()
+          : selectedSampleVideo;
 
         res = await axios.post(
           "/api/story-edit",
@@ -558,12 +578,12 @@ export const StoryEditTool: React.FC = () => {
             duration,
             scriptFirstWord,
           },
-          { timeout: 120000 }
+          { timeout: 180000 }
         );
       }
 
-      setRenderProgress(80);
-      setRenderStep("Menggabungkan animasi tipografi ke video MP4...");
+      setRenderProgress(85);
+      setRenderStep("Mengompresi video output...");
 
       if (res.data && res.data.ok) {
         setRenderProgress(100);
@@ -574,126 +594,213 @@ export const StoryEditTool: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Render error:", err);
-      setRenderError(
-        err?.response?.data?.message ||
-          err?.message ||
-          "Gagal memproses render video Story Edit. Pastikan format video MP4 valid."
-      );
+      let errMsg = "Gagal memproses render video Story Edit.";
+      if (err?.message === "Network Error") {
+        errMsg = "Koneksi terputus saat mengunggah video. Pastikan file video MP4 tidak korup dan coba kembali.";
+      } else if (err?.response?.data?.message) {
+        errMsg = err.response.data.message;
+      } else if (err?.message) {
+        errMsg = err.message;
+      }
+      setRenderError(errMsg);
     } finally {
       setIsRendering(false);
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="border-b border-black/5 dark:border-white/10 pb-4">
-        <div className="flex items-center gap-2 text-[#007aff] dark:text-[#0a84ff] font-semibold text-xs mb-1">
-          <Type className="w-4 h-4" />
-          <span>RS Canvas • Story Edit Typography</span>
-        </div>
-        <h2 className="text-xl sm:text-2xl font-bold text-black dark:text-white tracking-tight flex items-center gap-2">
-          <span>Video Story Typography Generator</span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
+      <div className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
+        <h2 className="text-xl sm:text-2xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight flex items-center gap-2">
+          <span>Story Edit Typography</span>
+          <span className="text-[11px] px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 font-semibold border border-neutral-200 dark:border-neutral-700">
             MP4 9:16
           </span>
         </h2>
-        <p className="text-[#8e8e93] dark:text-[#98989d] text-xs sm:text-sm mt-1">
-          Render animasi tipografi aesthetic langsung di atas video mentahan MP4. Dilengkapi bingkai neon, teks latin bersambung, search bar mengetik, 5 foto melayang, dan pemutar musik.
+        <p className="text-neutral-500 dark:text-neutral-400 text-xs sm:text-sm mt-1">
+          Render animasi tipografi aesthetic langsung di atas video MP4 tanpa perlu upload ke URL eksternal.
         </p>
       </div>
 
-      {/* Preset Banner Highlight (Requested by User) */}
-      <div className="p-4 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-sky-500/10 border border-emerald-500/25 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-        <div className="space-y-1">
-          <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Format Teks Tipografi Rekomendasi:</span>
-          </div>
-          <code className="text-xs sm:text-sm font-semibold text-black dark:text-white bg-white/60 dark:bg-black/40 px-2.5 py-1 rounded-lg border border-black/5 dark:border-white/10 inline-block font-mono">
-            Nature&apos;s whisper | Healing, Serenity, Escapism
-          </code>
-        </div>
-        <div className="flex items-center gap-2 self-stretch sm:self-auto">
-          <button
-            type="button"
-            onClick={() => handleCopyText("Nature's whisper | Healing, Serenity, Escapism")}
-            className="flex-1 sm:flex-none px-3 py-1.5 bg-white dark:bg-[#2c2c2e] hover:bg-slate-100 dark:hover:bg-[#3a3a3c] text-xs font-semibold rounded-xl text-black dark:text-white border border-black/10 dark:border-white/10 shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition active:scale-95"
-            title="Salin teks ke clipboard"
-          >
-            {copiedText ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="text-emerald-500">Tersalin!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                <span>Salin Teks</span>
-              </>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSelectPreset(PRESET_LIST[0])}
-            className="flex-1 sm:flex-none px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition active:scale-95"
-          >
-            <Check className="w-3.5 h-3.5" />
-            <span>Gunakan Teks Ini</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Main Grid: Settings & Live Preview */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Controls & Upload */}
+      {/* Main Grid: Controls & Preview */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column: Form & Direct Upload */}
         <div className="lg:col-span-7 space-y-5">
-          {/* Typography Input Card */}
-          <div className="bg-white dark:bg-[#1c1c1e] p-5 rounded-3xl border border-black/5 dark:border-white/10 shadow-xs space-y-4">
+          {/* Section 1: Direct MP4 Video Upload */}
+          <div className="bg-white dark:bg-neutral-900 p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 space-y-3.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs sm:text-sm font-bold text-black dark:text-white flex items-center gap-2">
-                <Type className="w-4 h-4 text-[#007aff]" />
-                <span>Teks Tipografi & Tag (Story Edit)</span>
+              <label className="text-xs sm:text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                1. Upload Video MP4 Anda
+              </label>
+              {uploadedFile && !useSampleMode && (
+                <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
+                  {(uploadedFile.size / (1024 * 1024)).toFixed(1)} MB
+                </span>
+              )}
+            </div>
+
+            {/* Direct Upload Dropzone */}
+            <div
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-xl p-5 sm:p-6 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2.5 ${
+                uploadedFile && !useSampleMode
+                  ? "border-emerald-500/50 bg-emerald-500/5 dark:bg-emerald-500/10"
+                  : "border-neutral-300 dark:border-neutral-700 hover:border-neutral-400 dark:hover:border-neutral-500 bg-neutral-50 dark:bg-neutral-800/40"
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="video/mp4,video/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <div className="w-10 h-10 rounded-xl bg-neutral-200/80 dark:bg-neutral-700 flex items-center justify-center text-neutral-700 dark:text-neutral-200">
+                <Upload className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-xs sm:text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                  {uploadedFile && !useSampleMode
+                    ? uploadedFile.name
+                    : "Pilih atau seret file video MP4 ke sini"}
+                </p>
+                <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                  {uploadedFile && !useSampleMode
+                    ? "Klik untuk mengganti video"
+                    : "File video diproses langsung di server tanpa perlu upload ke URL"}
+                </p>
+              </div>
+            </div>
+
+            {/* Sample Video Alternative */}
+            <div className="pt-1 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="text-neutral-500 text-[11px]">Atau gunakan video sampel:</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSampleVideo("/samples/nature.mp4");
+                    setUseSampleMode(true);
+                    setRenderError(null);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer ${
+                    useSampleMode && selectedSampleVideo === "/samples/nature.mp4"
+                      ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 border-transparent"
+                      : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200/60 dark:hover:bg-neutral-700"
+                  }`}
+                >
+                  Sampel Alam (Nature)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSampleVideo("/samples/sunset.mp4");
+                    setUseSampleMode(true);
+                    setRenderError(null);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer ${
+                    useSampleMode && selectedSampleVideo === "/samples/sunset.mp4"
+                      ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 border-transparent"
+                      : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200/60 dark:hover:bg-neutral-700"
+                  }`}
+                >
+                  Sampel Senja (Sunset)
+                </button>
+              </div>
+            </div>
+
+            {/* Secondary URL toggle if user has a remote link */}
+            <div className="pt-1 border-t border-neutral-100 dark:border-neutral-800/80">
+              <button
+                type="button"
+                onClick={() => setShowUrlInput(!showUrlInput)}
+                className="text-[11px] text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 underline cursor-pointer"
+              >
+                {showUrlInput ? "Sembunyikan input URL" : "Punya URL video MP4 langsung?"}
+              </button>
+              {showUrlInput && (
+                <div className="mt-2 space-y-1">
+                  <input
+                    type="url"
+                    value={customVideoUrl}
+                    onChange={(e) => {
+                      setCustomVideoUrl(e.target.value);
+                      setUseSampleMode(false);
+                    }}
+                    placeholder="https://.../video.mp4"
+                    className="w-full px-3.5 py-2 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl text-xs text-neutral-900 dark:text-neutral-100 focus:outline-none focus:border-neutral-400"
+                  />
+                  <p className="text-[10px] text-neutral-500">
+                    Masukkan URL langsung yang mengarah ke file .mp4 publik.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 2: Typography Text Input */}
+          <div className="bg-white dark:bg-neutral-900 p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs sm:text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                2. Teks Tipografi & Tag
               </label>
               <button
                 type="button"
                 onClick={() => handleCopyText(rawText)}
-                className="text-xs font-semibold text-[#007aff] dark:text-[#0a84ff] hover:opacity-80 flex items-center gap-1 cursor-pointer"
+                className="text-xs text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200 flex items-center gap-1 cursor-pointer font-medium"
               >
-                {copiedText ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                <span>{copiedText ? "Tersalin" : "Salin Teks"}</span>
+                {copiedText ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="text-emerald-500">Tersalin</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Salin Teks</span>
+                  </>
+                )}
               </button>
             </div>
 
-            <div className="relative">
-              <input
-                type="text"
-                value={rawText}
-                onChange={(e) => setRawText(e.target.value)}
-                placeholder="Contoh: Nature's whisper | Healing, Serenity, Escapism"
-                className="w-full px-4 py-3 bg-[#f2f2f7] dark:bg-[#2c2c2e] border border-black/5 dark:border-white/10 rounded-2xl text-xs sm:text-sm text-black dark:text-white font-medium placeholder-[#8e8e93] focus:outline-hidden focus:ring-2 focus:ring-[#007aff]/50 transition"
-              />
+            {/* Main Text Input with Format */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={rawText}
+                  onChange={(e) => setRawText(e.target.value)}
+                  placeholder="Judul Cerita | Tag 1, Tag 2, Tag 3"
+                  className="w-full px-3.5 py-2.5 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl text-xs sm:text-sm font-medium text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-neutral-400"
+                />
+              </div>
+              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                Gunakan format tanda pipa <code>|</code> untuk memisahkan Judul dan Tags.
+              </p>
             </div>
 
             {/* Parsed Structure Preview */}
-            <div className="p-3 bg-slate-50 dark:bg-[#121214] rounded-2xl border border-black/5 dark:border-white/10 space-y-2 text-xs">
+            <div className="p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-xl border border-neutral-200 dark:border-neutral-800 text-xs space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-[#8e8e93] dark:text-[#98989d] text-[11px] font-semibold uppercase">
-                  Judul Utama:
+                <span className="text-neutral-500 text-[11px] uppercase tracking-wider font-semibold">
+                  Judul:
                 </span>
-                <span className="font-bold text-black dark:text-white">
+                <span className="font-semibold text-neutral-900 dark:text-neutral-100">
                   {parsedData.title}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#8e8e93] dark:text-[#98989d] text-[11px] font-semibold uppercase">
-                  Tags Terdeteksi:
+                <span className="text-neutral-500 text-[11px] uppercase tracking-wider font-semibold">
+                  Tags:
                 </span>
-                <div className="flex flex-wrap gap-1 justify-end">
+                <div className="flex flex-wrap gap-1.5 justify-end">
                   {parsedData.tags.map((tg, i) => (
                     <span
                       key={i}
-                      className="px-2 py-0.5 bg-[#007aff]/10 text-[#007aff] dark:text-[#0a84ff] text-[10px] font-bold rounded-md"
+                      className="px-2 py-0.5 bg-neutral-200 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-[11px] font-medium rounded-md"
                     >
                       #{tg}
                     </span>
@@ -702,230 +809,92 @@ export const StoryEditTool: React.FC = () => {
               </div>
             </div>
 
-            {/* Quick Preset Buttons */}
-            <div className="space-y-1.5">
-              <span className="text-[11px] text-[#8e8e93] font-medium flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-amber-500" />
-                Pilihan Preset Cepat:
-              </span>
+            {/* Preset Options */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[11px] text-neutral-500 font-medium">Contoh Teks Siap Pakai:</span>
               <div className="flex flex-wrap gap-1.5">
                 {PRESET_LIST.map((p) => (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => handleSelectPreset(p)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer border ${
                       rawText === p.rawText
-                        ? "bg-[#007aff] text-white shadow-xs"
-                        : "bg-[#f2f2f7] dark:bg-[#2c2c2e] hover:bg-[#e5e5ea] dark:hover:bg-[#3a3a3c] text-black dark:text-white border border-black/5 dark:border-white/5"
+                        ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 border-transparent"
+                        : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200/50"
                     }`}
                   >
-                    <span>{p.label}</span>
+                    {p.label}
                   </button>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Video Source Picker Card */}
-          <div className="bg-white dark:bg-[#1c1c1e] p-5 rounded-3xl border border-black/5 dark:border-white/10 shadow-xs space-y-4">
-            <label className="text-xs sm:text-sm font-bold text-black dark:text-white flex items-center gap-2">
-              <Film className="w-4 h-4 text-emerald-500" />
-              <span>Sumber Video Mentahan (MP4)</span>
-            </label>
-
-            {/* Tabs: Upload vs Preset vs URL */}
-            <div className="grid grid-cols-3 gap-1 p-1 bg-[#f2f2f7] dark:bg-[#2c2c2e] rounded-2xl text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => setVideoSourceType("upload")}
-                className={`py-2 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                  videoSourceType === "upload"
-                    ? "bg-white dark:bg-[#1c1c1e] text-black dark:text-white shadow-xs"
-                    : "text-[#8e8e93] hover:text-black dark:hover:text-white"
-                }`}
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Upload MP4</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setVideoSourceType("preset")}
-                className={`py-2 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                  videoSourceType === "preset"
-                    ? "bg-white dark:bg-[#1c1c1e] text-black dark:text-white shadow-xs"
-                    : "text-[#8e8e93] hover:text-black dark:hover:text-white"
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Video Contoh</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setVideoSourceType("url")}
-                className={`py-2 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                  videoSourceType === "url"
-                    ? "bg-white dark:bg-[#1c1c1e] text-black dark:text-white shadow-xs"
-                    : "text-[#8e8e93] hover:text-black dark:hover:text-white"
-                }`}
-              >
-                <Video className="w-3.5 h-3.5" />
-                <span>Tautan URL</span>
-              </button>
-            </div>
-
-            {/* Video Input Body */}
-            {videoSourceType === "upload" && (
-              <div className="space-y-3">
-                <label className="border-2 border-dashed border-black/10 dark:border-white/15 hover:border-[#007aff]/60 dark:hover:border-[#0a84ff]/60 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all bg-[#f2f2f7]/50 dark:bg-[#2c2c2e]/50 text-center group">
-                  <input
-                    type="file"
-                    accept="video/mp4,video/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <div className="w-12 h-12 rounded-2xl bg-[#007aff]/10 text-[#007aff] dark:text-[#0a84ff] flex items-center justify-center group-hover:scale-105 transition-transform">
-                    <Upload className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm font-bold text-black dark:text-white">
-                      {uploadedFile ? uploadedFile.name : "Klik atau seret file video MP4 ke sini"}
-                    </p>
-                    <p className="text-[11px] text-[#8e8e93] dark:text-[#98989d] mt-0.5">
-                      {uploadedFile
-                        ? `${(uploadedFile.size / (1024 * 1024)).toFixed(1)} MB • Siap diproses`
-                        : "Mendukung MP4 vertikal 9:16 untuk hasil optimal (maks 150MB)"}
-                    </p>
-                  </div>
-                </label>
-              </div>
-            )}
-
-            {videoSourceType === "preset" && (
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setSelectedPresetVideo("/samples/nature.mp4")}
-                  className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1.5 ${
-                    selectedPresetVideo === "/samples/nature.mp4"
-                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                      : "border-black/5 dark:border-white/10 bg-[#f2f2f7] dark:bg-[#2c2c2e]"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold">Emerald Nature Flow</span>
-                    {selectedPresetVideo === "/samples/nature.mp4" && (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    )}
-                  </div>
-                  <span className="text-[11px] text-[#8e8e93]">Video alam 8 detik 9:16</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedPresetVideo("/samples/sunset.mp4")}
-                  className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1.5 ${
-                    selectedPresetVideo === "/samples/sunset.mp4"
-                      ? "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                      : "border-black/5 dark:border-white/10 bg-[#f2f2f7] dark:bg-[#2c2c2e]"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold">Warm Sunset Glow</span>
-                    {selectedPresetVideo === "/samples/sunset.mp4" && (
-                      <CheckCircle2 className="w-4 h-4 text-amber-500" />
-                    )}
-                  </div>
-                  <span className="text-[11px] text-[#8e8e93]">Video senja 8 detik 9:16</span>
-                </button>
-              </div>
-            )}
-
-            {videoSourceType === "url" && (
-              <div className="space-y-2">
-                <input
-                  type="url"
-                  value={customVideoUrl}
-                  onChange={(e) => setCustomVideoUrl(e.target.value)}
-                  placeholder="https://.../video.mp4"
-                  className="w-full px-4 py-2.5 bg-[#f2f2f7] dark:bg-[#2c2c2e] border border-black/5 dark:border-white/10 rounded-2xl text-xs sm:text-sm text-black dark:text-white placeholder-[#8e8e93] focus:outline-hidden focus:ring-2 focus:ring-[#007aff]/50 transition"
-                />
-                <p className="text-[11px] text-[#8e8e93]">
-                  Pastikan tautan dapat diakses publik langsung ke file video berekstensi .mp4.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Advanced Customization Collapsible */}
-          <div className="bg-white dark:bg-[#1c1c1e] rounded-3xl border border-black/5 dark:border-white/10 shadow-xs overflow-hidden">
+          {/* Section 3: Settings Collapsible */}
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden">
             <button
               type="button"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="w-full p-4 flex items-center justify-between text-xs sm:text-sm font-bold text-black dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition cursor-pointer"
+              onClick={() => setShowSettings(!showSettings)}
+              className="w-full p-4 flex items-center justify-between text-xs sm:text-sm font-semibold text-neutral-900 dark:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition cursor-pointer"
             >
-              <div className="flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-[#007aff]" />
-                <span>Pengaturan Lanjutan (Author, Resolusi, Durasi)</span>
-              </div>
-              {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              <span>Pengaturan Tambahan (Author, Resolusi, Huruf Sambung)</span>
+              <span className="text-neutral-400 text-xs">{showSettings ? "Tutup" : "Buka"}</span>
             </button>
 
-            {showAdvanced && (
-              <div className="p-5 pt-1 border-t border-black/5 dark:border-white/10 space-y-4 text-xs">
+            {showSettings && (
+              <div className="p-4 pt-1 border-t border-neutral-100 dark:border-neutral-800 space-y-3.5 text-xs">
                 {/* Author Input */}
-                <div className="space-y-1.5">
-                  <label className="font-semibold text-black dark:text-white">
-                    Nama Author (Storytelling by ...)
+                <div className="space-y-1">
+                  <label className="font-medium text-neutral-700 dark:text-neutral-300">
+                    Nama Author (storytelling by...)
                   </label>
                   <input
                     type="text"
                     value={author}
                     onChange={(e) => setAuthor(e.target.value)}
                     placeholder="nexadev"
-                    className="w-full px-3.5 py-2 bg-[#f2f2f7] dark:bg-[#2c2c2e] border border-black/5 dark:border-white/10 rounded-xl text-black dark:text-white"
+                    className="w-full px-3 py-2 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-neutral-900 dark:text-neutral-100"
                   />
                 </div>
 
                 {/* Resolution & Durasi */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-black dark:text-white">Resolusi Output</label>
+                  <div className="space-y-1">
+                    <label className="font-medium text-neutral-700 dark:text-neutral-300">Resolusi</label>
                     <select
                       value={width}
                       onChange={(e) => setWidth(parseInt(e.target.value, 10))}
-                      className="w-full px-3 py-2 bg-[#f2f2f7] dark:bg-[#2c2c2e] border border-black/5 dark:border-white/10 rounded-xl text-black dark:text-white"
+                      className="w-full px-3 py-2 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-neutral-900 dark:text-neutral-100"
                     >
                       <option value={540}>540x960 (Cepat ~3-5 detik)</option>
-                      <option value={720}>720x1280 (HD 9:16 Story)</option>
+                      <option value={720}>720x1280 (HD Story)</option>
                     </select>
                   </div>
-
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-black dark:text-white">Durasi Render</label>
+                  <div className="space-y-1">
+                    <label className="font-medium text-neutral-700 dark:text-neutral-300">Durasi Video</label>
                     <select
                       value={duration}
                       onChange={(e) => setDuration(parseInt(e.target.value, 10))}
-                      className="w-full px-3 py-2 bg-[#f2f2f7] dark:bg-[#2c2c2e] border border-black/5 dark:border-white/10 rounded-xl text-black dark:text-white"
+                      className="w-full px-3 py-2 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-neutral-900 dark:text-neutral-100"
                     >
-                      <option value={5}>5 Detik</option>
+                      <option value={6}>6 Detik</option>
                       <option value={8}>8 Detik (Standar)</option>
                       <option value={10}>10 Detik</option>
-                      <option value={15}>15 Detik (Maksimal)</option>
                     </select>
                   </div>
                 </div>
 
-                {/* Script Font First Word Toggle */}
+                {/* Script Word toggle */}
                 <div className="flex items-center justify-between pt-1">
-                  <span className="font-medium text-black dark:text-white">
-                    Gaya Huruf Pertama Latin (RS Script Cursive)
+                  <span className="text-neutral-700 dark:text-neutral-300">
+                    Kata Pertama Tulisan Sambung Cursive (RS Script)
                   </span>
                   <input
                     type="checkbox"
                     checked={scriptFirstWord}
                     onChange={(e) => setScriptFirstWord(e.target.checked)}
-                    className="w-4 h-4 accent-[#007aff] rounded cursor-pointer"
+                    className="rounded accent-neutral-900 dark:accent-neutral-100 w-4 h-4 cursor-pointer"
                   />
                 </div>
               </div>
@@ -933,34 +902,39 @@ export const StoryEditTool: React.FC = () => {
           </div>
 
           {/* Render Action Button */}
-          <div>
+          <div className="space-y-2">
             <button
               type="button"
-              disabled={isRendering}
               onClick={handleStartRender}
-              className="w-full py-3.5 bg-gradient-to-r from-[#007aff] via-[#0062cc] to-[#0051a8] hover:opacity-95 active:scale-98 text-white font-bold rounded-2xl flex items-center justify-center gap-2.5 transition shadow-md cursor-pointer disabled:opacity-50"
+              disabled={isRendering}
+              className={`w-full py-3.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-sm ${
+                isRendering
+                  ? "bg-neutral-300 dark:bg-neutral-800 text-neutral-500 cursor-not-allowed"
+                  : "bg-neutral-900 hover:bg-neutral-800 active:scale-98 text-white dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
+              }`}
             >
               {isRendering ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>{renderStep || "Sedang Merender Video MP4..."}</span>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Sedang Merender Video ({renderProgress}%)...</span>
                 </>
               ) : (
                 <>
-                  <Film className="w-5 h-5" />
+                  <Film className="w-4 h-4" />
                   <span>Render Video Story MP4 Sekarang</span>
                 </>
               )}
             </button>
+
             {isRendering && (
-              <div className="mt-2.5 space-y-1">
-                <div className="w-full h-2 bg-[#f2f2f7] dark:bg-[#2c2c2e] rounded-full overflow-hidden">
+              <div className="space-y-1.5 pt-1">
+                <div className="w-full h-1.5 bg-neutral-200 dark:bg-neutral-800 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-[#007aff] transition-all duration-300 rounded-full"
+                    className="h-full bg-neutral-900 dark:bg-neutral-100 transition-all duration-300 rounded-full"
                     style={{ width: `${renderProgress}%` }}
                   />
                 </div>
-                <div className="flex justify-between text-[11px] text-[#8e8e93]">
+                <div className="flex justify-between text-[11px] text-neutral-500">
                   <span>{renderStep}</span>
                   <span>{renderProgress}%</span>
                 </div>
@@ -968,10 +942,10 @@ export const StoryEditTool: React.FC = () => {
             )}
           </div>
 
-          {/* Render Error */}
+          {/* Render Error Alert */}
           {renderError && (
-            <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-600 dark:text-rose-400 text-xs sm:text-sm flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-600 dark:text-rose-400 text-xs sm:text-sm flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
                 <p className="font-semibold">Gagal Memproses Render Video</p>
                 <p className="text-xs mt-0.5 opacity-90">{renderError}</p>
@@ -983,17 +957,16 @@ export const StoryEditTool: React.FC = () => {
         {/* Right Column: Live Interactive Preview & Result */}
         <div className="lg:col-span-5 space-y-5">
           {/* Live Preview Card */}
-          <div className="bg-white dark:bg-[#1c1c1e] p-5 rounded-3xl border border-black/5 dark:border-white/10 shadow-xs space-y-4">
+          <div className="bg-white dark:bg-neutral-900 p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs sm:text-sm font-bold text-black dark:text-white flex items-center gap-2">
-                <Eye className="w-4 h-4 text-[#007aff]" />
-                <span>Pratinjau Langsung (9:16 Canvas)</span>
-              </h3>
+              <span className="text-xs sm:text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                Pratinjau Animasi (9:16 Canvas)
+              </span>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={togglePreviewPlay}
-                  className="px-2.5 py-1 bg-[#f2f2f7] dark:bg-[#2c2c2e] hover:bg-[#e5e5ea] dark:hover:bg-[#3a3a3c] rounded-xl text-xs font-semibold flex items-center gap-1 text-black dark:text-white cursor-pointer transition"
+                  className="px-2.5 py-1 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg text-xs font-medium flex items-center gap-1 text-neutral-800 dark:text-neutral-200 cursor-pointer transition"
                 >
                   {isPlayingPreview ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
                   <span>{isPlayingPreview ? "Jeda" : "Putar"}</span>
@@ -1006,17 +979,16 @@ export const StoryEditTool: React.FC = () => {
                       videoPreviewRef.current.currentTime = 0;
                     }
                   }}
-                  className="p-1 bg-[#f2f2f7] dark:bg-[#2c2c2e] rounded-xl hover:bg-[#e5e5ea] dark:hover:bg-[#3a3a3c] text-black dark:text-white cursor-pointer"
+                  className="p-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 cursor-pointer"
                   title="Mulai dari awal"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
+                  <RotateCcw className="w-3 h-3" />
                 </button>
               </div>
             </div>
 
-            {/* 9:16 Preview Box */}
-            <div className="relative mx-auto aspect-9/16 max-w-[280px] sm:max-w-[300px] w-full rounded-2xl overflow-hidden shadow-xl bg-black border border-black/10 dark:border-white/15">
-              {/* Background Video */}
+            {/* 9:16 Preview Frame */}
+            <div className="relative mx-auto aspect-9/16 max-w-[270px] w-full rounded-xl overflow-hidden bg-black border border-neutral-200 dark:border-neutral-800 shadow-sm">
               <video
                 ref={videoPreviewRef}
                 src={currentVideoSrc}
@@ -1026,24 +998,20 @@ export const StoryEditTool: React.FC = () => {
                 onTimeUpdate={handleVideoTimeUpdate}
                 className="absolute inset-0 w-full h-full object-cover"
               />
-
-              {/* Canvas Overlay */}
               <canvas
                 ref={canvasRef}
                 className="absolute inset-0 w-full h-full pointer-events-none"
               />
-
-              {/* Timestamp badge */}
-              <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-mono text-white font-semibold">
+              <div className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/70 text-[10px] font-mono text-white">
                 {previewTime.toFixed(1)}s / {duration}s
               </div>
             </div>
 
-            {/* Timeline Scrubber */}
-            <div className="space-y-1.5 pt-1">
-              <div className="flex justify-between text-[11px] text-[#8e8e93]">
+            {/* Timeline Slider */}
+            <div className="space-y-1 pt-1">
+              <div className="flex justify-between text-[11px] text-neutral-500">
                 <span>Timeline Animasi:</span>
-                <span className="font-mono font-bold text-black dark:text-white">
+                <span className="font-mono font-semibold text-neutral-900 dark:text-neutral-100">
                   {previewTime.toFixed(1)}s
                 </span>
               </div>
@@ -1060,35 +1028,25 @@ export const StoryEditTool: React.FC = () => {
                     videoPreviewRef.current.currentTime = val;
                   }
                 }}
-                className="w-full accent-[#007aff] cursor-pointer"
+                className="w-full accent-neutral-900 dark:accent-neutral-100 cursor-pointer"
               />
-              <div className="flex justify-between text-[9px] text-[#8e8e93]">
-                <span>0.0s (Frame)</span>
-                <span>1.5s (Title)</span>
-                <span>2.5s (Type)</span>
-                <span>4.0s (Cards)</span>
-                <span>{duration}.0s</span>
-              </div>
             </div>
           </div>
 
           {/* Render Result Card */}
           {renderedResult && (
-            <div className="bg-white dark:bg-[#1c1c1e] p-5 rounded-3xl border border-emerald-500/30 shadow-md space-y-4 animate-ios-fade">
-              <div className="flex items-center justify-between pb-1 border-b border-black/5 dark:border-white/10">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                  <span className="text-xs sm:text-sm font-bold text-black dark:text-white">
-                    Video Story Selesai Dirender!
-                  </span>
-                </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold">
+            <div className="bg-white dark:bg-neutral-900 p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between pb-2 border-b border-neutral-100 dark:border-neutral-800">
+                <span className="text-xs sm:text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                  Video Story Selesai Dirender
+                </span>
+                <span className="text-[10px] font-mono text-neutral-500">
                   {renderedResult.duration} Detik MP4
                 </span>
               </div>
 
               {/* Rendered Video Player */}
-              <div className="aspect-9/16 max-w-[240px] mx-auto rounded-2xl overflow-hidden shadow-lg border border-black/10 dark:border-white/10 bg-black">
+              <div className="aspect-9/16 max-w-[240px] mx-auto rounded-xl overflow-hidden border border-neutral-200 dark:border-neutral-800 bg-black">
                 <video
                   src={renderedResult.videoUrl}
                   controls
@@ -1104,7 +1062,7 @@ export const StoryEditTool: React.FC = () => {
                 <a
                   href={renderedResult.videoUrl}
                   download={renderedResult.filename}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-xs sm:text-sm transition shadow-sm"
+                  className="w-full py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200 font-bold rounded-xl flex items-center justify-center gap-2 text-xs sm:text-sm transition"
                 >
                   <Download className="w-4 h-4" />
                   <span>Unduh Video MP4</span>
@@ -1113,12 +1071,12 @@ export const StoryEditTool: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleCopyResultUrl(renderedResult.videoUrl)}
-                  className="w-full py-2 bg-[#f2f2f7] dark:bg-[#2c2c2e] hover:bg-[#e5e5ea] dark:hover:bg-[#3a3a3c] text-black dark:text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-xs transition cursor-pointer"
+                  className="w-full py-2 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 font-medium rounded-xl flex items-center justify-center gap-2 text-xs transition cursor-pointer"
                 >
                   {copiedResultUrl ? (
                     <>
                       <Check className="w-3.5 h-3.5 text-emerald-500" />
-                      <span className="text-emerald-500">Tautan Video Tersalin</span>
+                      <span className="text-emerald-500">Tautan Tersalin</span>
                     </>
                   ) : (
                     <>

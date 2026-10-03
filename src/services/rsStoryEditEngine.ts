@@ -621,41 +621,75 @@ async function fetchToFile(url: string, dest: string, maxMB = 150) {
 }
 
 async function probeDuration(src: string): Promise<number> {
-  const { stdout } = await execFileP("ffprobe", [
-    "-v",
-    "error",
-    "-show_entries",
-    "format=duration",
-    "-of",
-    "default=nw=1:nk=1",
-    src,
-  ]);
-  return parseFloat(stdout) || 10;
+  try {
+    const { stdout } = await execFileP("ffprobe", [
+      "-v",
+      "error",
+      "-show_entries",
+      "format=duration",
+      "-of",
+      "default=nw=1:nk=1",
+      src,
+    ]);
+    const val = parseFloat((stdout || "").trim());
+    return isNaN(val) || val <= 0 ? 8 : val;
+  } catch (err) {
+    console.warn("[probeDuration] ffprobe fallback:", err);
+    return 8;
+  }
 }
 
 async function grabThumbs(src: string, dur: number, dir: string): Promise<Image[]> {
   const out: Image[] = [];
+  const safeDur = Math.max(1, dur || 8);
   const ks = [0.18, 0.34, 0.5, 0.66, 0.82];
   for (let i = 0; i < ks.length; i++) {
     const f = path.join(dir, `th${i}.jpg`);
-    await execFileP("ffmpeg", [
-      "-v",
-      "error",
-      "-y",
-      "-ss",
-      (dur * ks[i]).toFixed(2),
-      "-i",
-      src,
-      "-frames:v",
-      "1",
-      "-vf",
-      "scale=480:-2",
-      "-q:v",
-      "3",
-      f,
-    ]);
-    out.push(await loadImage(f));
+    try {
+      await execFileP("ffmpeg", [
+        "-v",
+        "error",
+        "-y",
+        "-ss",
+        (safeDur * ks[i]).toFixed(2),
+        "-i",
+        src,
+        "-frames:v",
+        "1",
+        "-vf",
+        "scale=480:-2",
+        "-q:v",
+        "3",
+        f,
+      ]);
+      if (fs.existsSync(f)) {
+        out.push(await loadImage(f));
+      }
+    } catch (e: any) {
+      console.warn(`[grabThumbs] frame ${i} extraction failed:`, e?.message);
+    }
   }
+
+  // Fallback if no frames could be grabbed (e.g. video too short or unusual format)
+  if (out.length === 0) {
+    try {
+      const fbCanvas = createCanvas(480, 480);
+      const fbCtx = fbCanvas.getContext("2d");
+      fbCtx.fillStyle = "#1e293b";
+      fbCtx.fillRect(0, 0, 480, 480);
+      const fbImg = await loadImage(fbCanvas.toBuffer("image/jpeg"));
+      for (let i = 0; i < 5; i++) {
+        out.push(fbImg);
+      }
+    } catch (fbErr) {
+      console.warn("[grabThumbs] fallback image error:", fbErr);
+    }
+  } else {
+    while (out.length < 5) {
+      out.push(out[0]);
+    }
+  }
+
   return out;
 }
 
