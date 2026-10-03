@@ -28,15 +28,6 @@ interface PresetItem {
 
 const PRESET_LIST: PresetItem[] = [
   {
-    id: "nature",
-    label: "Nature's Whisper",
-    rawText: "Nature's whisper | Healing, Serenity, Escapism",
-    title: "Nature's whisper",
-    tags: ["Healing", "Serenity", "Escapism"],
-    author: "nexadev",
-    sampleVideo: "/samples/nature.mp4",
-  },
-  {
     id: "sunset",
     label: "The Sunset Vibes",
     rawText: "The sunset vibes | Healing, Vitaminsea, Addict",
@@ -44,6 +35,15 @@ const PRESET_LIST: PresetItem[] = [
     tags: ["Healing", "Vitaminsea", "Addict"],
     author: "nexadev",
     sampleVideo: "/samples/sunset.mp4",
+  },
+  {
+    id: "nature",
+    label: "Nature's Whisper",
+    rawText: "Nature's whisper | Healing, Serenity, Escapism",
+    title: "Nature's whisper",
+    tags: ["Healing", "Serenity", "Escapism"],
+    author: "nexadev",
+    sampleVideo: "/samples/nature.mp4",
   },
   {
     id: "twilight",
@@ -65,10 +65,475 @@ const PRESET_LIST: PresetItem[] = [
   },
 ];
 
+/* ------------------------------------------------------------------ */
+/* HELPER MATH & DRAWING (1:1 DARI SCRIPT REFERENCE)                   */
+/* ------------------------------------------------------------------ */
+const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const seg = (t: number, a: number, b: number) => clamp((t - a) / (b - a));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const easeOutCubic = (x: number) => 1 - Math.pow(1 - x, 3);
+const easeOutBack = (x: number) => {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+};
+
+function rrect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawCover(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  const iw = (img as any).videoWidth || img.width || w;
+  const ih = (img as any).videoHeight || img.height || h;
+  const ir = iw / ih;
+  const r = w / h;
+  let sw = iw;
+  let sh = ih;
+  let sx = 0;
+  let sy = 0;
+  if (ir > r) {
+    sw = ih * r;
+    sx = (iw - sw) / 2;
+  } else {
+    sh = iw / r;
+    sy = (ih - sh) / 2;
+  }
+  try {
+    ctx.drawImage(img as any, sx, sy, sw, sh, x, y, w, h);
+  } catch {}
+}
+
+function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
+  if (ctx.measureText(text).width <= maxW) return text;
+  let s = text;
+  while (s.length > 1 && ctx.measureText(s + "…").width > maxW) s = s.slice(0, -1);
+  return s + "…";
+}
+
+function buildLayout(W: number, H: number) {
+  const S = W / 720;
+  const F = { x: 30 * S, y: 44 * S, w: W - 60 * S, h: H - 88 * S, cx: W / 2 };
+  const Y = (k: number) => F.y + F.h * k;
+  return { W, H, S, F, Y };
+}
+
+function prepareTitle(ctx: CanvasRenderingContext2D, L: any, title: string, scriptFirstWord: boolean) {
+  const { F, S, Y } = L;
+  const words = title.trim().split(/\s+/);
+  let script = "";
+  let main = title.trim().toUpperCase();
+  if (scriptFirstWord && words.length >= 2) {
+    script = words[0][0].toUpperCase() + words[0].slice(1).toLowerCase();
+    main = words.slice(1).join(" ").toUpperCase();
+  }
+
+  const SQ = 0.58;
+  const maxW = F.w * 0.78;
+  const measure = (str: string, fs: number) => {
+    ctx.font = `${fs}px "Bebas Neue", Impact, sans-serif`;
+    return ctx.measureText(str).width;
+  };
+  const base = 190 * S;
+  let lines = [main];
+  let fs = base * Math.min(1, maxW / (measure(main, base) * SQ));
+  const ws = main.split(" ");
+  if (fs < 105 * S && ws.length >= 2) {
+    let best: any = null;
+    for (let i = 1; i < ws.length; i++) {
+      const a = ws.slice(0, i).join(" ");
+      const b = ws.slice(i).join(" ");
+      const w = Math.max(measure(a, base), measure(b, base));
+      if (!best || w < best.w) best = { lines: [a, b], w };
+    }
+    lines = best.lines;
+    fs = base * Math.min(1, maxW / (best.w * SQ));
+  }
+
+  const capH = fs * 0.7;
+  const step = fs * 0.84;
+  const blockH = capH + (lines.length - 1) * step;
+  const top = Y(0.345) - blockH / 2;
+  const bottom = top + blockH;
+  const natMax = Math.max(...lines.map((l) => measure(l, fs)));
+  const left = L.F.cx - (natMax * SQ) / 2;
+
+  let fsS = 0;
+  let scriptW = 0;
+  if (script) {
+    const target = F.w * 0.36;
+    ctx.font = `${150 * S}px "Pinyon Script", cursive`;
+    const w0 = ctx.measureText(script).width;
+    fsS = clamp((150 * S * target) / w0, 60 * S, 300 * S);
+    ctx.font = `${fsS}px "Pinyon Script", cursive`;
+    scriptW = ctx.measureText(script).width;
+  }
+
+  return {
+    script,
+    lines,
+    fs,
+    fsS,
+    scriptW,
+    sq: SQ,
+    capH,
+    step,
+    top,
+    bottom,
+    left,
+    scriptBase: top + capH * 0.12,
+  };
+}
+
+function drawBackdrop(ctx: CanvasRenderingContext2D, L: any) {
+  const g = ctx.createLinearGradient(0, 0, 0, L.H);
+  g.addColorStop(0, "rgba(0,10,32,0.50)");
+  g.addColorStop(0.5, "rgba(0,10,32,0.12)");
+  g.addColorStop(1, "rgba(0,0,0,0.38)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, L.W, L.H);
+}
+
+function drawFrame(ctx: CanvasRenderingContext2D, L: any, t: number) {
+  const { F, S } = L;
+  const p = easeOutCubic(seg(t, 0, 0.7));
+  if (p <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = p;
+  const sc = lerp(1.05, 1, p);
+  const cy = F.y + F.h / 2;
+  ctx.translate(F.cx, cy);
+  ctx.scale(sc, sc);
+  ctx.translate(-F.cx, -cy);
+
+  const g = ctx.createLinearGradient(0, F.y, 0, F.y + F.h);
+  g.addColorStop(0, "rgba(120,160,230,0.14)");
+  g.addColorStop(0.5, "rgba(120,160,230,0.03)");
+  g.addColorStop(1, "rgba(0,0,0,0.12)");
+  rrect(ctx, F.x, F.y, F.w, F.h, 46 * S);
+  ctx.fillStyle = g;
+  ctx.fill();
+
+  ctx.shadowColor = "rgba(190,220,255,0.7)";
+  ctx.shadowBlur = 16 * S;
+  ctx.lineWidth = 3 * S;
+  ctx.strokeStyle = "rgba(255,255,255,0.92)";
+  rrect(ctx, F.x, F.y, F.w, F.h, 46 * S);
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = "transparent";
+  ctx.lineWidth = 1 * S;
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
+  rrect(ctx, F.x + 7 * S, F.y + 7 * S, F.w - 14 * S, F.h - 14 * S, 39 * S);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawTabs(ctx: CanvasRenderingContext2D, L: any, t: number, T: any, tags: string[]) {
+  const { F, S, Y } = L;
+  const p = easeOutCubic(seg(t, T.tabs, T.tabs + 0.7));
+  if (p <= 0 || !tags.length) return;
+  const active = Math.floor((tags.length - 1) / 2);
+  const gap = 56 * S;
+  const padX = 28 * S;
+  const maxW = F.w * 0.9;
+
+  let fs = 38 * S;
+  const slots = (size: number) => {
+    ctx.font = `italic ${size}px "Instrument Serif", serif`;
+    return tags.map((tg, i) => ctx.measureText(tg).width + (i === active ? padX * 2 : 0));
+  };
+  let ws = slots(fs);
+  let total = ws.reduce((a, b) => a + b, 0) + gap * (tags.length - 1);
+  if (total > maxW) {
+    fs *= maxW / total;
+    ws = slots(fs);
+    total = ws.reduce((a, b) => a + b, 0) + gap * (tags.length - 1);
+  }
+
+  const cy = Y(0.078) + (1 - p) * 10 * S;
+  let x = F.cx - total / 2;
+  ctx.save();
+  ctx.globalAlpha = p;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `italic ${fs}px "Instrument Serif", serif`;
+  tags.forEach((tg, i) => {
+    const w = ws[i];
+    if (i === active) {
+      const ph = 62 * S;
+      rrect(ctx, x, cy - ph / 2, w, ph, ph / 2);
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      ctx.fill();
+      ctx.lineWidth = 2 * S;
+      ctx.strokeStyle = "rgba(255,255,255,0.9)";
+      ctx.stroke();
+    }
+    ctx.fillStyle = i === active ? "#fff" : "rgba(255,255,255,0.82)";
+    ctx.fillText(tg, x + w / 2, cy);
+    x += w + gap;
+  });
+  ctx.restore();
+}
+
+function drawTitle(ctx: CanvasRenderingContext2D, L: any, t: number, T: any, ti: any) {
+  const { F, S } = L;
+  const p = easeOutCubic(seg(t, T.title, T.title + 0.75));
+  if (p > 0) {
+    ctx.save();
+    ctx.globalAlpha = p;
+    ctx.shadowColor = "rgba(0,0,0,0.35)";
+    ctx.shadowBlur = 14 * S;
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.font = `${ti.fs}px "Bebas Neue", Impact, sans-serif`;
+    ti.lines.forEach((ln: string, k: number) => {
+      ctx.save();
+      ctx.translate(F.cx, ti.top + ti.capH + k * ti.step + (1 - p) * 30 * S);
+      ctx.scale(ti.sq, 1);
+      ctx.fillText(ln, 0, 0);
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+
+  if (ti.script) {
+    const q = seg(t, T.script, T.script + 0.8);
+    if (q > 0) {
+      ctx.save();
+      ctx.font = `${ti.fsS}px "Pinyon Script", cursive`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      ctx.beginPath();
+      ctx.rect(ti.left - 40 * S, ti.scriptBase - ti.fsS * 1.2, (ti.scriptW + 80 * S) * easeOutCubic(q), ti.fsS * 1.8);
+      ctx.clip();
+      ctx.globalAlpha = clamp(q * 2);
+      ctx.shadowColor = "rgba(0,0,0,0.35)";
+      ctx.shadowBlur = 14 * S;
+      ctx.fillStyle = "#fff";
+      ctx.fillText(ti.script, ti.left - 8 * S, ti.scriptBase);
+      ctx.restore();
+    }
+  }
+}
+
+function drawSub(ctx: CanvasRenderingContext2D, L: any, t: number, T: any, ti: any, author: string) {
+  const { S } = L;
+  const p = easeOutCubic(seg(t, T.sub, T.sub + 0.6));
+  if (p <= 0) return;
+  const y = ti.bottom + 38 * S;
+  const x = ti.left + 8 * S + (1 - p) * -14 * S;
+  ctx.save();
+  ctx.globalAlpha = p;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.font = `${23 * S}px "Poppins", sans-serif`;
+  ctx.fillStyle = "rgba(255,255,255,0.8)";
+  const a = "storytelling by ";
+  ctx.fillText(a, x, y);
+  const wa = ctx.measureText(a).width;
+  ctx.font = `italic ${30 * S}px "Instrument Serif", serif`;
+  ctx.fillStyle = "#fff";
+  ctx.fillText(author, x + wa, y);
+  ctx.restore();
+}
+
+function drawSearch(ctx: CanvasRenderingContext2D, L: any, t: number, T: any, query: string) {
+  const { F, S, Y } = L;
+  const p = easeOutCubic(seg(t, T.search, T.search + 0.6));
+  if (p <= 0) return;
+
+  let fs = 27 * S;
+  ctx.font = `600 ${fs}px "Poppins", sans-serif`;
+  const full = ctx.measureText(query).width;
+  const w = clamp(full + 130 * S, F.w * 0.46, F.w * 0.84);
+  const h = 64 * S;
+  const avail = w - 118 * S;
+  if (full > avail) {
+    fs *= avail / full;
+    ctx.font = `600 ${fs}px "Poppins", sans-serif`;
+  }
+
+  ctx.save();
+  ctx.globalAlpha = p;
+  const sc = lerp(0.92, 1, p);
+  ctx.translate(F.cx, Y(0.538));
+  ctx.scale(sc, sc);
+  rrect(ctx, -w / 2, -h / 2, w, h, h / 2);
+  ctx.fillStyle = "rgba(255,255,255,0.14)";
+  ctx.fill();
+  ctx.lineWidth = 2 * S;
+  ctx.strokeStyle = "rgba(255,255,255,0.85)";
+  ctx.stroke();
+
+  const ix = -w / 2 + 38 * S;
+  ctx.lineWidth = 3 * S;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(ix, -2 * S, 9 * S, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(ix + 6.5 * S, 4.5 * S);
+  ctx.lineTo(ix + 14 * S, 12 * S);
+  ctx.stroke();
+
+  const k = seg(t, T.typeStart, T.typeEnd);
+  const typed = query.slice(0, Math.floor(k * query.length + 1e-6));
+  const tx = ix + 30 * S;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#fff";
+  ctx.font = `600 ${fs}px "Poppins", sans-serif`;
+  ctx.fillText(typed, tx, 1 * S);
+  const typing = t >= T.typeStart && t < T.typeEnd + 0.9;
+  if (typing && Math.floor(t * 2.6) % 2 === 0) {
+    const cxp = tx + ctx.measureText(typed).width + 4 * S;
+    ctx.fillRect(cxp, -15 * S, 2.5 * S, 30 * S);
+  }
+  ctx.restore();
+}
+
+function drawCards(ctx: CanvasRenderingContext2D, L: any, t: number, T: any, bgElement?: HTMLVideoElement | null) {
+  const { F, S, Y } = L;
+  const spec = [
+    { dx: -0.3, dy: 0.625, w: 0.2, r: -7, img: 0 },
+    { dx: 0.3, dy: 0.622, w: 0.2, r: 6, img: 1 },
+    { dx: -0.17, dy: 0.683, w: 0.255, r: -4, img: 2 },
+    { dx: 0.17, dy: 0.683, w: 0.255, r: 4, img: 3 },
+    { dx: 0, dy: 0.728, w: 0.3, r: 0, img: 4 },
+  ];
+  spec.forEach((c, i) => {
+    const a = T.cards + i * 0.12;
+    const p = seg(t, a, a + 0.55);
+    if (p <= 0) return;
+    const e = easeOutCubic(p);
+    const w = F.w * c.w;
+    const h = w * 0.94;
+    const tx = F.cx + F.w * c.dx;
+    const ty = Y(c.dy) + (i === 4 ? Math.sin(t * 1.8) * 3 * S : 0);
+    const x = lerp(F.cx, tx, e);
+    const y = lerp(Y(0.538), ty, e);
+    const sc = lerp(0.25, 1, easeOutBack(p));
+
+    ctx.save();
+    ctx.globalAlpha = clamp(p * 3);
+    ctx.translate(x, y);
+    ctx.rotate(((c.r * Math.PI) / 180) * e);
+    ctx.scale(sc, sc);
+    ctx.shadowColor = "rgba(0,0,0,0.45)";
+    ctx.shadowBlur = 18 * S;
+    ctx.shadowOffsetY = 6 * S;
+    rrect(ctx, -w / 2, -h / 2, w, h, 12 * S);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    const bd = 3.5 * S;
+    ctx.save();
+    rrect(ctx, -w / 2 + bd, -h / 2 + bd, w - bd * 2, h - bd * 2, 9 * S);
+    ctx.clip();
+
+    if (bgElement && bgElement.readyState >= 2) {
+      drawCover(ctx, bgElement, -w / 2 + bd, -h / 2 + bd, w - bd * 2, h - bd * 2);
+    } else {
+      ctx.fillStyle = `hsl(${190 + i * 32}, 45%, 38%)`;
+      ctx.fillRect(-w / 2 + bd, -h / 2 + bd, w - bd * 2, h - bd * 2);
+    }
+    ctx.restore();
+    ctx.restore();
+  });
+}
+
+function drawMusic(
+  ctx: CanvasRenderingContext2D,
+  L: any,
+  t: number,
+  T: any,
+  music: { title: string; sub: string },
+  bgElement?: HTMLVideoElement | null
+) {
+  const { F, S, Y } = L;
+  const p = seg(t, T.music, T.music + 0.65);
+  if (p <= 0) return;
+  const e = easeOutCubic(p);
+  const w = F.w * 0.77;
+  const h = 98 * S;
+  const cx = F.cx;
+  const cy = Y(0.885) + (1 - e) * 60 * S;
+  const left = cx - w / 2;
+
+  ctx.save();
+  ctx.globalAlpha = e;
+  rrect(ctx, left, cy - h / 2, w, h, h / 2);
+  ctx.fillStyle = "rgba(12,18,32,0.50)";
+  ctx.fill();
+  ctx.lineWidth = 2 * S;
+  ctx.strokeStyle = "rgba(255,255,255,0.8)";
+  ctx.stroke();
+
+  // Cover thumbnail kecil
+  const as = 62 * S;
+  const ax = left + 22 * S;
+  const ay = cy - as / 2;
+  ctx.save();
+  rrect(ctx, ax, ay, as, as, 11 * S);
+  ctx.clip();
+  if (bgElement && bgElement.readyState >= 2) {
+    drawCover(ctx, bgElement, ax, ay, as, as);
+  } else {
+    ctx.fillStyle = "#1e293b";
+    ctx.fillRect(ax, ay, as, as);
+  }
+  ctx.restore();
+  rrect(ctx, ax, ay, as, as, 11 * S);
+  ctx.lineWidth = 2 * S;
+  ctx.strokeStyle = "#fff";
+  ctx.stroke();
+
+  // Ikon next track
+  const nx = left + w - 58 * S;
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.moveTo(nx - 11 * S, cy - 14 * S);
+  ctx.lineTo(nx + 9 * S, cy);
+  ctx.lineTo(nx - 11 * S, cy + 14 * S);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillRect(nx + 11 * S, cy - 14 * S, 4 * S, 28 * S);
+
+  // Teks Judul & Author Track
+  const tx = ax + as + 18 * S;
+  const maxW = nx - 30 * S - tx;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.font = `600 ${27 * S}px "Poppins", sans-serif`;
+  ctx.fillStyle = "#fff";
+  ctx.fillText(fitText(ctx, music.title, maxW), tx, cy - 14 * S);
+  ctx.font = `${21 * S}px "Poppins", sans-serif`;
+  ctx.fillStyle = "rgba(255,255,255,0.65)";
+  ctx.fillText(fitText(ctx, music.sub, maxW), tx, cy + 18 * S);
+  ctx.restore();
+}
+
 /**
- * Universal Typography Composite Renderer
- * Renders backdrop, frame border, pill tags, Bebas title, cursive script,
- * author subtitle, search bar with typewriter, 5 floating cards, and music player.
+ * Universal Composite Frame Renderer matching the exact logic of rs-canvas.js
  */
 function renderTypographyFrame(
   ctx: CanvasRenderingContext2D,
@@ -80,37 +545,7 @@ function renderTypographyFrame(
   scriptFirstWord: boolean,
   bgVideo?: HTMLVideoElement | null
 ) {
-  const S = W / 720;
-  const F = {
-    x: 30 * S,
-    y: 44 * S,
-    w: W - 60 * S,
-    h: H - 88 * S,
-    cx: W / 2,
-  };
-  const Y = (k: number) => F.y + F.h * k;
-
-  const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v));
-  const seg = (val: number, a: number, b: number) => clamp((val - a) / (b - a));
-  const lerp = (a: number, b: number, factor: number) => a + (b - a) * factor;
-  const easeOutCubic = (x: number) => 1 - Math.pow(1 - x, 3);
-  const easeOutBack = (x: number) => {
-    const c1 = 1.70158;
-    const c3 = c1 + 1;
-    return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
-  };
-
-  const rrect = (x: number, y: number, w: number, h: number, r: number) => {
-    r = Math.min(r, w / 2, h / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-  };
-
+  const L = buildLayout(W, H);
   ctx.clearRect(0, 0, W, H);
 
   // 0. Background Video Frame (when rendering offscreen composite)
@@ -127,269 +562,35 @@ function renderTypographyFrame(
     } catch {}
   }
 
-  // 1. Subtle dark vignette overlay
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, "rgba(0,10,32,0.45)");
-  g.addColorStop(0.5, "rgba(0,10,32,0.12)");
-  g.addColorStop(1, "rgba(0,0,0,0.38)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  const clean = (parsedData.title || "The Sunset Vibes").trim();
+  const query = clean.replace(/^(the|a|an)\s+/i, "").toLowerCase();
+  const music = { title: author, sub: "suara asli" };
+  const ti = prepareTitle(ctx, L, clean, scriptFirstWord);
 
-  // 2. Aesthetic Frame Border
-  const pf = easeOutCubic(seg(t, 0, 0.7));
-  if (pf > 0) {
-    ctx.save();
-    ctx.globalAlpha = pf;
-    const sc = lerp(1.05, 1, pf);
-    const cy = F.y + F.h / 2;
-    ctx.translate(F.cx, cy);
-    ctx.scale(sc, sc);
-    ctx.translate(-F.cx, -cy);
+  const T = { tabs: 0.15, title: 0.55, script: 0.95, sub: 1.5, search: 1.9, typeStart: 2.5, typeEnd: 0, cards: 0, music: 0 };
+  T.typeEnd = T.typeStart + Math.max(1.0, query.length * 0.11);
+  T.cards = T.typeEnd + 0.3;
+  T.music = T.cards + 0.6;
 
-    rrect(F.x, F.y, F.w, F.h, 46 * S);
-    ctx.fillStyle = "rgba(120,160,230,0.06)";
-    ctx.fill();
-
-    ctx.shadowColor = "rgba(190,220,255,0.6)";
-    ctx.shadowBlur = 12 * S;
-    ctx.lineWidth = 2.5 * S;
-    ctx.strokeStyle = "rgba(255,255,255,0.92)";
-    rrect(F.x, F.y, F.w, F.h, 46 * S);
-    ctx.stroke();
-
-    ctx.shadowBlur = 0;
-    ctx.lineWidth = 1 * S;
-    ctx.strokeStyle = "rgba(255,255,255,0.22)";
-    rrect(F.x + 7 * S, F.y + 7 * S, F.w - 14 * S, F.h - 14 * S, 39 * S);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // 3. Category Tags Tabs
-  const tags = parsedData.tags;
-  const pt = easeOutCubic(seg(t, 0.15, 0.85));
-  if (pt > 0 && tags.length > 0) {
-    const activeIdx = Math.floor((tags.length - 1) / 2);
-    const gap = 36 * S;
-    const padX = 20 * S;
-    ctx.save();
-    ctx.globalAlpha = pt;
-    ctx.font = `italic ${28 * S}px "Instrument Serif", Georgia, serif`;
-    const ws = tags.map((tg, i) => ctx.measureText(tg).width + (i === activeIdx ? padX * 2 : 0));
-    const totalW = ws.reduce((a, b) => a + b, 0) + gap * (tags.length - 1);
-    const cy = Y(0.078) + (1 - pt) * 10 * S;
-    let curX = F.cx - totalW / 2;
-
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    tags.forEach((tg, i) => {
-      const itemW = ws[i];
-      if (i === activeIdx) {
-        const ph = 48 * S;
-        rrect(curX, cy - ph / 2, itemW, ph, ph / 2);
-        ctx.fillStyle = "rgba(255,255,255,0.12)";
-        ctx.fill();
-        ctx.lineWidth = 1.5 * S;
-        ctx.strokeStyle = "rgba(255,255,255,0.9)";
-        ctx.stroke();
-      }
-      ctx.fillStyle = i === activeIdx ? "#ffffff" : "rgba(255,255,255,0.85)";
-      ctx.fillText(tg, curX + itemW / 2, cy);
-      curX += itemW + gap;
-    });
-    ctx.restore();
-  }
-
-  // 4. Main Title & Script
-  const titleClean = parsedData.title || "Nature's whisper";
-  const words = titleClean.split(/\s+/);
-  let scriptWord = "";
-  let mainWords = titleClean.toUpperCase();
-  if (scriptFirstWord && words.length >= 2) {
-    scriptWord = words[0][0].toUpperCase() + words[0].slice(1).toLowerCase();
-    mainWords = words.slice(1).join(" ").toUpperCase();
-  }
-
-  const SQ = 0.58;
-  const baseFs = 150 * S;
-  const pTitle = easeOutCubic(seg(t, 0.55, 1.3));
-  if (pTitle > 0) {
-    ctx.save();
-    ctx.globalAlpha = pTitle;
-    ctx.shadowColor = "rgba(0,0,0,0.4)";
-    ctx.shadowBlur = 10 * S;
-    ctx.fillStyle = "#ffffff";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "alphabetic";
-    ctx.font = `${baseFs}px "Bebas Neue", Impact, sans-serif`;
-
-    const titleY = Y(0.34) + (1 - pTitle) * 20 * S;
-    ctx.save();
-    ctx.translate(F.cx, titleY);
-    ctx.scale(SQ, 1);
-    ctx.fillText(mainWords, 0, 0);
-    ctx.restore();
-
-    // Script cursive word
-    if (scriptWord) {
-      const qScript = seg(t, 0.95, 1.75);
-      if (qScript > 0) {
-        ctx.save();
-        ctx.font = `${85 * S}px "Pinyon Script", cursive`;
-        ctx.fillStyle = "#ffffff";
-        ctx.textAlign = "center";
-        ctx.globalAlpha = clamp(qScript * 2);
-        ctx.fillText(scriptWord, F.cx - 60 * S, titleY - 60 * S);
-        ctx.restore();
-      }
-    }
-    ctx.restore();
-  }
-
-  // 5. Author Subtitle
-  const pSub = easeOutCubic(seg(t, 1.5, 2.1));
-  if (pSub > 0) {
-    ctx.save();
-    ctx.globalAlpha = pSub;
-    const subY = Y(0.39) + (1 - pSub) * -8 * S;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = `${18 * S}px Poppins, sans-serif`;
-    ctx.fillStyle = "rgba(255,255,255,0.75)";
-    ctx.fillText(`storytelling by ${author}`, F.cx, subY);
-    ctx.restore();
-  }
-
-  // 6. Search Bar with Typewriter Effect
-  const pSearch = easeOutCubic(seg(t, 1.9, 2.5));
-  if (pSearch > 0) {
-    const searchW = F.w * 0.72;
-    const searchH = 48 * S;
-    const searchY = Y(0.48);
-    ctx.save();
-    ctx.globalAlpha = pSearch;
-    rrect(F.cx - searchW / 2, searchY - searchH / 2, searchW, searchH, searchH / 2);
-    ctx.fillStyle = "rgba(255,255,255,0.15)";
-    ctx.fill();
-    ctx.lineWidth = 1.5 * S;
-    ctx.strokeStyle = "rgba(255,255,255,0.85)";
-    ctx.stroke();
-
-    const iconX = F.cx - searchW / 2 + 28 * S;
-    ctx.lineWidth = 2 * S;
-    ctx.strokeStyle = "#ffffff";
-    ctx.beginPath();
-    ctx.arc(iconX, searchY - 1 * S, 6 * S, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(iconX + 4.5 * S, searchY + 3.5 * S);
-    ctx.lineTo(iconX + 10 * S, searchY + 9 * S);
-    ctx.stroke();
-
-    const queryStr = titleClean.toLowerCase();
-    const kType = seg(t, 2.5, 4.0);
-    const typedLen = Math.floor(kType * queryStr.length);
-    const typedStr = queryStr.slice(0, typedLen);
-
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.font = `600 ${18 * S}px Poppins, sans-serif`;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(typedStr, iconX + 22 * S, searchY);
-    ctx.restore();
-  }
-
-  // 7. Mini 5 Floating Cards
-  const spec = [
-    { dx: -0.3, dy: 0.625, w: 0.2, r: -7 },
-    { dx: 0.3, dy: 0.622, w: 0.2, r: 6 },
-    { dx: -0.17, dy: 0.683, w: 0.255, r: -4 },
-    { dx: 0.17, dy: 0.683, w: 0.255, r: 4 },
-    { dx: 0, dy: 0.728, w: 0.3, r: 0 },
-  ];
-  spec.forEach((c, i) => {
-    const a = 3.6 + i * 0.12;
-    const pc = seg(t, a, a + 0.55);
-    if (pc <= 0) return;
-    const e = easeOutCubic(pc);
-    const cw = F.w * c.w;
-    const ch = cw * 0.94;
-    const tx = F.cx + F.w * c.dx;
-    const ty = Y(c.dy) + (i === 4 ? Math.sin(t * 1.8) * 3 * S : 0);
-    const cxPos = lerp(F.cx, tx, e);
-    const cyPos = lerp(Y(0.538), ty, e);
-    const sc = lerp(0.25, 1, easeOutBack(pc));
-
-    ctx.save();
-    ctx.globalAlpha = clamp(pc * 3);
-    ctx.translate(cxPos, cyPos);
-    ctx.rotate(((c.r * Math.PI) / 180) * e);
-    ctx.scale(sc, sc);
-    ctx.shadowColor = "rgba(0,0,0,0.35)";
-    ctx.shadowBlur = 14 * S;
-    rrect(-cw / 2, -ch / 2, cw, ch, 8 * S);
-    ctx.fillStyle = "rgba(255,255,255,0.92)";
-    ctx.fill();
-
-    const bd = 3 * S;
-    rrect(-cw / 2 + bd, -ch / 2 + bd, cw - bd * 2, ch - bd * 2, 6 * S);
-    ctx.fillStyle = `hsl(${160 + i * 28}, 45%, 38%)`;
-    ctx.fill();
-    ctx.restore();
-  });
-
-  // 8. Music Bar at bottom
-  const pMus = seg(t, 4.4, 5.0);
-  if (pMus > 0) {
-    const eMus = easeOutCubic(pMus);
-    const mw = F.w * 0.77;
-    const mh = 70 * S;
-    const my = Y(0.885) + (1 - eMus) * 40 * S;
-    const mx = F.cx - mw / 2;
-
-    ctx.save();
-    ctx.globalAlpha = eMus;
-    rrect(mx, my - mh / 2, mw, mh, mh / 2);
-    ctx.fillStyle = "rgba(12,18,32,0.60)";
-    ctx.fill();
-    ctx.lineWidth = 1.5 * S;
-    ctx.strokeStyle = "rgba(255,255,255,0.75)";
-    ctx.stroke();
-
-    // Album art disc
-    const aw = 46 * S;
-    const ax = mx + 16 * S;
-    ctx.beginPath();
-    ctx.arc(ax + aw / 2, my, aw / 2, 0, Math.PI * 2);
-    ctx.fillStyle = "#1e293b";
-    ctx.fill();
-    ctx.lineWidth = 1 * S;
-    ctx.strokeStyle = "#ffffff";
-    ctx.stroke();
-
-    // Track text
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.font = `600 ${16 * S}px Poppins, sans-serif`;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(author, ax + aw + 14 * S, my - 8 * S);
-
-    ctx.font = `${12 * S}px Poppins, sans-serif`;
-    ctx.fillStyle = "rgba(255,255,255,0.65)";
-    ctx.fillText("suara asli", ax + aw + 14 * S, my + 10 * S);
-    ctx.restore();
-  }
+  drawBackdrop(ctx, L);
+  drawFrame(ctx, L, t);
+  drawTabs(ctx, L, t, T, parsedData.tags);
+  drawTitle(ctx, L, t, T, ti);
+  drawSub(ctx, L, t, T, ti, author);
+  drawSearch(ctx, L, t, T, query);
+  drawCards(ctx, L, t, T, bgVideo);
+  drawMusic(ctx, L, t, T, music, bgVideo);
 }
 
 export const StoryEditTool: React.FC = () => {
   // Main typography text input
-  const [rawText, setRawText] = useState("Nature's whisper | Healing, Serenity, Escapism");
+  const [rawText, setRawText] = useState("The sunset vibes | Healing, Vitaminsea, Addict");
   const [author, setAuthor] = useState("nexadev");
 
   // Video source state: direct file upload is primary
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string>("");
-  const [selectedSampleVideo, setSelectedSampleVideo] = useState<string>("/samples/nature.mp4");
+  const [selectedSampleVideo, setSelectedSampleVideo] = useState<string>("/samples/sunset.mp4");
   const [useSampleMode, setUseSampleMode] = useState<boolean>(false);
   const [customVideoUrl, setCustomVideoUrl] = useState<string>("");
   const [showUrlInput, setShowUrlInput] = useState<boolean>(false);
@@ -566,7 +767,6 @@ export const StoryEditTool: React.FC = () => {
   /**
    * Browser Direct Render Engine (Zero Server Load & Anti "Failed to fetch")
    * Directly composites video + typography in browser memory using HTML5 Canvas & MediaRecorder.
-   * Does NOT upload file to server and does NOT write anything to server disk.
    */
   const executeBrowserRender = useCallback(async (): Promise<{
     videoUrl: string;
@@ -594,7 +794,7 @@ export const StoryEditTool: React.FC = () => {
     const vid = document.createElement("video");
     vid.crossOrigin = "anonymous";
     vid.src = currentVideoSrc;
-    vid.muted = true; // Avoid feedback while recording
+    vid.muted = true;
     vid.playsInline = true;
 
     await new Promise<void>((resolve, reject) => {
@@ -662,7 +862,7 @@ export const StoryEditTool: React.FC = () => {
       }
     };
 
-    const ext = mimeType.includes("mp4") ? "mp4" : "mp4"; // named mp4 for easy saving
+    const ext = mimeType.includes("mp4") ? "mp4" : "mp4";
     const safeTitle = (parsedData.title || "story").toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 30);
     const outFilename = `storyedit_${safeTitle}_${Date.now()}.${ext}`;
 
@@ -814,10 +1014,8 @@ export const StoryEditTool: React.FC = () => {
 
   /**
    * Main Render Handler
-   * Direct execution with automated fallback to ensure the user ALWAYS gets a completed video.
    */
   const handleStartRender = async () => {
-    // Revoke previous blob if exists
     if (renderedResult?.videoUrl && renderedResult.videoUrl.startsWith("blob:")) {
       try {
         URL.revokeObjectURL(renderedResult.videoUrl);
@@ -833,17 +1031,14 @@ export const StoryEditTool: React.FC = () => {
       let resultData: { videoUrl: string; filename: string; duration: number };
 
       if (renderEngine === "browser") {
-        // Direct browser rendering: 0 server load, no storage, instant display
         resultData = await executeBrowserRender();
       } else {
-        // Server FFmpeg render with auto-fallback to browser if server is unreachable
         try {
           resultData = await executeServerRender();
         } catch (serverErr: any) {
-          console.warn("Server render encountered error, auto-fallback to Browser Engine:", serverErr);
+          console.warn("Server render error, auto-fallback to Browser Engine:", serverErr);
           setRenderStep("Koneksi server bermasalah, beralih otomatis ke Browser Engine...");
           setRenderProgress(15);
-          // Seamless fallback
           resultData = await executeBrowserRender();
         }
       }
@@ -853,7 +1048,7 @@ export const StoryEditTool: React.FC = () => {
       setRenderedResult({
         videoUrl: resultData.videoUrl,
         filename: resultData.filename,
-        title: parsedData.title || "Nature's whisper",
+        title: parsedData.title || "The Sunset Vibes",
         tags: parsedData.tags,
         author,
         duration: resultData.duration,
@@ -891,7 +1086,7 @@ export const StoryEditTool: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Form & Direct Upload */}
         <div className="lg:col-span-7 space-y-5">
-          {/* Section 1: Video Source (Direct File Upload is Primary) */}
+          {/* Section 1: Video Source */}
           <div className="bg-white dark:bg-neutral-900 p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-neutral-100 dark:border-neutral-800">
               <span className="text-xs sm:text-sm font-semibold text-neutral-900 dark:text-neutral-100">
@@ -957,22 +1152,6 @@ export const StoryEditTool: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setSelectedSampleVideo("/samples/nature.mp4");
-                    setUseSampleMode(true);
-                  }}
-                  className={`p-2.5 rounded-xl text-left border transition text-xs font-medium cursor-pointer ${
-                    useSampleMode && selectedSampleVideo === "/samples/nature.mp4"
-                      ? "border-neutral-900 bg-neutral-100 dark:border-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100"
-                      : "border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/40 text-neutral-600 dark:text-neutral-400"
-                  }`}
-                >
-                  <p className="font-semibold truncate">Emerald Nature</p>
-                  <p className="text-[10px] text-neutral-500">Video Alam Aesthetic</p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
                     setSelectedSampleVideo("/samples/sunset.mp4");
                     setUseSampleMode(true);
                   }}
@@ -984,6 +1163,22 @@ export const StoryEditTool: React.FC = () => {
                 >
                   <p className="font-semibold truncate">Warm Sunset</p>
                   <p className="text-[10px] text-neutral-500">Video Senja Pantai</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSampleVideo("/samples/nature.mp4");
+                    setUseSampleMode(true);
+                  }}
+                  className={`p-2.5 rounded-xl text-left border transition text-xs font-medium cursor-pointer ${
+                    useSampleMode && selectedSampleVideo === "/samples/nature.mp4"
+                      ? "border-neutral-900 bg-neutral-100 dark:border-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100"
+                      : "border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/40 text-neutral-600 dark:text-neutral-400"
+                  }`}
+                >
+                  <p className="font-semibold truncate">Emerald Nature</p>
+                  <p className="text-[10px] text-neutral-500">Video Alam Aesthetic</p>
                 </button>
               </div>
 
@@ -1035,7 +1230,7 @@ export const StoryEditTool: React.FC = () => {
                 type="text"
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
-                placeholder="Judul Cerita | Tag 1, Tag 2, Tag 3"
+                placeholder="The sunset vibes | Healing, Vitaminsea, Addict"
                 className="w-full px-3.5 py-2.5 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl text-xs sm:text-sm font-medium text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-neutral-400"
               />
               <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
@@ -1200,6 +1395,7 @@ export const StoryEditTool: React.FC = () => {
                       <option value={6}>6 Detik</option>
                       <option value={8}>8 Detik (Standar)</option>
                       <option value={10}>10 Detik</option>
+                      <option value={15}>15 Detik</option>
                     </select>
                   </div>
                 </div>
@@ -1364,7 +1560,7 @@ export const StoryEditTool: React.FC = () => {
                 </span>
               </div>
 
-              {/* Rendered Video Player - Displayed Immediately */}
+              {/* Rendered Video Player */}
               <div className="aspect-9/16 max-w-[240px] mx-auto rounded-xl overflow-hidden border border-neutral-200 dark:border-neutral-800 bg-black">
                 <video
                   src={renderedResult.videoUrl}
