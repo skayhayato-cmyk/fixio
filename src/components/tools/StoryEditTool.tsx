@@ -460,7 +460,9 @@ function drawCards(
     ctx.save();
     rrect(ctx, -w / 2 + bd, -h / 2 + bd, w - bd * 2, h - bd * 2, 9 * S);
     ctx.clip();
-    const targetImg = (imgs && imgs[c.img]) || (imgs && imgs[0]);
+    ctx.fillStyle = "#1e293b";
+    ctx.fillRect(-w / 2 + bd, -h / 2 + bd, w - bd * 2, h - bd * 2);
+    const targetImg = (imgs && imgs[c.img]) || (imgs && imgs[0]) || (imgs && imgs[2]) || (imgs && imgs[4]);
     if (targetImg) {
       drawCover(ctx, targetImg, -w / 2 + bd, -h / 2 + bd, w - bd * 2, h - bd * 2);
     }
@@ -503,6 +505,8 @@ function drawMusic(
   ctx.save();
   rrect(ctx, ax, ay, as, as, 11 * S);
   ctx.clip();
+  ctx.fillStyle = "#1e293b";
+  ctx.fillRect(ax, ay, as, as);
   if (thumb) {
     drawCover(ctx, thumb, ax, ay, as, as);
   }
@@ -722,23 +726,18 @@ export const StoryEditTool: React.FC = () => {
         vid.preload = "auto";
 
         await new Promise<void>((resolve) => {
-          const to = setTimeout(resolve, 4000);
-          vid.onloadedmetadata = () => {
-            clearTimeout(to);
-            resolve();
+          let resolved = false;
+          const done = () => {
+            if (!resolved) {
+              resolved = true;
+              resolve();
+            }
           };
-          vid.onloadeddata = () => {
-            clearTimeout(to);
-            resolve();
-          };
-          vid.oncanplay = () => {
-            clearTimeout(to);
-            resolve();
-          };
-          vid.onerror = () => {
-            clearTimeout(to);
-            resolve();
-          };
+          const to = setTimeout(done, 3500);
+          vid.onloadedmetadata = done;
+          vid.onloadeddata = done;
+          vid.oncanplay = done;
+          vid.onerror = done;
           vid.load();
         });
 
@@ -749,10 +748,10 @@ export const StoryEditTool: React.FC = () => {
             ? videoPreviewRef.current.duration
             : duration || 8;
 
-        const ks = [0.18, 0.34, 0.5, 0.66, 0.82];
+        const ks = [0.18, 0.34, 0.50, 0.66, 0.82];
         const newThumbs: HTMLCanvasElement[] = [];
 
-        // Pre-create 5 canvases with initial frame from uploaded video
+        // Pre-create 5 canvases with initial non-empty frame
         for (let i = 0; i < 5; i++) {
           const c = document.createElement("canvas");
           c.width = 480;
@@ -768,18 +767,22 @@ export const StoryEditTool: React.FC = () => {
           newThumbs.push(c);
         }
 
-        // Seek through 5 timestamps to extract distinct snapshots from uploaded video
+        // Sequentially seek and extract 5 timestamps from uploaded video
         for (let i = 0; i < ks.length; i++) {
           if (isCancelled) return;
-          const seekTime = Math.max(0.1, Math.min(totalDur - 0.1, totalDur * ks[i]));
+          const seekTime = Math.max(0.05, Math.min(totalDur - 0.05, totalDur * ks[i]));
           vid.currentTime = seekTime;
 
           await new Promise<void>((resolve) => {
-            const to = setTimeout(resolve, 350);
-            vid.onseeked = () => {
-              clearTimeout(to);
-              resolve();
+            let done = false;
+            const finish = () => {
+              if (!done) {
+                done = true;
+                resolve();
+              }
             };
+            const to = setTimeout(finish, 400);
+            vid.onseeked = finish;
           });
 
           const ctx = newThumbs[i].getContext("2d");
@@ -788,6 +791,40 @@ export const StoryEditTool: React.FC = () => {
             drawCover(ctx, vid, 0, 0, 480, 480);
           } else if (ctx && videoPreviewRef.current && videoPreviewRef.current.videoWidth > 0) {
             drawCover(ctx, videoPreviewRef.current, 0, 0, 480, 480);
+          }
+        }
+
+        // Auto-heal any empty canvas by borrowing from valid canvases or video element
+        let validCanvas: HTMLCanvasElement | null = null;
+        for (let i = 0; i < 5; i++) {
+          const cCtx = newThumbs[i].getContext("2d");
+          if (cCtx) {
+            try {
+              const pixel = cCtx.getImageData(240, 240, 1, 1).data;
+              if (pixel[3] > 0) {
+                validCanvas = newThumbs[i];
+                break;
+              }
+            } catch {}
+          }
+        }
+
+        if (validCanvas) {
+          for (let i = 0; i < 5; i++) {
+            const cCtx = newThumbs[i].getContext("2d");
+            if (cCtx) {
+              try {
+                const pixel = cCtx.getImageData(240, 240, 1, 1).data;
+                if (pixel[3] === 0) {
+                  drawCover(cCtx, validCanvas, 0, 0, 480, 480);
+                }
+              } catch {}
+            }
+          }
+        } else if (videoPreviewRef.current && videoPreviewRef.current.videoWidth > 0) {
+          for (let i = 0; i < 5; i++) {
+            const cCtx = newThumbs[i].getContext("2d");
+            if (cCtx) drawCover(cCtx, videoPreviewRef.current, 0, 0, 480, 480);
           }
         }
 
