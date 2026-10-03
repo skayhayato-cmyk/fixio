@@ -1009,10 +1009,19 @@ export const StoryEditTool: React.FC = () => {
     }
 
     const chunks: Blob[] = [];
-    const recorder = new MediaRecorder(canvasStream, {
-      mimeType,
-      videoBitsPerSecond: 3500000,
-    });
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(canvasStream, {
+        mimeType,
+        videoBitsPerSecond: 2500000,
+      });
+    } catch {
+      try {
+        recorder = new MediaRecorder(canvasStream);
+      } catch (recInitErr: any) {
+        throw new Error(recInitErr?.message || "MediaRecorder tidak didukung.");
+      }
+    }
 
     recorder.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) {
@@ -1126,72 +1135,87 @@ export const StoryEditTool: React.FC = () => {
     let finalFilename = `storyedit_${Date.now()}.mp4`;
     let finalDuration = duration;
 
-    if (!useSampleMode && uploadedFile) {
-      setRenderStep("Mengunggah data video ke server...");
-      setRenderProgress(20);
+    try {
+      if (!useSampleMode && uploadedFile) {
+        setRenderStep("Mengunggah data video ke server...");
+        setRenderProgress(20);
 
-      const formData = new FormData();
-      formData.append("file", uploadedFile);
-      formData.append("rawText", rawText);
-      formData.append("author", author);
-      formData.append("width", String(width));
-      formData.append("duration", String(duration));
-      formData.append("scriptFirstWord", String(scriptFirstWord));
+        const formData = new FormData();
+        formData.append("file", uploadedFile);
+        formData.append("rawText", rawText);
+        formData.append("author", author);
+        formData.append("width", String(width));
+        formData.append("duration", String(duration));
+        formData.append("scriptFirstWord", String(scriptFirstWord));
 
-      const res = await axios.post("/api/story-edit", formData, {
-        responseType: "blob",
-        timeout: 300000,
-        onUploadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const uploadPct = Math.round((progressEvent.loaded * 45) / progressEvent.total);
-            setRenderProgress(15 + uploadPct);
-            if (uploadPct >= 42) {
-              setRenderStep("Merender video & tipografi dengan FFmpeg...");
-            }
-          }
-        },
-      });
-
-      if (res.data instanceof Blob) {
-        finalVideoUrl = URL.createObjectURL(res.data);
-        finalFilename = (res.headers["x-video-filename"] as string) || finalFilename;
-        finalDuration = Number(res.headers["x-video-duration"]) || duration;
-      }
-    } else {
-      setRenderStep("Memproses render video di server...");
-      setRenderProgress(35);
-      const targetUrl = showUrlInput && customVideoUrl.trim()
-        ? customVideoUrl.trim()
-        : selectedSampleVideo;
-
-      const res = await axios.post(
-        "/api/story-edit",
-        {
-          url: targetUrl,
-          rawText,
-          author,
-          width,
-          duration,
-          scriptFirstWord,
-        },
-        {
+        const res = await axios.post("/api/story-edit", formData, {
           responseType: "blob",
           timeout: 300000,
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const uploadPct = Math.round((progressEvent.loaded * 45) / progressEvent.total);
+              setRenderProgress(15 + uploadPct);
+              if (uploadPct >= 42) {
+                setRenderStep("Merender video & tipografi dengan FFmpeg...");
+              }
+            }
+          },
+        });
+
+        if (res.data instanceof Blob) {
+          finalVideoUrl = URL.createObjectURL(res.data);
+          finalFilename = (res.headers["x-video-filename"] as string) || finalFilename;
+          finalDuration = Number(res.headers["x-video-duration"]) || duration;
         }
-      );
+      } else {
+        setRenderStep("Memproses render video di server...");
+        setRenderProgress(35);
+        const targetUrl = showUrlInput && customVideoUrl.trim()
+          ? customVideoUrl.trim()
+          : selectedSampleVideo;
 
-      if (res.data instanceof Blob) {
-        finalVideoUrl = URL.createObjectURL(res.data);
-        finalFilename = (res.headers["x-video-filename"] as string) || finalFilename;
-        finalDuration = Number(res.headers["x-video-duration"]) || duration;
+        const res = await axios.post(
+          "/api/story-edit",
+          {
+            url: targetUrl,
+            rawText,
+            author,
+            width,
+            duration,
+            scriptFirstWord,
+          },
+          {
+            responseType: "blob",
+            timeout: 300000,
+          }
+        );
+
+        if (res.data instanceof Blob) {
+          finalVideoUrl = URL.createObjectURL(res.data);
+          finalFilename = (res.headers["x-video-filename"] as string) || finalFilename;
+          finalDuration = Number(res.headers["x-video-duration"]) || duration;
+        }
       }
-    }
 
-    return {
-      videoUrl: finalVideoUrl,
-      filename: finalFilename,
-      duration: finalDuration,
-    };
+      return {
+        videoUrl: finalVideoUrl,
+        filename: finalFilename,
+        duration: finalDuration,
+      };
+    } catch (err: any) {
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const json = JSON.parse(text);
+          throw new Error(json.message || text);
+        } catch (subErr: any) {
+          if (subErr.message && !subErr.message.includes("JSON")) {
+            throw subErr;
+          }
+        }
+      }
+      throw err;
+    }
   };
 
   /**
