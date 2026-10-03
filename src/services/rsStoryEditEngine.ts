@@ -164,10 +164,13 @@ export function drawCover(
   h: number
 ) {
   if (!img) return;
-  const ir = img.width / img.height;
+  const iw = img.naturalWidth || img.videoWidth || img.width || 0;
+  const ih = img.naturalHeight || img.videoHeight || img.height || 0;
+  if (!iw || !ih) return;
+  const ir = iw / ih;
   const r = w / h;
-  let sw = img.width;
-  let sh = img.height;
+  let sw = iw;
+  let sh = ih;
   let sx = 0;
   let sy = 0;
   if (ir > r) {
@@ -177,7 +180,9 @@ export function drawCover(
     sh = img.width / r;
     sy = (img.height - sh) / 2;
   }
-  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  try {
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  } catch {}
 }
 
 export function fitText(ctx: any, text: string, maxW: number): string {
@@ -720,8 +725,36 @@ async function probeDuration(src: string): Promise<number> {
 }
 
 async function grabThumbs(src: string, dur: number, dir: string): Promise<Image[]> {
-  const ffmpegBin = getFfmpegPath();
   const out: Image[] = [];
+
+  // Check if this is a sample video with pre-existing thumbnails
+  const isNature = src.includes("nature.mp4");
+  const isSunset = src.includes("sunset.mp4");
+  if (isNature || isSunset) {
+    const prefix = isNature ? "nature" : "sunset";
+    const sampleDir = path.join(process.cwd(), "public", "samples");
+    let allSampleExist = true;
+    for (let i = 0; i < 5; i++) {
+      const thPath = path.join(sampleDir, `${prefix}_th${i}.jpg`);
+      if (!fs.existsSync(thPath)) {
+        allSampleExist = false;
+        break;
+      }
+    }
+    if (allSampleExist) {
+      try {
+        for (let i = 0; i < 5; i++) {
+          const thPath = path.join(sampleDir, `${prefix}_th${i}.jpg`);
+          out.push(await loadImage(thPath));
+        }
+        if (out.length === 5) return out;
+      } catch (err) {
+        console.warn("[grabThumbs] pre-cached sample load error, fallback to ffmpeg:", err);
+      }
+    }
+  }
+
+  const ffmpegBin = getFfmpegPath();
   const safeDur = Math.max(1, dur || 8);
   const ks = [0.18, 0.34, 0.5, 0.66, 0.82];
   for (let i = 0; i < ks.length; i++) {

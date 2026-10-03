@@ -98,8 +98,8 @@ function drawCover(
   h: number
 ) {
   if (!img) return;
-  const iw = (img as any).videoWidth || (img as any).width || w;
-  const ih = (img as any).videoHeight || (img as any).height || h;
+  const iw = (img as any).videoWidth || (img as any).naturalWidth || (img as any).width || 0;
+  const ih = (img as any).videoHeight || (img as any).naturalHeight || (img as any).height || 0;
   if (!iw || !ih) return;
   const ir = iw / ih;
   const r = w / h;
@@ -680,6 +680,44 @@ export const StoryEditTool: React.FC = () => {
 
     const extractFiveThumbs = async () => {
       try {
+        const isNature = currentVideoSrc.includes("nature.mp4");
+        const isSunset = currentVideoSrc.includes("sunset.mp4");
+
+        // 1. Instant load for pre-rendered sample snapshots
+        if (isNature || isSunset) {
+          const prefix = isNature ? "nature" : "sunset";
+          const promises = [0, 1, 2, 3, 4].map((i) => {
+            return new Promise<HTMLCanvasElement>((resolve) => {
+              const img = new Image();
+              img.crossOrigin = "anonymous";
+              img.onload = () => {
+                const c = document.createElement("canvas");
+                c.width = 480;
+                c.height = 480;
+                const cCtx = c.getContext("2d");
+                if (cCtx) {
+                  drawCover(cCtx, img, 0, 0, 480, 480);
+                }
+                resolve(c);
+              };
+              img.onerror = () => {
+                const c = document.createElement("canvas");
+                c.width = 480;
+                c.height = 480;
+                resolve(c);
+              };
+              img.src = `/samples/${prefix}_th${i}.jpg`;
+            });
+          });
+
+          const loadedCanvases = await Promise.all(promises);
+          if (!isCancelled && loadedCanvases.length === 5) {
+            setPreviewThumbs(loadedCanvases);
+            return;
+          }
+        }
+
+        // 2. Dynamic extraction from uploaded / custom video
         const vid = document.createElement("video");
         vid.crossOrigin = "anonymous";
         vid.src = currentVideoSrc;
@@ -704,7 +742,7 @@ export const StoryEditTool: React.FC = () => {
         const ks = [0.18, 0.34, 0.5, 0.66, 0.82];
         const newThumbs: HTMLCanvasElement[] = [];
 
-        // Pre-create 5 canvases with initial non-empty frame
+        // Pre-create 5 canvases with initial frame
         for (let i = 0; i < 5; i++) {
           const c = document.createElement("canvas");
           c.width = 480;
@@ -721,7 +759,7 @@ export const StoryEditTool: React.FC = () => {
           if (isCancelled) return;
           vid.currentTime = totalDur * ks[i];
           await new Promise<void>((resolve) => {
-            const to = setTimeout(resolve, 350);
+            const to = setTimeout(resolve, 400);
             vid.onseeked = () => {
               clearTimeout(to);
               resolve();
