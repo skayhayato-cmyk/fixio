@@ -71,7 +71,8 @@ export function getFfprobePath(): string {
 /* ------------------------------------------------------------------ */
 /* FONTS                                                               */
 /* ------------------------------------------------------------------ */
-const FONT_DIR = path.join(process.cwd(), "fonts");
+const LOCAL_FONT_DIR = path.join(process.cwd(), "fonts");
+const TMP_FONT_DIR = path.join(os.tmpdir(), "fixio-fonts");
 const GF = "https://raw.githubusercontent.com/google/fonts/main/ofl/";
 const FONTS: [string, string, string][] = [
   ["RS Script", "PinyonScript-Regular.ttf", GF + "pinyonscript/PinyonScript-Regular.ttf"],
@@ -85,24 +86,38 @@ let fontsReady = false;
 
 export async function ensureFonts() {
   if (fontsReady) return;
-  fs.mkdirSync(FONT_DIR, { recursive: true });
   await Promise.all(
     FONTS.map(async ([family, file, url]) => {
-      const p = path.join(FONT_DIR, file);
-      if (!fs.existsSync(p)) {
+      // 1. Try pre-bundled local font first (read-only safe)
+      const localPath = path.join(LOCAL_FONT_DIR, file);
+      if (fs.existsSync(localPath)) {
+        try {
+          GlobalFonts.registerFromPath(localPath, family);
+          return;
+        } catch (e: any) {
+          console.warn(`[font] gagal register local ${file}:`, e?.message);
+        }
+      }
+
+      // 2. Fallback: download to writable /tmp directory if not present
+      try {
+        fs.mkdirSync(TMP_FONT_DIR, { recursive: true });
+      } catch {}
+      const tmpPath = path.join(TMP_FONT_DIR, file);
+      if (!fs.existsSync(tmpPath)) {
         try {
           const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
           if (!res.ok) throw new Error("HTTP " + res.status);
-          fs.writeFileSync(p, Buffer.from(await res.arrayBuffer()));
+          fs.writeFileSync(tmpPath, Buffer.from(await res.arrayBuffer()));
         } catch (e: any) {
           console.warn(`[font] gagal download ${file}: ${e.message}`);
           return;
         }
       }
       try {
-        GlobalFonts.registerFromPath(p, family);
+        GlobalFonts.registerFromPath(tmpPath, family);
       } catch (e: any) {
-        console.warn(`[font] gagal register ${file}: ${e.message}`);
+        console.warn(`[font] gagal register tmp ${file}:`, e?.message);
       }
     })
   );
@@ -774,7 +789,13 @@ export interface StoryEditOptions {
   onProgress?: (percent: number) => void;
 }
 
-export async function createStoryEdit(o: StoryEditOptions = {}): Promise<string> {
+export interface StoryEditResult {
+  buffer: Buffer;
+  filename: string;
+  duration: number;
+}
+
+export async function createStoryEdit(o: StoryEditOptions = {}): Promise<StoryEditResult> {
   const {
     url,
     fileBuffer,
@@ -835,10 +856,10 @@ export async function createStoryEdit(o: StoryEditOptions = {}): Promise<string>
     T.cards = T.typeEnd + 0.3;
     T.music = T.cards + 0.6;
 
-    const outputDir = path.join(process.cwd(), "public", "generated");
-    fs.mkdirSync(outputDir, { recursive: true });
-    const output =
-      o.output || path.join(outputDir, `storyedit-${Date.now()}.mp4`);
+    // Render directly into the temporary directory in /tmp
+    const safeTitle = (clean || "story").toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 30);
+    const outFilename = `storyedit_${safeTitle}_${Date.now()}.mp4`;
+    const output = path.join(tmp, "rendered.mp4");
 
     const filter =
       `[0:v]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1,fps=${fps},` +
@@ -928,8 +949,16 @@ export async function createStoryEdit(o: StoryEditOptions = {}): Promise<string>
     await done;
     if (onProgress) onProgress(100);
 
-    return output;
+    const buffer = fs.readFileSync(output);
+
+    return {
+      buffer,
+      filename: outFilename,
+      duration,
+    };
   } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
+    try {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    } catch {}
   }
 }

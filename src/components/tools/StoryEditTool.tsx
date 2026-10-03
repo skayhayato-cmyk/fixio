@@ -531,8 +531,15 @@ export const StoryEditTool: React.FC = () => {
     }
   };
 
-  // Main Render Action: Direct File Upload to /api/story-edit
+  // Main Render Action: Direct File Upload to /api/story-edit (Zero Disk Storage on Server)
   const handleStartRender = async () => {
+    // Revoke previous blob if exists
+    if (renderedResult?.videoUrl && renderedResult.videoUrl.startsWith("blob:")) {
+      try {
+        URL.revokeObjectURL(renderedResult.videoUrl);
+      } catch {}
+    }
+
     setIsRendering(true);
     setRenderError(null);
     setRenderedResult(null);
@@ -540,7 +547,10 @@ export const StoryEditTool: React.FC = () => {
     setRenderStep("Menyiapkan font tipografi...");
 
     try {
-      let res;
+      let finalVideoUrl = "";
+      let finalFilename = `storyedit_${Date.now()}.mp4`;
+      let finalDuration = duration;
+
       // Direct File Upload Logic (no external url needed!)
       if (!useSampleMode && uploadedFile) {
         setRenderStep("Mengunggah video MP4...");
@@ -554,10 +564,10 @@ export const StoryEditTool: React.FC = () => {
         formData.append("duration", String(duration));
         formData.append("scriptFirstWord", String(scriptFirstWord));
 
-        let resData: any = null;
         try {
-          // Primary: Axios with upload progress tracking
+          // Primary: Axios with responseType: "blob" & upload progress tracking
           const res = await axios.post("/api/story-edit", formData, {
+            responseType: "blob",
             timeout: 300000, // 5 minutes timeout
             onUploadProgress: (progressEvent) => {
               if (progressEvent.total) {
@@ -569,31 +579,50 @@ export const StoryEditTool: React.FC = () => {
               }
             },
           });
-          resData = res.data;
+
+          if (res.data instanceof Blob) {
+            finalVideoUrl = URL.createObjectURL(res.data);
+            finalFilename = (res.headers["x-video-filename"] as string) || finalFilename;
+            finalDuration = Number(res.headers["x-video-duration"]) || duration;
+          } else if (res.data?.videoUrl) {
+            finalVideoUrl = res.data.videoUrl;
+            finalFilename = res.data.filename || finalFilename;
+            finalDuration = res.data.duration || duration;
+          }
         } catch (axiosErr: any) {
+          // If axios error has a blob response body containing JSON error
+          if (axiosErr?.response?.data instanceof Blob) {
+            try {
+              const errText = await axiosErr.response.data.text();
+              const errJson = JSON.parse(errText);
+              throw new Error(errJson.message || "Gagal merender video.");
+            } catch (pErr: any) {
+              if (pErr.message && !pErr.message.includes("JSON")) throw pErr;
+            }
+          }
+
           console.warn("Axios upload failed, trying native fetch:", axiosErr?.message);
-          // Fallback: Native fetch if browser XHR hit an abort or network error
+          // Fallback: Native fetch
           setRenderStep("Menyelesaikan proses render di server...");
           const fetchRes = await fetch("/api/story-edit", {
             method: "POST",
             body: formData,
           });
+
           if (!fetchRes.ok) {
-            const errJson = await fetchRes.json().catch(() => ({}));
-            throw new Error(errJson.message || `Server merespons dengan status ${fetchRes.status}`);
+            const errText = await fetchRes.text();
+            let msg = `Server merespons dengan status ${fetchRes.status}`;
+            try {
+              const errJson = JSON.parse(errText);
+              msg = errJson.message || msg;
+            } catch {}
+            throw new Error(msg);
           }
-          resData = await fetchRes.json();
-        }
 
-        setRenderProgress(85);
-        setRenderStep("Mengompresi video output...");
-
-        if (resData && resData.ok) {
-          setRenderProgress(100);
-          setRenderStep("Selesai!");
-          setRenderedResult(resData);
-        } else {
-          throw new Error(resData?.message || "Gagal merender video.");
+          const blob = await fetchRes.blob();
+          finalVideoUrl = URL.createObjectURL(blob);
+          finalFilename = fetchRes.headers.get("x-video-filename") || finalFilename;
+          finalDuration = Number(fetchRes.headers.get("x-video-duration")) || duration;
         }
       } else {
         // Sample Video or Direct URL mode
@@ -603,30 +632,56 @@ export const StoryEditTool: React.FC = () => {
           ? customVideoUrl.trim()
           : selectedSampleVideo;
 
-        const res = await axios.post(
-          "/api/story-edit",
-          {
-            url: targetUrl,
-            rawText,
-            author,
-            width,
-            duration,
-            scriptFirstWord,
-          },
-          { timeout: 300000 }
-        );
+        try {
+          const res = await axios.post(
+            "/api/story-edit",
+            {
+              url: targetUrl,
+              rawText,
+              author,
+              width,
+              duration,
+              scriptFirstWord,
+            },
+            {
+              responseType: "blob",
+              timeout: 300000,
+            }
+          );
 
-        setRenderProgress(85);
-        setRenderStep("Mengompresi video output...");
-
-        if (res.data && res.data.ok) {
-          setRenderProgress(100);
-          setRenderStep("Selesai!");
-          setRenderedResult(res.data);
-        } else {
-          throw new Error(res.data?.message || "Gagal merender video.");
+          if (res.data instanceof Blob) {
+            finalVideoUrl = URL.createObjectURL(res.data);
+            finalFilename = (res.headers["x-video-filename"] as string) || finalFilename;
+            finalDuration = Number(res.headers["x-video-duration"]) || duration;
+          } else if (res.data?.videoUrl) {
+            finalVideoUrl = res.data.videoUrl;
+            finalFilename = res.data.filename || finalFilename;
+            finalDuration = res.data.duration || duration;
+          }
+        } catch (axiosErr: any) {
+          if (axiosErr?.response?.data instanceof Blob) {
+            try {
+              const errText = await axiosErr.response.data.text();
+              const errJson = JSON.parse(errText);
+              throw new Error(errJson.message || "Gagal merender video.");
+            } catch (pErr: any) {
+              if (pErr.message && !pErr.message.includes("JSON")) throw pErr;
+            }
+          }
+          throw axiosErr;
         }
       }
+
+      setRenderProgress(100);
+      setRenderStep("Selesai!");
+      setRenderedResult({
+        videoUrl: finalVideoUrl,
+        filename: finalFilename,
+        title: parsedData.title || "Nature's whisper",
+        tags: parsedData.tags,
+        author,
+        duration: finalDuration,
+      });
     } catch (err: any) {
       console.error("Render error:", err);
       let errMsg = "Gagal memproses render video Story Edit.";

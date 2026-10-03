@@ -139,16 +139,8 @@ export async function POST(req: NextRequest) {
       videoUrl = "/samples/nature.mp4";
     }
 
-    const timestamp = Date.now();
-    const safeTitle = finalTitle.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 30);
-    const filename = `storyedit_${safeTitle}_${timestamp}.mp4`;
-    const outputPath = path.join(process.cwd(), "public", "generated", filename);
-
-    // Ensure output directory exists
-    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-
-    // Render using engine
-    await createStoryEdit({
+    // Render using engine in temporary memory
+    const result = await createStoryEdit({
       url: videoUrl || undefined,
       fileBuffer,
       title: finalTitle,
@@ -158,21 +150,43 @@ export async function POST(req: NextRequest) {
       fps,
       duration,
       scriptFirstWord,
-      output: outputPath,
     });
 
-    const publicUrl = `/generated/${filename}`;
+    const isJsonRequested =
+      req.nextUrl.searchParams.get("format") === "json" ||
+      (req.headers.get("accept")?.includes("application/json") &&
+        !req.headers.get("accept")?.includes("video/*") &&
+        !req.headers.get("accept")?.includes("*/*"));
 
-    return NextResponse.json({
-      ok: true,
-      videoUrl: publicUrl,
-      filename,
-      title: finalTitle,
-      tags: finalTags,
-      author,
-      duration,
-      width,
-      fps,
+    if (isJsonRequested) {
+      const base64 = result.buffer.toString("base64");
+      return NextResponse.json({
+        ok: true,
+        videoUrl: `data:video/mp4;base64,${base64}`,
+        filename: result.filename,
+        title: finalTitle,
+        tags: finalTags,
+        author,
+        duration: result.duration,
+        width,
+        fps,
+      });
+    }
+
+    // Direct binary streaming response
+    return new NextResponse(result.buffer, {
+      status: 200,
+      headers: {
+        "Content-Type": "video/mp4",
+        "Content-Length": String(result.buffer.byteLength),
+        "Content-Disposition": `inline; filename="${result.filename}"`,
+        "x-video-filename": result.filename,
+        "x-video-duration": String(result.duration),
+        "x-video-title": encodeURIComponent(finalTitle),
+        "x-video-tags": encodeURIComponent(JSON.stringify(finalTags)),
+        "x-video-author": encodeURIComponent(author),
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
     });
   } catch (error: any) {
     console.error("Story edit render failed:", error);
