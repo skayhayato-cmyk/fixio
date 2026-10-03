@@ -675,12 +675,11 @@ export const StoryEditTool: React.FC = () => {
 
     const extractFiveThumbs = async () => {
       try {
-        const isNature = currentVideoSrc.includes("nature.mp4");
-        const isSunset = currentVideoSrc.includes("sunset.mp4");
+        const isSample = !uploadedFile && (currentVideoSrc.includes("nature.mp4") || currentVideoSrc.includes("sunset.mp4"));
 
-        // 1. Instant load for pre-rendered sample snapshots
-        if (isNature || isSunset) {
-          const prefix = isNature ? "nature" : "sunset";
+        // 1. Instant load for pre-rendered sample snapshots only when no file is uploaded
+        if (isSample) {
+          const prefix = currentVideoSrc.includes("nature.mp4") ? "nature" : "sunset";
           const promises = [0, 1, 2, 3, 4].map((i) => {
             return new Promise<HTMLCanvasElement>((resolve) => {
               const img = new Image();
@@ -712,17 +711,27 @@ export const StoryEditTool: React.FC = () => {
           }
         }
 
-        // 2. Dynamic extraction from uploaded / custom video
+        // 2. High-precision extraction from uploaded user video or custom URL
         const vid = document.createElement("video");
-        vid.crossOrigin = "anonymous";
+        if (currentVideoSrc.startsWith("http://") || currentVideoSrc.startsWith("https://")) {
+          vid.crossOrigin = "anonymous";
+        }
         vid.src = currentVideoSrc;
         vid.muted = true;
         vid.playsInline = true;
         vid.preload = "auto";
 
         await new Promise<void>((resolve) => {
-          const to = setTimeout(resolve, 3500);
+          const to = setTimeout(resolve, 4000);
+          vid.onloadedmetadata = () => {
+            clearTimeout(to);
+            resolve();
+          };
           vid.onloadeddata = () => {
+            clearTimeout(to);
+            resolve();
+          };
+          vid.oncanplay = () => {
             clearTimeout(to);
             resolve();
           };
@@ -733,28 +742,40 @@ export const StoryEditTool: React.FC = () => {
           vid.load();
         });
 
-        const totalDur = vid.duration && !isNaN(vid.duration) && vid.duration > 0 ? vid.duration : duration || 8;
+        const totalDur =
+          vid.duration && !isNaN(vid.duration) && vid.duration > 0
+            ? vid.duration
+            : videoPreviewRef.current?.duration && !isNaN(videoPreviewRef.current.duration)
+            ? videoPreviewRef.current.duration
+            : duration || 8;
+
         const ks = [0.18, 0.34, 0.5, 0.66, 0.82];
         const newThumbs: HTMLCanvasElement[] = [];
 
-        // Pre-create 5 canvases with initial frame
+        // Pre-create 5 canvases with initial frame from uploaded video
         for (let i = 0; i < 5; i++) {
           const c = document.createElement("canvas");
           c.width = 480;
           c.height = 480;
           const cCtx = c.getContext("2d");
-          if (cCtx && vid.videoWidth > 0) {
-            drawCover(cCtx, vid, 0, 0, 480, 480);
+          if (cCtx) {
+            if (vid.videoWidth > 0) {
+              drawCover(cCtx, vid, 0, 0, 480, 480);
+            } else if (videoPreviewRef.current && videoPreviewRef.current.videoWidth > 0) {
+              drawCover(cCtx, videoPreviewRef.current, 0, 0, 480, 480);
+            }
           }
           newThumbs.push(c);
         }
 
-        // Seek through 5 timestamps to extract distinct snapshots
+        // Seek through 5 timestamps to extract distinct snapshots from uploaded video
         for (let i = 0; i < ks.length; i++) {
           if (isCancelled) return;
-          vid.currentTime = totalDur * ks[i];
+          const seekTime = Math.max(0.1, Math.min(totalDur - 0.1, totalDur * ks[i]));
+          vid.currentTime = seekTime;
+
           await new Promise<void>((resolve) => {
-            const to = setTimeout(resolve, 400);
+            const to = setTimeout(resolve, 350);
             vid.onseeked = () => {
               clearTimeout(to);
               resolve();
@@ -765,6 +786,8 @@ export const StoryEditTool: React.FC = () => {
           if (ctx && vid.videoWidth > 0) {
             ctx.clearRect(0, 0, 480, 480);
             drawCover(ctx, vid, 0, 0, 480, 480);
+          } else if (ctx && videoPreviewRef.current && videoPreviewRef.current.videoWidth > 0) {
+            drawCover(ctx, videoPreviewRef.current, 0, 0, 480, 480);
           }
         }
 
