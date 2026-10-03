@@ -140,6 +140,10 @@ export const StoryEditTool: React.FC = () => {
         setRenderError("Pilih file video MP4 yang valid.");
         return;
       }
+      if (file.size > 150 * 1024 * 1024) {
+        setRenderError("Ukuran file video terlalu besar (maksimal 150MB).");
+        return;
+      }
       setUploadedFile(file);
       const objUrl = URL.createObjectURL(file);
       setUploadedVideoUrl(objUrl);
@@ -156,6 +160,10 @@ export const StoryEditTool: React.FC = () => {
     if (file) {
       if (!file.type.includes("video") && !file.name.toLowerCase().endsWith(".mp4")) {
         setRenderError("Pilih file video MP4 yang valid.");
+        return;
+      }
+      if (file.size > 150 * 1024 * 1024) {
+        setRenderError("Ukuran file video terlalu besar (maksimal 150MB).");
         return;
       }
       setUploadedFile(file);
@@ -546,20 +554,47 @@ export const StoryEditTool: React.FC = () => {
         formData.append("duration", String(duration));
         formData.append("scriptFirstWord", String(scriptFirstWord));
 
-        // NOTE: Never manually set 'Content-Type: multipart/form-data' in Axios!
-        // Leaving headers empty lets the browser set the boundary parameter correctly.
-        res = await axios.post("/api/story-edit", formData, {
-          timeout: 180000,
-          onUploadProgress: (progressEvent) => {
-            if (progressEvent.total) {
-              const uploadPct = Math.round((progressEvent.loaded * 40) / progressEvent.total);
-              setRenderProgress(20 + uploadPct);
-              if (uploadPct >= 38) {
-                setRenderStep("Merender frame animasi tipografi dengan FFmpeg...");
+        let resData: any = null;
+        try {
+          // Primary: Axios with upload progress tracking
+          const res = await axios.post("/api/story-edit", formData, {
+            timeout: 300000, // 5 minutes timeout
+            onUploadProgress: (progressEvent) => {
+              if (progressEvent.total) {
+                const uploadPct = Math.round((progressEvent.loaded * 45) / progressEvent.total);
+                setRenderProgress(15 + uploadPct);
+                if (uploadPct >= 42) {
+                  setRenderStep("Merender video & animasi tipografi dengan FFmpeg...");
+                }
               }
-            }
-          },
-        });
+            },
+          });
+          resData = res.data;
+        } catch (axiosErr: any) {
+          console.warn("Axios upload failed, trying native fetch:", axiosErr?.message);
+          // Fallback: Native fetch if browser XHR hit an abort or network error
+          setRenderStep("Menyelesaikan proses render di server...");
+          const fetchRes = await fetch("/api/story-edit", {
+            method: "POST",
+            body: formData,
+          });
+          if (!fetchRes.ok) {
+            const errJson = await fetchRes.json().catch(() => ({}));
+            throw new Error(errJson.message || `Server merespons dengan status ${fetchRes.status}`);
+          }
+          resData = await fetchRes.json();
+        }
+
+        setRenderProgress(85);
+        setRenderStep("Mengompresi video output...");
+
+        if (resData && resData.ok) {
+          setRenderProgress(100);
+          setRenderStep("Selesai!");
+          setRenderedResult(resData);
+        } else {
+          throw new Error(resData?.message || "Gagal merender video.");
+        }
       } else {
         // Sample Video or Direct URL mode
         setRenderStep("Memproses video...");
@@ -568,7 +603,7 @@ export const StoryEditTool: React.FC = () => {
           ? customVideoUrl.trim()
           : selectedSampleVideo;
 
-        res = await axios.post(
+        const res = await axios.post(
           "/api/story-edit",
           {
             url: targetUrl,
@@ -578,19 +613,19 @@ export const StoryEditTool: React.FC = () => {
             duration,
             scriptFirstWord,
           },
-          { timeout: 180000 }
+          { timeout: 300000 }
         );
-      }
 
-      setRenderProgress(85);
-      setRenderStep("Mengompresi video output...");
+        setRenderProgress(85);
+        setRenderStep("Mengompresi video output...");
 
-      if (res.data && res.data.ok) {
-        setRenderProgress(100);
-        setRenderStep("Selesai!");
-        setRenderedResult(res.data);
-      } else {
-        throw new Error(res.data?.message || "Gagal merender video.");
+        if (res.data && res.data.ok) {
+          setRenderProgress(100);
+          setRenderStep("Selesai!");
+          setRenderedResult(res.data);
+        } else {
+          throw new Error(res.data?.message || "Gagal merender video.");
+        }
       }
     } catch (err: any) {
       console.error("Render error:", err);

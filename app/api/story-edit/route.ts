@@ -8,7 +8,7 @@ import {
 } from "../../../src/services/rsStoryEditEngine";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120; // 2 minutes max duration for video rendering
+export const maxDuration = 300; // 5 minutes max duration for video rendering
 
 export async function GET() {
   return NextResponse.json({
@@ -75,7 +75,19 @@ export async function POST(req: NextRequest) {
     let scriptFirstWord = true;
 
     if (contentType.includes("multipart/form-data")) {
-      const formData = await req.formData();
+      let formData: FormData;
+      try {
+        formData = await req.formData();
+      } catch (err: any) {
+        console.error("Gagal membaca formData:", err);
+        return NextResponse.json(
+          {
+            ok: false,
+            message: "Gagal memproses unggahan file video. File mungkin terlalu besar atau koneksi terputus.",
+          },
+          { status: 400 }
+        );
+      }
       const file = formData.get("file") as File | null;
       if (file && typeof file === "object" && "arrayBuffer" in file) {
         const arr = await file.arrayBuffer();

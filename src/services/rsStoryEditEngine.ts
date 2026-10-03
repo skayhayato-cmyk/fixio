@@ -6,8 +6,67 @@ import { promisify } from "util";
 import { pipeline } from "stream/promises";
 import { Readable } from "stream";
 import { createCanvas, loadImage, GlobalFonts, Image } from "@napi-rs/canvas";
+// @ts-ignore
+import ffmpegStatic from "ffmpeg-static";
+// @ts-ignore
+import ffprobeStatic from "ffprobe-static";
 
 const execFileP = promisify(execFile);
+
+/**
+ * Resolves static or system FFmpeg binary path
+ */
+export function getFfmpegPath(): string {
+  try {
+    if (ffmpegStatic && typeof ffmpegStatic === "string" && fs.existsSync(ffmpegStatic)) {
+      try {
+        fs.chmodSync(ffmpegStatic, 0o755);
+      } catch {}
+      return ffmpegStatic;
+    }
+  } catch {}
+
+  const candidates = [
+    "/usr/bin/ffmpeg",
+    "/usr/local/bin/ffmpeg",
+    path.join(process.cwd(), "node_modules", "ffmpeg-static", "ffmpeg"),
+    "ffmpeg",
+  ];
+  for (const c of candidates) {
+    if (c === "ffmpeg" || fs.existsSync(c)) {
+      return c;
+    }
+  }
+  return "ffmpeg";
+}
+
+/**
+ * Resolves static or system FFprobe binary path
+ */
+export function getFfprobePath(): string {
+  try {
+    const p = (ffprobeStatic as any)?.path;
+    if (p && typeof p === "string" && fs.existsSync(p)) {
+      try {
+        fs.chmodSync(p, 0o755);
+      } catch {}
+      return p;
+    }
+  } catch {}
+
+  const candidates = [
+    "/usr/bin/ffprobe",
+    "/usr/local/bin/ffprobe",
+    path.join(process.cwd(), "node_modules", "ffprobe-static", "bin", "linux", "x64", "ffprobe"),
+    "ffprobe",
+  ];
+  for (const c of candidates) {
+    if (c === "ffprobe" || fs.existsSync(c)) {
+      return c;
+    }
+  }
+  return "ffprobe";
+}
 
 /* ------------------------------------------------------------------ */
 /* FONTS                                                               */
@@ -621,8 +680,9 @@ async function fetchToFile(url: string, dest: string, maxMB = 150) {
 }
 
 async function probeDuration(src: string): Promise<number> {
+  const ffprobeBin = getFfprobePath();
   try {
-    const { stdout } = await execFileP("ffprobe", [
+    const { stdout } = await execFileP(ffprobeBin, [
       "-v",
       "error",
       "-show_entries",
@@ -640,13 +700,14 @@ async function probeDuration(src: string): Promise<number> {
 }
 
 async function grabThumbs(src: string, dur: number, dir: string): Promise<Image[]> {
+  const ffmpegBin = getFfmpegPath();
   const out: Image[] = [];
   const safeDur = Math.max(1, dur || 8);
   const ks = [0.18, 0.34, 0.5, 0.66, 0.82];
   for (let i = 0; i < ks.length; i++) {
     const f = path.join(dir, `th${i}.jpg`);
     try {
-      await execFileP("ffmpeg", [
+      await execFileP(ffmpegBin, [
         "-v",
         "error",
         "-y",
@@ -823,7 +884,8 @@ export async function createStoryEdit(o: StoryEditOptions = {}): Promise<string>
       output,
     ];
 
-    const ff = spawn("ffmpeg", args, { stdio: ["pipe", "ignore", "pipe"] });
+    const ffmpegBin = getFfmpegPath();
+    const ff = spawn(ffmpegBin, args, { stdio: ["pipe", "ignore", "pipe"] });
     let errLog = "";
     ff.stderr.on("data", (d) => {
       errLog = (errLog + d).slice(-4000);

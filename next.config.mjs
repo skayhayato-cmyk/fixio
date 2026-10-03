@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  serverExternalPackages: ["@napi-rs/canvas"],
+  serverExternalPackages: ["@napi-rs/canvas", "ffmpeg-static", "ffprobe-static"],
   typescript: {
     ignoreBuildErrors: true,
   },
