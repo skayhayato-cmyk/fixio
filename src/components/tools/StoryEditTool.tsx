@@ -460,13 +460,12 @@ function drawCards(
     ctx.save();
     rrect(ctx, -w / 2 + bd, -h / 2 + bd, w - bd * 2, h - bd * 2, 9 * S);
     ctx.clip();
+    ctx.fillStyle = "#0f172a";
+    ctx.fillRect(-w / 2 + bd, -h / 2 + bd, w - bd * 2, h - bd * 2);
 
-    const targetImg = imgs[c.img] || imgs[0];
+    const targetImg = (imgs && imgs[c.img]) || (imgs && imgs[0]);
     if (targetImg) {
       drawCover(ctx, targetImg, -w / 2 + bd, -h / 2 + bd, w - bd * 2, h - bd * 2);
-    } else {
-      ctx.fillStyle = `hsl(${190 + i * 32}, 45%, 38%)`;
-      ctx.fillRect(-w / 2 + bd, -h / 2 + bd, w - bd * 2, h - bd * 2);
     }
     ctx.restore();
     ctx.restore();
@@ -507,11 +506,10 @@ function drawMusic(
   ctx.save();
   rrect(ctx, ax, ay, as, as, 11 * S);
   ctx.clip();
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(ax, ay, as, as);
   if (thumb) {
     drawCover(ctx, thumb, ax, ay, as, as);
-  } else {
-    ctx.fillStyle = "#1e293b";
-    ctx.fillRect(ax, ay, as, as);
   }
   ctx.restore();
   rrect(ctx, ax, ay, as, as, 11 * S);
@@ -600,13 +598,13 @@ function renderTypographyFrame(
 
 export const StoryEditTool: React.FC = () => {
   // Main typography text input
-  const [rawText, setRawText] = useState("The sunset vibes | Healing, Vitaminsea, Addict");
+  const [rawText, setRawText] = useState("Nature's whisper | Healing, Serenity, Escapism");
   const [author, setAuthor] = useState("nexadev");
 
   // Video source state: direct file upload is primary
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string>("");
-  const [selectedSampleVideo, setSelectedSampleVideo] = useState<string>("/samples/sunset.mp4");
+  const [selectedSampleVideo, setSelectedSampleVideo] = useState<string>("/samples/nature.mp4");
   const [useSampleMode, setUseSampleMode] = useState<boolean>(false);
   const [customVideoUrl, setCustomVideoUrl] = useState<string>("");
   const [showUrlInput, setShowUrlInput] = useState<boolean>(false);
@@ -645,7 +643,7 @@ export const StoryEditTool: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [previewTime, setPreviewTime] = useState<number>(3.5);
+  const [previewTime, setPreviewTime] = useState<number>(4.2);
   const [isPlayingPreview, setIsPlayingPreview] = useState<boolean>(false);
 
   // Parsed metadata from rawText
@@ -682,16 +680,16 @@ export const StoryEditTool: React.FC = () => {
 
     const extractFiveThumbs = async () => {
       try {
-        const ks = [0.18, 0.34, 0.5, 0.66, 0.82];
         const vid = document.createElement("video");
         vid.crossOrigin = "anonymous";
         vid.src = currentVideoSrc;
         vid.muted = true;
         vid.playsInline = true;
+        vid.preload = "auto";
 
         await new Promise<void>((resolve) => {
-          const to = setTimeout(resolve, 5000);
-          vid.onloadedmetadata = () => {
+          const to = setTimeout(resolve, 3500);
+          vid.onloadeddata = () => {
             clearTimeout(to);
             resolve();
           };
@@ -703,8 +701,22 @@ export const StoryEditTool: React.FC = () => {
         });
 
         const totalDur = vid.duration && !isNaN(vid.duration) && vid.duration > 0 ? vid.duration : duration || 8;
-        const thumbs: HTMLCanvasElement[] = [];
+        const ks = [0.18, 0.34, 0.5, 0.66, 0.82];
+        const newThumbs: HTMLCanvasElement[] = [];
 
+        // Pre-create 5 canvases with initial non-empty frame
+        for (let i = 0; i < 5; i++) {
+          const c = document.createElement("canvas");
+          c.width = 480;
+          c.height = 480;
+          const cCtx = c.getContext("2d");
+          if (cCtx && vid.videoWidth > 0) {
+            drawCover(cCtx, vid, 0, 0, 480, 480);
+          }
+          newThumbs.push(c);
+        }
+
+        // Seek through 5 timestamps to extract distinct snapshots
         for (let i = 0; i < ks.length; i++) {
           if (isCancelled) return;
           vid.currentTime = totalDur * ks[i];
@@ -716,18 +728,15 @@ export const StoryEditTool: React.FC = () => {
             };
           });
 
-          const c = document.createElement("canvas");
-          c.width = 480;
-          c.height = 480;
-          const ctx = c.getContext("2d");
-          if (ctx && vid.readyState >= 2) {
+          const ctx = newThumbs[i].getContext("2d");
+          if (ctx && vid.videoWidth > 0) {
+            ctx.clearRect(0, 0, 480, 480);
             drawCover(ctx, vid, 0, 0, 480, 480);
           }
-          thumbs.push(c);
         }
 
-        if (!isCancelled && thumbs.length === 5) {
-          setPreviewThumbs(thumbs);
+        if (!isCancelled && newThumbs.length === 5) {
+          setPreviewThumbs(newThumbs);
         }
       } catch (e) {
         console.warn("Client thumbs extraction skipped:", e);
@@ -829,8 +838,9 @@ export const StoryEditTool: React.FC = () => {
     canvas.width = W;
     canvas.height = H;
 
-    // Render preview overlays with the 5 extracted thumbnails
-    renderTypographyFrame(ctx, W, H, previewTime, parsedData, author, scriptFirstWord, null, previewThumbs);
+    // Render preview overlays with the 5 extracted thumbnails (or live video fallback)
+    const effectiveThumbs = previewThumbs.length === 5 ? previewThumbs : (videoPreviewRef.current ? [videoPreviewRef.current, videoPreviewRef.current, videoPreviewRef.current, videoPreviewRef.current, videoPreviewRef.current] : []);
+    renderTypographyFrame(ctx, W, H, previewTime, parsedData, author, scriptFirstWord, null, effectiveThumbs as any);
   }, [previewTime, parsedData, author, scriptFirstWord, previewThumbs]);
 
   // Video timeupdate sync
@@ -883,6 +893,7 @@ export const StoryEditTool: React.FC = () => {
     vid.src = currentVideoSrc;
     vid.muted = true;
     vid.playsInline = true;
+    vid.preload = "auto";
 
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("Timeout memuat video di browser.")), 20000);
@@ -897,30 +908,21 @@ export const StoryEditTool: React.FC = () => {
       vid.load();
     });
 
-    // Extract 5 crisp thumbnails before recording starts
-    setRenderStep("Mengekstrak 5 snapshot thumbnail video...");
-    const ks = [0.18, 0.34, 0.5, 0.66, 0.82];
-    const totalDur = vid.duration && !isNaN(vid.duration) && vid.duration > 0 ? vid.duration : duration || 8;
-    const recordingThumbs: HTMLCanvasElement[] = [];
-
-    for (let i = 0; i < ks.length; i++) {
-      vid.currentTime = totalDur * ks[i];
-      await new Promise<void>((resolve) => {
-        const to = setTimeout(resolve, 350);
-        vid.onseeked = () => {
-          clearTimeout(to);
-          resolve();
-        };
-      });
-
+    // Prepare 5 thumbnail canvases initialized with previewThumbs or video frame
+    const recThumbs: HTMLCanvasElement[] = [];
+    for (let i = 0; i < 5; i++) {
       const c = document.createElement("canvas");
       c.width = 480;
       c.height = 480;
-      const ctx = c.getContext("2d");
-      if (ctx && vid.readyState >= 2) {
-        drawCover(ctx, vid, 0, 0, 480, 480);
+      const cCtx = c.getContext("2d");
+      if (cCtx) {
+        if (previewThumbs[i]) {
+          cCtx.drawImage(previewThumbs[i], 0, 0);
+        } else if (vid.videoWidth > 0) {
+          drawCover(cCtx, vid, 0, 0, 480, 480);
+        }
       }
-      recordingThumbs.push(c);
+      recThumbs.push(c);
     }
 
     const fps = 30;
@@ -982,6 +984,8 @@ export const StoryEditTool: React.FC = () => {
     return new Promise<{ videoUrl: string; filename: string; duration: number }>((resolve, reject) => {
       let animId: number;
       let isDone = false;
+      const ks = [0.18, 0.34, 0.50, 0.66, 0.82];
+      const snapped = [false, false, false, false, false];
 
       recorder.onstop = () => {
         vid.pause();
@@ -1012,7 +1016,20 @@ export const StoryEditTool: React.FC = () => {
           if (isDone) return;
           const elapsed = performance.now() - startTime;
           const curSec = Math.min(duration, elapsed / 1000);
+          const ratio = curSec / duration;
           const pct = Math.min(98, Math.round((curSec / duration) * 100));
+
+          // Real-time snapshot of live video frames at exact intervals
+          for (let k = 0; k < ks.length; k++) {
+            if (!snapped[k] && ratio >= ks[k] && vid.videoWidth > 0) {
+              snapped[k] = true;
+              const sCtx = recThumbs[k].getContext("2d");
+              if (sCtx) {
+                sCtx.clearRect(0, 0, 480, 480);
+                drawCover(sCtx, vid, 0, 0, 480, 480);
+              }
+            }
+          }
 
           setRenderProgress(pct);
           setRenderStep(`Merender frame tipografi & video (${pct}%)...`);
@@ -1026,7 +1043,7 @@ export const StoryEditTool: React.FC = () => {
             author,
             scriptFirstWord,
             vid,
-            recordingThumbs
+            recThumbs
           );
 
           if (elapsed >= targetDurationMs || vid.ended) {
@@ -1044,7 +1061,7 @@ export const StoryEditTool: React.FC = () => {
         reject(new Error("Gagal memulai pemutaran video: " + err.message));
       });
     });
-  }, [width, currentVideoSrc, duration, parsedData, author, scriptFirstWord]);
+  }, [width, currentVideoSrc, duration, parsedData, author, scriptFirstWord, previewThumbs]);
 
   /**
    * Server Render Engine (FFmpeg Ultra Speed via rawvideo)

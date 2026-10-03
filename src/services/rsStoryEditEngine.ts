@@ -584,8 +584,11 @@ export function drawCards(
     ctx.save();
     rrect(ctx, -w / 2 + bd, -h / 2 + bd, w - bd * 2, h - bd * 2, 9 * S);
     ctx.clip();
-    if (imgs[c.img]) {
-      drawCover(ctx, imgs[c.img], -w / 2 + bd, -h / 2 + bd, w - bd * 2, h - bd * 2);
+    ctx.fillStyle = "#0f172a";
+    ctx.fillRect(-w / 2 + bd, -h / 2 + bd, w - bd * 2, h - bd * 2);
+    const targetImg = imgs[c.img] || imgs[0];
+    if (targetImg) {
+      drawCover(ctx, targetImg, -w / 2 + bd, -h / 2 + bd, w - bd * 2, h - bd * 2);
     }
     ctx.restore();
     ctx.restore();
@@ -626,6 +629,8 @@ export function drawMusic(
   ctx.save();
   rrect(ctx, ax, ay, as, as, 11 * S);
   ctx.clip();
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(ax, ay, as, as);
   if (thumb) {
     drawCover(ctx, thumb, ax, ay, as, as);
   }
