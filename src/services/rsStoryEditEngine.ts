@@ -875,9 +875,11 @@ export async function createStoryEdit(o: StoryEditOptions = {}): Promise<StoryEd
       "-i",
       src,
       "-f",
-      "image2pipe",
-      "-c:v",
-      "png",
+      "rawvideo",
+      "-pix_fmt",
+      "rgba",
+      "-s",
+      `${W}x${H}`,
       "-framerate",
       String(fps),
       "-i",
@@ -895,7 +897,7 @@ export async function createStoryEdit(o: StoryEditOptions = {}): Promise<StoryEd
       "-preset",
       "veryfast",
       "-crf",
-      "20",
+      "22",
       "-c:a",
       "aac",
       "-b:a",
@@ -933,7 +935,7 @@ export async function createStoryEdit(o: StoryEditOptions = {}): Promise<StoryEd
       drawCards(ctx, L, t, T, imgs);
       drawMusic(ctx, L, t, T, music, imgs[0]);
 
-      const buf = await canvas.encode("png");
+      const buf = canvas.data();
       if (!ff.stdin.write(buf)) {
         await Promise.race([
           new Promise((r) => ff.stdin.once("drain", r)),
