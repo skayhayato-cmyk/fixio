@@ -908,7 +908,7 @@ export const StoryEditTool: React.FC = () => {
     filename: string;
     duration: number;
   }> => {
-    setRenderStep("Menyiapkan Canvas & Perekam Video Browser...");
+    setRenderStep("Menyiapkan Canvas & Perekam Video...");
     setRenderProgress(10);
 
     // Wait for web fonts to load
@@ -926,25 +926,30 @@ export const StoryEditTool: React.FC = () => {
     const offCtx = offscreen.getContext("2d");
     if (!offCtx) throw new Error("Gagal menginisialisasi Canvas di browser.");
 
-    const vid = document.createElement("video");
-    vid.crossOrigin = "anonymous";
-    vid.src = currentVideoSrc;
-    vid.muted = true;
-    vid.playsInline = true;
-    vid.preload = "auto";
+    // Prefer using preview video element or create clean video instance
+    let vid: HTMLVideoElement;
+    if (videoPreviewRef.current && videoPreviewRef.current.readyState >= 2) {
+      vid = videoPreviewRef.current;
+    } else {
+      vid = document.createElement("video");
+      if (currentVideoSrc.startsWith("http://") || currentVideoSrc.startsWith("https://")) {
+        vid.crossOrigin = "anonymous";
+      }
+      vid.src = currentVideoSrc;
+      vid.muted = true;
+      vid.playsInline = true;
+      vid.preload = "auto";
 
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("Timeout memuat video di browser.")), 20000);
-      vid.onloadeddata = () => {
-        clearTimeout(timer);
-        resolve();
-      };
-      vid.onerror = () => {
-        clearTimeout(timer);
-        reject(new Error("Gagal membaca file video sumber. Pastikan format MP4 dapat diputar."));
-      };
-      vid.load();
-    });
+      if (vid.readyState < 2) {
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, 3500);
+          vid.onloadeddata = () => { clearTimeout(timer); resolve(); };
+          vid.oncanplay = () => { clearTimeout(timer); resolve(); };
+          vid.onerror = () => { clearTimeout(timer); resolve(); };
+          vid.load();
+        });
+      }
+    }
 
     // Prepare 5 thumbnail canvases initialized with previewThumbs or video frame
     const recThumbs: HTMLCanvasElement[] = [];
@@ -956,7 +961,7 @@ export const StoryEditTool: React.FC = () => {
       if (cCtx) {
         if (previewThumbs[i]) {
           cCtx.drawImage(previewThumbs[i], 0, 0);
-        } else if (vid.videoWidth > 0) {
+        } else if (vid && vid.videoWidth > 0) {
           drawCover(cCtx, vid, 0, 0, 480, 480);
         }
       }
@@ -971,7 +976,7 @@ export const StoryEditTool: React.FC = () => {
       : null;
 
     if (!canvasStream) {
-      throw new Error("Browser Anda tidak mendukung perekaman Canvas Stream. Silakan gunakan Chrome, Edge, Safari, atau Firefox terbaru.");
+      throw new Error("Browser Anda tidak mendukung perekaman Canvas Stream.");
     }
 
     // Capture audio from video if available
@@ -1026,7 +1031,7 @@ export const StoryEditTool: React.FC = () => {
       const snapped = [false, false, false, false, false];
 
       recorder.onstop = () => {
-        vid.pause();
+        try { vid.pause(); } catch {}
         cancelAnimationFrame(animId);
         const finalBlob = new Blob(chunks, { type: mimeType });
         const objUrl = URL.createObjectURL(finalBlob);
@@ -1038,7 +1043,7 @@ export const StoryEditTool: React.FC = () => {
       };
 
       recorder.onerror = (e: any) => {
-        vid.pause();
+        try { vid.pause(); } catch {}
         cancelAnimationFrame(animId);
         reject(new Error(e?.error?.message || "Gagal merekam video di browser."));
       };
@@ -1046,7 +1051,8 @@ export const StoryEditTool: React.FC = () => {
       recorder.start(200);
       vid.currentTime = 0;
 
-      vid.play().then(() => {
+      const playPromise = vid.play();
+      const startLoop = () => {
         const startTime = performance.now();
         const targetDurationMs = duration * 1000;
 
@@ -1095,9 +1101,16 @@ export const StoryEditTool: React.FC = () => {
         };
 
         animId = requestAnimationFrame(loop);
-      }).catch((err) => {
-        reject(new Error("Gagal memulai pemutaran video: " + err.message));
-      });
+      };
+
+      if (playPromise !== undefined) {
+        playPromise.then(startLoop).catch(() => {
+          // If autoplay is restricted, continue loop with simulated clock
+          startLoop();
+        });
+      } else {
+        startLoop();
+      }
     });
   }, [width, currentVideoSrc, duration, parsedData, author, scriptFirstWord, previewThumbs]);
 
@@ -1182,7 +1195,7 @@ export const StoryEditTool: React.FC = () => {
   };
 
   /**
-   * Main Render Handler
+   * Main Render Handler with Intelligent Two-Way Fallback
    */
   const handleStartRender = async () => {
     if (renderedResult?.videoUrl && renderedResult.videoUrl.startsWith("blob:")) {
@@ -1200,14 +1213,21 @@ export const StoryEditTool: React.FC = () => {
       let resultData: { videoUrl: string; filename: string; duration: number };
 
       if (renderEngine === "browser") {
-        resultData = await executeBrowserRender();
+        try {
+          resultData = await executeBrowserRender();
+        } catch (browserErr: any) {
+          console.warn("Browser render error, switching to Server Engine:", browserErr);
+          setRenderStep("Mengalihkan pemrosesan ke Server FFmpeg...");
+          setRenderProgress(25);
+          resultData = await executeServerRender();
+        }
       } else {
         try {
           resultData = await executeServerRender();
         } catch (serverErr: any) {
-          console.warn("Server render error, auto-fallback to Browser Engine:", serverErr);
-          setRenderStep("Koneksi server bermasalah, beralih otomatis ke Browser Engine...");
-          setRenderProgress(15);
+          console.warn("Server render error, switching to Browser Engine:", serverErr);
+          setRenderStep("Mengalihkan pemrosesan ke Browser Engine...");
+          setRenderProgress(20);
           resultData = await executeBrowserRender();
         }
       }
@@ -1226,7 +1246,7 @@ export const StoryEditTool: React.FC = () => {
       console.error("Render execution error:", err);
       let errMsg = "Gagal memproses render video Story Edit.";
       if (err?.message === "Network Error" || err?.message?.includes("fetch")) {
-        errMsg = "Koneksi terputus. Silakan gunakan Mode Render Browser untuk hasil instan tanpa membebani server.";
+        errMsg = "Koneksi terputus. Silakan coba lagi.";
       } else if (err?.message) {
         errMsg = err.message;
       }
