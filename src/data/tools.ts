@@ -2,6 +2,15 @@ import { ToolDefinition } from "../types";
 
 export const TOOLS_LIST: ToolDefinition[] = [
   {
+    id: "auto-trace",
+    title: "Auto Trace Image to SVG",
+    description: "Ubah gambar PNG/JPG/WebP menjadi vektor SVG berlapis warna dengan pemisahan per patch otomatis.",
+    category: "image",
+    iconName: "Shapes",
+    badge: "Vector SVG",
+    popular: true,
+  },
+  {
     id: "imgtopromt",
     title: "Image to Prompt AI",
     description: "Ekstrak dan hasilkan deskripsi prompt AI terdeteksi dari foto/gambar secara otomatis.",

@@ -39,6 +39,7 @@ import { InstagramDownloaderV2Tool } from "./components/tools/InstagramDownloade
 import { SpotifyDownloaderTool } from "./components/tools/SpotifyDownloaderTool";
 import { StoryEditTool } from "./components/tools/StoryEditTool";
 import { ToQrTool } from "./components/tools/ToQrTool";
+import { AutoTraceTool } from "./components/tools/AutoTraceTool";
 
 import { 
   ChevronLeft, 
@@ -165,6 +166,8 @@ export default function App() {
         return <StandaloneUploaderTool onSelectTool={(id) => setActiveToolId(id)} />;
       case "to-qr":
         return <ToQrTool onSelectTool={(id) => setActiveToolId(id)} />;
+      case "auto-trace":
+        return <AutoTraceTool />;
       default:
         return null;
     }
