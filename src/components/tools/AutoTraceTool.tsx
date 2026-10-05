@@ -830,6 +830,16 @@ export const AutoTraceTool: React.FC = () => {
           <Download className="w-4 h-4" />
           <span>Unduh Berkas SVG</span>
         </button>
+
+        <a
+          href="/auto-trace.html"
+          target="_blank"
+          rel="noreferrer"
+          className="col-span-2 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border border-neutral-800 bg-neutral-950/60 hover:bg-neutral-900 text-[11px] font-mono text-neutral-400 hover:text-white transition-colors"
+        >
+          <FileCode className="w-3.5 h-3.5" />
+          <span>Buka / Unduh Versi Standalone Single-File (index.html)</span>
+        </a>
       </div>
 
       {/* Bottom Floating Toast */}
