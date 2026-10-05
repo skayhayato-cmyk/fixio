@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   TraceOptions,
   TraceResult,
@@ -6,6 +6,12 @@ import {
   loadAndScaleImage,
   runAutoTrace,
 } from "../../services/tracerEngine";
+import {
+  AlightOptions,
+  AlightResult,
+  AlightLayerInfo,
+  SvgToAlightConverter,
+} from "../../services/alightXmlEngine";
 import {
   Wand2,
   Image as ImageIcon,
@@ -15,14 +21,11 @@ import {
   Spline,
   Shapes,
   Droplets,
-  Eye,
   Layers,
   Download,
   Copy,
   Check,
   RotateCcw,
-  CheckSquare,
-  Square,
   Sparkles,
   Maximize2,
   ZoomIn,
@@ -33,16 +36,31 @@ import {
   Trash2,
   Loader2,
   FileCode,
+  Clock,
+  Film,
+  FileText,
+  Sliders,
+  Shield,
+  Square,
+  CheckSquare,
+  X,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 export const AutoTraceTool: React.FC = () => {
-  // Input Image & State
-  const [sourceImage, setSourceImage] = useState<File | string | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string>("");
-  const [imageFileName, setImageFileName] = useState<string>("image");
+  // Input Mode: "raster" (Auto Trace) or "svg" (Direct SVG to Alight XML)
+  const [inputMode, setInputMode] = useState<"raster" | "svg">("raster");
 
-  // Trace Options
-  const [options, setOptions] = useState<TraceOptions>({
+  // Source Files & Previews
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string>("");
+  const [fileName, setFileName] = useState<string>("vector");
+  const [directSvgText, setDirectSvgText] = useState<string>("");
+
+  // Trace Settings
+  const [traceOpts, setTraceOpts] = useState<TraceOptions>({
     colors: 8,
     resolution: 640,
     speckle: 6,
@@ -52,22 +70,39 @@ export const AutoTraceTool: React.FC = () => {
     removeBg: false,
   });
 
-  // Processing & Results
-  const [status, setStatus] = useState<"idle" | "tracing" | "done" | "error">("idle");
+  // Alight Motion XML Settings
+  const [alightOpts, setAlightOpts] = useState<AlightOptions>({
+    preset: "orig",
+    cw: 1080,
+    ch: 1080,
+    duration: 2.0,
+    fps: 30,
+    grouping: "nested",
+    prim: true,
+    cstroke: true,
+    engine: "max",
+    patch: 0.01,
+    protect: 2.0,
+    exclude: [],
+  });
+
+  // State: Processing & Results
+  const [status, setStatus] = useState<"idle" | "busy" | "done" | "error">("idle");
   const [statusText, setStatusText] = useState<string>("MENUNGGU");
-  const [progress, setProgress] = useState<number>(0);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [currentSvg, setCurrentSvg] = useState<string>("");
+  const [alightResult, setAlightResult] = useState<AlightResult | null>(null);
+  const [activeLayers, setActiveLayers] = useState<AlightLayerInfo[]>([]);
+  const [selectedLayerIds, setSelectedLayerIds] = useState<Set<number>>(new Set());
 
-  const [traceResult, setTraceResult] = useState<TraceResult | null>(null);
-  const [layers, setLayers] = useState<TraceLayerInfo[]>([]);
-
-  // Preview & Viewport State
+  // Viewport & UI State
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [bgPattern, setBgPattern] = useState<"grid" | "dark" | "white">("grid");
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const [toast, setToast] = useState<{ message: string; type: "ok" | "bad" } | null>(null);
+  const [isXmlModalOpen, setIsXmlModalOpen] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<"trace" | "alight" | "layers">("trace");
 
-  // Cancellation and Debounce Ref
+  // Debounce & Cancellation Refs
   const abortControllerRef = useRef<{ aborted: boolean }>({ aborted: false });
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -76,86 +111,115 @@ export const AutoTraceTool: React.FC = () => {
     setToast({ message, type });
     setTimeout(() => {
       setToast((prev) => (prev?.message === message ? null : prev));
-    }, 2600);
+    }, 2800);
   };
 
   /**
-   * Main Execute Trace Function
+   * Run the full pipeline:
+   * 1. If raster: runAutoTrace -> produce SVG -> convert to Alight XML
+   * 2. If SVG: convert SVG -> Alight XML
    */
-  const executeTrace = useCallback(
-    async (src: File | string, currentOpts: TraceOptions) => {
-      // Abort ongoing task
+  const processPipeline = useCallback(
+    async (file: File | string, currentTraceOpts: TraceOptions, currentAlightOpts: AlightOptions) => {
       abortControllerRef.current.aborted = true;
       const newAbortSignal = { aborted: false };
       abortControllerRef.current = newAbortSignal;
 
-      setStatus("tracing");
-      setStatusText("MEMUAT GAMBAR...");
-      setProgress(0.05);
-      setErrorMsg(null);
+      setStatus("busy");
+      setStatusText("MEMPROSES");
 
       try {
-        const { imageData } = await loadAndScaleImage(src, currentOpts.resolution);
+        let svgString = "";
+
+        if (inputMode === "raster") {
+          setStatusText("TRACING GAMBAR...");
+          const { imageData } = await loadAndScaleImage(file, currentTraceOpts.resolution);
+          if (newAbortSignal.aborted) return;
+
+          const traceRes = await runAutoTrace(
+            imageData,
+            currentTraceOpts,
+            (pct, text) => {
+              if (!newAbortSignal.aborted) {
+                setStatusText(`TRACE ${Math.round(pct * 100)}%`);
+              }
+            },
+            newAbortSignal
+          );
+
+          if (newAbortSignal.aborted) return;
+          svgString = traceRes.svgString;
+        } else {
+          // Direct SVG string
+          svgString = typeof file === "string" ? file : await (file as File).text();
+        }
+
+        if (newAbortSignal.aborted) return;
+        setCurrentSvg(svgString);
+
+        // Convert SVG to Alight Motion XML
+        setStatusText("GENERATING XML...");
+        const title = fileName || "vector";
+        const converter = new SvgToAlightConverter(currentAlightOpts);
+        const amRes = converter.run(svgString, title);
+
         if (newAbortSignal.aborted) return;
 
-        const result = await runAutoTrace(
-          imageData,
-          currentOpts,
-          (pct, text) => {
-            if (!newAbortSignal.aborted) {
-              setProgress(pct);
-              setStatusText(text);
-            }
-          },
-          newAbortSignal
-        );
+        setAlightResult(amRes);
+        setActiveLayers(amRes.layers);
 
-        if (newAbortSignal.aborted) return;
+        // Initialize selected layers if not initialized
+        if (selectedLayerIds.size === 0 && amRes.layers.length > 0) {
+          const allIds = new Set(amRes.layers.map((l) => l.i));
+          setSelectedLayerIds(allIds);
+        }
 
-        setTraceResult(result);
-        setLayers(result.layers);
         setStatus("done");
         setStatusText("SELESAI");
-        setProgress(1);
       } catch (err: any) {
         if (!newAbortSignal.aborted) {
-          console.error("Trace failed:", err);
+          console.error("Pipeline failed:", err);
           setStatus("error");
           setStatusText("ERROR");
-          const msg = err?.message || "Gagal melakukan trace pada gambar.";
-          setErrorMsg(msg);
+          const msg = err?.message || "Gagal memproses vektor.";
           showToast(msg, "bad");
         }
       }
     },
-    []
+    [inputMode, fileName, selectedLayerIds]
   );
 
   /**
-   * Debounced Auto-Retrace on Settings Change (450ms)
+   * Auto re-run with 450ms debounce
    */
   useEffect(() => {
-    if (!sourceImage) return;
+    if (!sourceFile && !directSvgText) return;
 
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
 
     debounceTimerRef.current = setTimeout(() => {
-      executeTrace(sourceImage, options);
+      const source = inputMode === "raster" ? sourceFile : directSvgText || sourceFile;
+      if (source) {
+        processPipeline(source, traceOpts, alightOpts);
+      }
     }, 450);
 
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     };
-  }, [options, sourceImage, executeTrace]);
+  }, [traceOpts, alightOpts, inputMode, sourceFile, directSvgText, processPipeline]);
 
   /**
    * Handle File Selection
    */
-  const handleFileSelect = (file: File) => {
-    if (!file.type.startsWith("image/") && !file.name.match(/\.(png|jpg|jpeg|webp|gif)$/i)) {
-      showToast("Pilih file gambar yang valid (PNG, JPG, WebP)", "bad");
+  const handleFileSelect = async (file: File) => {
+    const isSvg = file.type === "image/svg+xml" || file.name.toLowerCase().endsWith(".svg");
+    const isRaster = file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp)$/i.test(file.name);
+
+    if (!isSvg && !isRaster) {
+      showToast("Pilih file gambar raster (PNG, JPG, WebP) atau SVG", "bad");
       return;
     }
 
@@ -163,13 +227,25 @@ export const AutoTraceTool: React.FC = () => {
       URL.revokeObjectURL(imagePreviewUrl);
     }
 
-    const objUrl = URL.createObjectURL(file);
-    setSourceImage(file);
-    setImagePreviewUrl(objUrl);
     const cleanName = file.name.replace(/\.[^/.]+$/, "");
-    setImageFileName(cleanName);
+    setFileName(cleanName);
+    setSourceFile(file);
+    setSelectedLayerIds(new Set());
     setZoomLevel(1);
-    executeTrace(file, options);
+
+    if (isSvg) {
+      setInputMode("svg");
+      const text = await file.text();
+      setDirectSvgText(text);
+      setImagePreviewUrl("");
+      processPipeline(text, traceOpts, alightOpts);
+    } else {
+      setInputMode("raster");
+      setDirectSvgText("");
+      const objUrl = URL.createObjectURL(file);
+      setImagePreviewUrl(objUrl);
+      processPipeline(file, traceOpts, alightOpts);
+    }
   };
 
   /**
@@ -195,66 +271,91 @@ export const AutoTraceTool: React.FC = () => {
   }, []);
 
   /**
-   * Toggle Layer Visibility
+   * Layer Toggle
    */
   const toggleLayer = (layerId: number) => {
-    setLayers((prev) =>
-      prev.map((l) => (l.id === layerId ? { ...l, enabled: !l.enabled } : l))
-    );
+    setSelectedLayerIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(layerId)) {
+        next.delete(layerId);
+      } else {
+        next.add(layerId);
+      }
+      const excluded = activeLayers.filter((l) => !next.has(l.i)).map((l) => l.i);
+      setAlightOpts((o) => ({ ...o, exclude: excluded }));
+      return next;
+    });
   };
 
   const handleSelectAllLayers = (selectAll: boolean) => {
-    setLayers((prev) => prev.map((l) => ({ ...l, enabled: selectAll })));
+    if (selectAll) {
+      const allIds = new Set(activeLayers.map((l) => l.i));
+      setSelectedLayerIds(allIds);
+      setAlightOpts((o) => ({ ...o, exclude: [] }));
+    } else {
+      setSelectedLayerIds(new Set());
+      setAlightOpts((o) => ({ ...o, exclude: activeLayers.map((l) => l.i) }));
+    }
   };
 
   const handleInvertLayers = () => {
-    setLayers((prev) => prev.map((l) => ({ ...l, enabled: !l.enabled })));
+    setSelectedLayerIds((prev) => {
+      const next = new Set<number>();
+      activeLayers.forEach((l) => {
+        if (!prev.has(l.i)) next.add(l.i);
+      });
+      const excluded = activeLayers.filter((l) => !next.has(l.i)).map((l) => l.i);
+      setAlightOpts((o) => ({ ...o, exclude: excluded }));
+      return next;
+    });
   };
 
   /**
-   * Generate Live SVG from current enabled layers
+   * Export Alight Motion XML
    */
-  const liveSvgString = React.useMemo(() => {
-    if (!traceResult) return "";
-    const activePaths = layers
-      .filter((l) => l.enabled)
-      .map((l) => `<path fill="${l.hex}" d="${l.d}"/>`)
-      .join("\n");
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${traceResult.width}" height="${traceResult.height}" viewBox="0 0 ${traceResult.width} ${traceResult.height}">\n${activePaths}\n</svg>`;
-  }, [traceResult, layers]);
+  const handleDownloadAlightXml = () => {
+    if (!alightResult?.xml) return;
+    const blob = new Blob([alightResult.xml], { type: "application/xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${fileName}-alight.xml`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`Mengunduh ${fileName}-alight.xml`, "ok");
+  };
 
-  /**
-   * Copy SVG to Clipboard
-   */
-  const handleCopySvg = async () => {
-    if (!liveSvgString) return;
+  const handleCopyAlightXml = async () => {
+    if (!alightResult?.xml) return;
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(liveSvgString);
+        await navigator.clipboard.writeText(alightResult.xml);
       } else {
         const ta = document.createElement("textarea");
-        ta.value = liveSvgString;
+        ta.value = alightResult.xml;
         document.body.appendChild(ta);
         ta.select();
         document.execCommand("copy");
         document.body.removeChild(ta);
       }
-      showToast("Kode SVG berhasil disalin", "ok");
+      showToast("XML Alight Motion disalin!", "ok");
     } catch {
-      showToast("Gagal menyalin SVG ke clipboard", "bad");
+      showToast("Gagal menyalin XML", "bad");
     }
   };
 
   /**
-   * Download SVG File
+   * Export SVG
    */
   const handleDownloadSvg = () => {
-    if (!liveSvgString) return;
-    const blob = new Blob([liveSvgString], { type: "image/svg+xml;charset=utf-8" });
+    if (!currentSvg) return;
+    const blob = new Blob([currentSvg], { type: "image/svg+xml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${imageFileName}-trace.svg`;
+    a.download = `${fileName}-trace.svg`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -262,34 +363,51 @@ export const AutoTraceTool: React.FC = () => {
     showToast("SVG siap diunduh", "ok");
   };
 
-  /**
-   * Reset All
-   */
+  const handleCopySvg = async () => {
+    if (!currentSvg) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(currentSvg);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = currentSvg;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      showToast("Kode SVG disalin!", "ok");
+    } catch {
+      showToast("Gagal menyalin SVG", "bad");
+    }
+  };
+
   const handleReset = () => {
     abortControllerRef.current.aborted = true;
     if (imagePreviewUrl && imagePreviewUrl.startsWith("blob:")) {
       URL.revokeObjectURL(imagePreviewUrl);
     }
-    setSourceImage(null);
+    setSourceFile(null);
+    setDirectSvgText("");
     setImagePreviewUrl("");
-    setTraceResult(null);
-    setLayers([]);
+    setCurrentSvg("");
+    setAlightResult(null);
+    setActiveLayers([]);
+    setSelectedLayerIds(new Set());
     setStatus("idle");
     setStatusText("MENUNGGU");
-    setProgress(0);
-    setErrorMsg(null);
   };
 
-  const activeLayersCount = layers.filter((l) => l.enabled).length;
-  const currentSvgBytes = liveSvgString ? new Blob([liveSvgString]).size : 0;
+  const selectedCount = selectedLayerIds.size;
+  const totalLayersCount = activeLayers.length;
 
   return (
-    <div className="w-full max-w-xl mx-auto space-y-4 font-sans text-neutral-100 pb-12 select-none">
+    <div className="w-full max-w-xl mx-auto space-y-4 font-sans text-neutral-100 pb-16 select-none">
       {/* Hidden File Input */}
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
+        accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,.svg,image/svg+xml"
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -304,17 +422,17 @@ export const AutoTraceTool: React.FC = () => {
             <Shapes className="w-4 h-4" />
           </div>
           <div>
-            <h1 className="text-sm font-bold tracking-tight text-white flex items-center gap-2">
-              Auto Trace SVG
+            <h1 className="text-sm font-bold tracking-tight text-white flex items-center gap-1.5">
+              Auto Trace <span className="text-neutral-400 font-normal">→</span> Alight XML
             </h1>
-            <p className="text-[10px] font-mono text-neutral-400">v2.0 • Split per Patch</p>
+            <p className="text-[10px] font-mono text-neutral-400">AM 5.0+ Native XML Project</p>
           </div>
         </div>
 
         {/* Status Pill */}
         <div
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono font-medium transition-all ${
-            status === "tracing"
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-medium transition-all ${
+            status === "busy"
               ? "bg-neutral-800 text-neutral-200 border border-neutral-700 animate-pulse"
               : status === "done"
               ? "bg-white text-neutral-950 shadow-md font-semibold"
@@ -323,7 +441,7 @@ export const AutoTraceTool: React.FC = () => {
               : "bg-neutral-900 text-neutral-400 border border-neutral-800"
           }`}
         >
-          {status === "tracing" ? (
+          {status === "busy" ? (
             <Loader2 className="w-3 h-3 animate-spin" />
           ) : status === "done" ? (
             <Check className="w-3 h-3 text-emerald-600" />
@@ -336,8 +454,8 @@ export const AutoTraceTool: React.FC = () => {
         </div>
       </header>
 
-      {/* Upload Zone (or Image Loaded Mini Card) */}
-      {!sourceImage ? (
+      {/* Upload Zone / Active File Info */}
+      {!sourceFile ? (
         <section
           onDragOver={(e) => {
             e.preventDefault();
@@ -351,37 +469,42 @@ export const AutoTraceTool: React.FC = () => {
             if (file) handleFileSelect(file);
           }}
           onClick={() => fileInputRef.current?.click()}
-          className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+          className={`relative border-2 border-dashed rounded-xl p-7 text-center cursor-pointer transition-all ${
             isDragOver
-              ? "border-white bg-neutral-900/60 shadow-lg"
+              ? "border-white bg-neutral-900/70 shadow-lg"
               : "border-neutral-800 hover:border-neutral-600 bg-gradient-to-b from-neutral-900/60 to-neutral-950"
           }`}
         >
           <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gradient-to-b from-white to-neutral-300 flex items-center justify-center text-neutral-950 shadow-md">
             <ImageIcon className="w-6 h-6" />
           </div>
-          <h2 className="text-base font-semibold text-white mb-1">Pilih atau Seret Gambar</h2>
-          <p className="text-xs text-neutral-400 max-w-xs mx-auto">
-            PNG, JPG, WebP • Diproses 100% di browser HP/Laptop tanpa upload ke server.
+          <h2 className="text-base font-semibold text-white mb-1">Pilih Gambar atau SVG</h2>
+          <p className="text-xs text-neutral-400 max-w-sm mx-auto">
+            PNG, JPG, WebP di-trace otomatis jadi SVG vektor, atau langsung impor file .SVG untuk dibuatkan proyek Alight Motion XML.
           </p>
-          <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-mono text-neutral-300">
-            <span>Bisa Ctrl + V / Paste Clipboard</span>
+          <div className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-mono text-neutral-300">
+            <span>Bisa Drag & Drop atau Paste (Ctrl + V)</span>
           </div>
         </section>
       ) : (
         <section className="bg-gradient-to-b from-neutral-900/80 to-neutral-950 border border-neutral-800 rounded-xl p-3 flex items-center justify-between gap-3 shadow-md">
           <div className="flex items-center gap-3 min-w-0">
-            {imagePreviewUrl && (
+            {imagePreviewUrl ? (
               <img
                 src={imagePreviewUrl}
                 alt="Source"
                 className="w-10 h-10 object-cover rounded-lg border border-neutral-700 shrink-0"
               />
+            ) : (
+              <div className="w-10 h-10 rounded-lg bg-neutral-800 flex items-center justify-center text-neutral-300 shrink-0">
+                <FileCode className="w-5 h-5" />
+              </div>
             )}
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-white truncate">{imageFileName}</p>
+              <p className="text-xs font-semibold text-white truncate">{fileName}</p>
               <p className="text-[11px] font-mono text-neutral-400">
-                {traceResult ? `${traceResult.width} × ${traceResult.height} px` : "Memuat..."}
+                {inputMode === "raster" ? "Auto Trace Raster" : "Direct SVG"} •{" "}
+                {alightResult ? `${alightResult.src.w}×${alightResult.src.h} px` : "Memproses..."}
               </p>
             </div>
           </div>
@@ -395,7 +518,7 @@ export const AutoTraceTool: React.FC = () => {
             <button
               onClick={handleReset}
               className="p-1.5 rounded-lg bg-neutral-900 hover:bg-red-950/50 hover:text-red-400 border border-neutral-800 text-neutral-400"
-              title="Hapus gambar"
+              title="Hapus"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -403,220 +526,464 @@ export const AutoTraceTool: React.FC = () => {
         </section>
       )}
 
-      {/* Settings Card */}
-      <section className="bg-gradient-to-b from-neutral-900/90 to-neutral-950 border border-neutral-800/90 rounded-xl p-4 shadow-xl space-y-3">
-        <div className="flex items-center justify-between pb-2 border-b border-neutral-800/80">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-neutral-800 flex items-center justify-center text-neutral-200">
-              <Wand2 className="w-3.5 h-3.5" />
-            </div>
-            <h3 className="text-sm font-semibold text-white">Pengaturan Trace</h3>
-          </div>
-          <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wide">
-            Auto Debounce
-          </span>
-        </div>
+      {/* Tabs Navigation for Settings */}
+      <div className="grid grid-cols-3 gap-1 bg-neutral-900/80 p-1 rounded-xl border border-neutral-800 text-xs font-semibold">
+        <button
+          onClick={() => setActiveTab("trace")}
+          className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
+            activeTab === "trace"
+              ? "bg-white text-neutral-950 shadow-sm"
+              : "text-neutral-400 hover:text-white"
+          }`}
+        >
+          <Wand2 className="w-3.5 h-3.5" />
+          <span>Auto Trace</span>
+        </button>
 
-        {/* Row 1: Jumlah Warna */}
-        <div className="flex items-center justify-between py-1.5">
-          <div className="flex items-center gap-2.5">
-            <Palette className="w-4 h-4 text-neutral-400 shrink-0" />
-            <div>
-              <p className="text-xs font-medium text-neutral-200">Jumlah Warna</p>
-              <p className="text-[10px] text-neutral-400">Palet K-Means (2 - 24)</p>
+        <button
+          onClick={() => setActiveTab("alight")}
+          className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
+            activeTab === "alight"
+              ? "bg-white text-neutral-950 shadow-sm"
+              : "text-neutral-400 hover:text-white"
+          }`}
+        >
+          <Film className="w-3.5 h-3.5" />
+          <span>Alight XML</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("layers")}
+          className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
+            activeTab === "layers"
+              ? "bg-white text-neutral-950 shadow-sm"
+              : "text-neutral-400 hover:text-white"
+          }`}
+        >
+          <Layers className="w-3.5 h-3.5" />
+          <span>Layers ({selectedCount}/{totalLayersCount})</span>
+        </button>
+      </div>
+
+      {/* TAB 1: Auto Trace Engine Settings */}
+      {activeTab === "trace" && (
+        <section className="bg-gradient-to-b from-neutral-900/90 to-neutral-950 border border-neutral-800/90 rounded-xl p-4 shadow-xl space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-neutral-800/80">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-neutral-800 flex items-center justify-center text-neutral-200">
+                <Wand2 className="w-3.5 h-3.5" />
+              </div>
+              <h3 className="text-sm font-semibold text-white">Pengaturan Auto Trace</h3>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="range"
-              min={2}
-              max={24}
-              value={options.colors}
-              onChange={(e) =>
-                setOptions((prev) => ({ ...prev, colors: parseInt(e.target.value, 10) }))
-              }
-              className="w-20 accent-white cursor-pointer"
-            />
-            <span className="w-7 text-right font-mono text-xs font-bold text-white">
-              {options.colors}
+            <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wide">
+              Raster → Vektor
             </span>
           </div>
-        </div>
 
-        <div className="border-t border-neutral-800/40" />
-
-        {/* Row 2: Detail / Resolusi */}
-        <div className="flex items-center justify-between py-1.5">
-          <div className="flex items-center gap-2.5">
-            <Ruler className="w-4 h-4 text-neutral-400 shrink-0" />
-            <div>
-              <p className="text-xs font-medium text-neutral-200">Detail (Resolusi)</p>
-              <p className="text-[10px] text-neutral-400">Sisi terpanjang raster</p>
+          {/* Row 1: Jumlah Warna */}
+          <div className="flex items-center justify-between py-1.5">
+            <div className="flex items-center gap-2.5">
+              <Palette className="w-4 h-4 text-neutral-400 shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-neutral-200">Jumlah Warna</p>
+                <p className="text-[10px] text-neutral-400">Palet K-Means (2 - 24)</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min={2}
+                max={24}
+                value={traceOpts.colors}
+                onChange={(e) =>
+                  setTraceOpts((prev) => ({ ...prev, colors: parseInt(e.target.value, 10) }))
+                }
+                className="w-20 accent-white cursor-pointer"
+              />
+              <span className="w-7 text-right font-mono text-xs font-bold text-white">
+                {traceOpts.colors}
+              </span>
             </div>
           </div>
-          <select
-            value={options.resolution}
-            onChange={(e) =>
-              setOptions((prev) => ({ ...prev, resolution: parseInt(e.target.value, 10) }))
-            }
-            className="bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none focus:border-white"
-          >
-            <option value={320}>320 px (Cepat)</option>
-            <option value={480}>480 px (Sedang)</option>
-            <option value={640}>640 px (Standar)</option>
-            <option value={800}>800 px (Detail HD)</option>
-          </select>
-        </div>
 
-        <div className="border-t border-neutral-800/40" />
+          <div className="border-t border-neutral-800/40" />
 
-        {/* Row 3: Buang Noise (Speckle) */}
-        <div className="flex items-center justify-between py-1.5">
-          <div className="flex items-center gap-2.5">
-            <Eraser className="w-4 h-4 text-neutral-400 shrink-0" />
-            <div>
-              <p className="text-xs font-medium text-neutral-200">Buang Noise</p>
-              <p className="text-[10px] text-neutral-400">Filter luas patch kecil</p>
+          {/* Row 2: Detail / Resolusi */}
+          <div className="flex items-center justify-between py-1.5">
+            <div className="flex items-center gap-2.5">
+              <Ruler className="w-4 h-4 text-neutral-400 shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-neutral-200">Detail (Resolusi)</p>
+                <p className="text-[10px] text-neutral-400">Sisi terpanjang raster trace</p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="range"
-              min={0}
-              max={60}
-              value={options.speckle}
+            <select
+              value={traceOpts.resolution}
               onChange={(e) =>
-                setOptions((prev) => ({ ...prev, speckle: parseInt(e.target.value, 10) }))
+                setTraceOpts((prev) => ({ ...prev, resolution: parseInt(e.target.value, 10) }))
               }
-              className="w-20 accent-white cursor-pointer"
-            />
-            <span className="w-7 text-right font-mono text-xs font-bold text-white">
-              {options.speckle}
+              className="bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none focus:border-white"
+            >
+              <option value={320}>320 px (Cepat)</option>
+              <option value={480}>480 px</option>
+              <option value={640}>640 px (Standar)</option>
+              <option value={800}>800 px (Rinci)</option>
+            </select>
+          </div>
+
+          <div className="border-t border-neutral-800/40" />
+
+          {/* Row 3: Buang Noise */}
+          <div className="flex items-center justify-between py-1.5">
+            <div className="flex items-center gap-2.5">
+              <Eraser className="w-4 h-4 text-neutral-400 shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-neutral-200">Buang Noise</p>
+                <p className="text-[10px] text-neutral-400">Patch di bawah nilai ini dibuang</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min={0}
+                max={60}
+                value={traceOpts.speckle}
+                onChange={(e) =>
+                  setTraceOpts((prev) => ({ ...prev, speckle: parseInt(e.target.value, 10) }))
+                }
+                className="w-20 accent-white cursor-pointer"
+              />
+              <span className="w-7 text-right font-mono text-xs font-bold text-white">
+                {traceOpts.speckle}
+              </span>
+            </div>
+          </div>
+
+          <div className="border-t border-neutral-800/40" />
+
+          {/* Row 4: Kehalusan Kontur */}
+          <div className="flex items-center justify-between py-1.5">
+            <div className="flex items-center gap-2.5">
+              <Spline className="w-4 h-4 text-neutral-400 shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-neutral-200">Kehalusan Kontur</p>
+                <p className="text-[10px] text-neutral-400">Sudut tajam dipertahankan</p>
+              </div>
+            </div>
+            <select
+              value={traceOpts.smoothness}
+              onChange={(e) =>
+                setTraceOpts((prev) => ({ ...prev, smoothness: parseInt(e.target.value, 10) }))
+              }
+              className="bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none focus:border-white"
+            >
+              <option value={0}>0 - Tajam (Lurus)</option>
+              <option value={1}>1 - Halus (Catmull-Rom)</option>
+              <option value={2}>2 - Sangat Halus</option>
+            </select>
+          </div>
+
+          <div className="border-t border-neutral-800/40" />
+
+          {/* Row 5: Switches */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+            <button
+              type="button"
+              onClick={() =>
+                setTraceOpts((prev) => ({ ...prev, splitPerPatch: !prev.splitPerPatch }))
+              }
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
+                traceOpts.splitPerPatch
+                  ? "bg-neutral-800 border-white text-white"
+                  : "bg-neutral-950 border-neutral-800 text-neutral-400"
+              }`}
+            >
+              <div>
+                <p className="text-[11px] font-semibold">Pisah Patch</p>
+                <p className="text-[9px] text-neutral-400">Tiap bagian jadi shape</p>
+              </div>
+              <div
+                className={`w-7 h-4 rounded-full p-0.5 transition-colors ${
+                  traceOpts.splitPerPatch ? "bg-white" : "bg-neutral-700"
+                }`}
+              >
+                <div
+                  className={`w-3 h-3 rounded-full transition-transform ${
+                    traceOpts.splitPerPatch
+                      ? "translate-x-3 bg-neutral-950"
+                      : "translate-x-0 bg-neutral-400"
+                  }`}
+                />
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTraceOpts((prev) => ({ ...prev, cleanEdges: !prev.cleanEdges }))}
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
+                traceOpts.cleanEdges
+                  ? "bg-neutral-800 border-white text-white"
+                  : "bg-neutral-950 border-neutral-800 text-neutral-400"
+              }`}
+            >
+              <div>
+                <p className="text-[11px] font-semibold">Rapikan Tepi</p>
+                <p className="text-[9px] text-neutral-400">Anti-alias fringe cleaner</p>
+              </div>
+              <div
+                className={`w-7 h-4 rounded-full p-0.5 transition-colors ${
+                  traceOpts.cleanEdges ? "bg-white" : "bg-neutral-700"
+                }`}
+              >
+                <div
+                  className={`w-3 h-3 rounded-full transition-transform ${
+                    traceOpts.cleanEdges
+                      ? "translate-x-3 bg-neutral-950"
+                      : "translate-x-0 bg-neutral-400"
+                  }`}
+                />
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setAlightOpts((prev) => ({ ...prev, cstroke: !prev.cstroke }))
+              }
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
+                alightOpts.cstroke
+                  ? "bg-neutral-800 border-white text-white"
+                  : "bg-neutral-950 border-neutral-800 text-neutral-400"
+              }`}
+            >
+              <div>
+                <p className="text-[11px] font-semibold">Hairline Stroke</p>
+                <p className="text-[9px] text-neutral-400">Buang stroke artefak</p>
+              </div>
+              <div
+                className={`w-7 h-4 rounded-full p-0.5 transition-colors ${
+                  alightOpts.cstroke ? "bg-white" : "bg-neutral-700"
+                }`}
+              >
+                <div
+                  className={`w-3 h-3 rounded-full transition-transform ${
+                    alightOpts.cstroke
+                      ? "translate-x-3 bg-neutral-950"
+                      : "translate-x-0 bg-neutral-400"
+                  }`}
+                />
+              </div>
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* TAB 2: Alight Motion Project Canvas & Export Settings */}
+      {activeTab === "alight" && (
+        <section className="bg-gradient-to-b from-neutral-900/90 to-neutral-950 border border-neutral-800/90 rounded-xl p-4 shadow-xl space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-neutral-800/80">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-neutral-800 flex items-center justify-center text-neutral-200">
+                <Film className="w-3.5 h-3.5" />
+              </div>
+              <h3 className="text-sm font-semibold text-white">Canvas & Proyek Alight Motion</h3>
+            </div>
+            <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wide">
+              Alight Preset
             </span>
           </div>
-        </div>
 
-        <div className="border-t border-neutral-800/40" />
-
-        {/* Row 4: Kehalusan Kontur */}
-        <div className="flex items-center justify-between py-1.5">
-          <div className="flex items-center gap-2.5">
-            <Spline className="w-4 h-4 text-neutral-400 shrink-0" />
-            <div>
-              <p className="text-xs font-medium text-neutral-200">Kehalusan Kontur</p>
-              <p className="text-[10px] text-neutral-400">Catmull-Rom & Bezier</p>
+          {/* Aspect Ratio Chips */}
+          <div>
+            <p className="text-xs font-medium text-neutral-300 mb-1.5">Preset Kanvas</p>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+              {(["orig", "1:1", "16:9", "9:16", "4:5", "4:3"] as const).map((pr) => (
+                <button
+                  key={pr}
+                  onClick={() => setAlightOpts((prev) => ({ ...prev, preset: pr }))}
+                  className={`py-1.5 px-2 rounded-lg border text-xs font-mono font-medium transition-all ${
+                    alightOpts.preset === pr
+                      ? "bg-white text-neutral-950 font-bold border-white"
+                      : "bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                  }`}
+                >
+                  {pr === "orig" ? "Asli" : pr}
+                </button>
+              ))}
             </div>
           </div>
-          <select
-            value={options.smoothness}
-            onChange={(e) =>
-              setOptions((prev) => ({ ...prev, smoothness: parseInt(e.target.value, 10) }))
-            }
-            className="bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none focus:border-white"
-          >
-            <option value={0}>0 - Tajam (Poligon)</option>
-            <option value={1}>1 - Halus (Standar)</option>
-            <option value={2}>2 - Sangat Halus</option>
-          </select>
-        </div>
 
-        <div className="border-t border-neutral-800/40" />
+          <div className="border-t border-neutral-800/40" />
 
-        {/* Row 5: Switches (Split per patch, Rapikan tepi, Buang Latar) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-          {/* Switch 1: Pisah per Patch */}
-          <button
-            type="button"
-            onClick={() =>
-              setOptions((prev) => ({ ...prev, splitPerPatch: !prev.splitPerPatch }))
-            }
-            className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
-              options.splitPerPatch
-                ? "bg-neutral-800 border-white text-white"
-                : "bg-neutral-950 border-neutral-800 text-neutral-400"
-            }`}
-          >
-            <div>
-              <p className="text-[11px] font-semibold">Pisah Patch</p>
-              <p className="text-[9px] text-neutral-400">1 path per patch</p>
+          {/* Durasi & FPS */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-neutral-400" />
+                <span className="text-xs font-medium text-neutral-200">Durasi</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  step={0.5}
+                  min={0.5}
+                  max={60}
+                  value={alightOpts.duration}
+                  onChange={(e) =>
+                    setAlightOpts((prev) => ({ ...prev, duration: parseFloat(e.target.value) || 2 }))
+                  }
+                  className="w-14 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs font-mono text-right text-white"
+                />
+                <span className="text-xs font-mono text-neutral-400">s</span>
+              </div>
             </div>
-            <div
-              className={`w-7 h-4 rounded-full p-0.5 transition-colors ${
-                options.splitPerPatch ? "bg-white" : "bg-neutral-700"
-              }`}
-            >
-              <div
-                className={`w-3 h-3 rounded-full transition-transform ${
-                  options.splitPerPatch
-                    ? "translate-x-3 bg-neutral-950"
-                    : "translate-x-0 bg-neutral-400"
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Film className="w-4 h-4 text-neutral-400" />
+                <span className="text-xs font-medium text-neutral-200">FPS</span>
+              </div>
+              <select
+                value={alightOpts.fps}
+                onChange={(e) =>
+                  setAlightOpts((prev) => ({ ...prev, fps: parseInt(e.target.value, 10) }))
+                }
+                className="bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs font-mono text-white"
+              >
+                <option value={24}>24 fps</option>
+                <option value={25}>25 fps</option>
+                <option value={30}>30 fps</option>
+                <option value={60}>60 fps</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="border-t border-neutral-800/40" />
+
+          {/* Struktur Export: Flat vs Nested */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-neutral-300">Struktur Export Alight Motion</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAlightOpts((prev) => ({ ...prev, grouping: "nested" }))}
+                className={`p-2.5 rounded-lg border text-left transition-all ${
+                  alightOpts.grouping === "nested"
+                    ? "bg-neutral-800 border-white text-white"
+                    : "bg-neutral-950 border-neutral-800 text-neutral-400"
                 }`}
-              />
-            </div>
-          </button>
+              >
+                <p className="text-xs font-semibold">Nested (embedScene)</p>
+                <p className="text-[10px] text-neutral-400">Satu grup rapi di timeline</p>
+              </button>
 
-          {/* Switch 2: Rapikan Tepi */}
-          <button
-            type="button"
-            onClick={() => setOptions((prev) => ({ ...prev, cleanEdges: !prev.cleanEdges }))}
-            className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
-              options.cleanEdges
-                ? "bg-neutral-800 border-white text-white"
-                : "bg-neutral-950 border-neutral-800 text-neutral-400"
-            }`}
-          >
-            <div>
-              <p className="text-[11px] font-semibold">Rapikan Tepi</p>
-              <p className="text-[9px] text-neutral-400">Hapus anti-alias fringe</p>
-            </div>
-            <div
-              className={`w-7 h-4 rounded-full p-0.5 transition-colors ${
-                options.cleanEdges ? "bg-white" : "bg-neutral-700"
-              }`}
-            >
-              <div
-                className={`w-3 h-3 rounded-full transition-transform ${
-                  options.cleanEdges
-                    ? "translate-x-3 bg-neutral-950"
-                    : "translate-x-0 bg-neutral-400"
+              <button
+                type="button"
+                onClick={() => setAlightOpts((prev) => ({ ...prev, grouping: "flat" }))}
+                className={`p-2.5 rounded-lg border text-left transition-all ${
+                  alightOpts.grouping === "flat"
+                    ? "bg-neutral-800 border-white text-white"
+                    : "bg-neutral-950 border-neutral-800 text-neutral-400"
                 }`}
-              />
+              >
+                <p className="text-xs font-semibold">Flat (Langsung)</p>
+                <p className="text-[10px] text-neutral-400">Semua shape di root layer</p>
+              </button>
             </div>
-          </button>
+          </div>
+        </section>
+      )}
 
-          {/* Switch 3: Buang Latar */}
-          <button
-            type="button"
-            onClick={() => setOptions((prev) => ({ ...prev, removeBg: !prev.removeBg }))}
-            className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
-              options.removeBg
-                ? "bg-neutral-800 border-white text-white"
-                : "bg-neutral-950 border-neutral-800 text-neutral-400"
-            }`}
-          >
-            <div>
-              <p className="text-[11px] font-semibold">Buang Latar</p>
-              <p className="text-[9px] text-neutral-400">Transparansi kanvas</p>
+      {/* TAB 3: Layer List & Filtering */}
+      {activeTab === "layers" && (
+        <section className="bg-gradient-to-b from-neutral-900/90 to-neutral-950 border border-neutral-800/90 rounded-xl p-4 shadow-xl space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-neutral-300" />
+              <h3 className="text-sm font-semibold text-white">
+                Daftar Layer / Patch ({selectedCount}/{totalLayersCount})
+              </h3>
             </div>
-            <div
-              className={`w-7 h-4 rounded-full p-0.5 transition-colors ${
-                options.removeBg ? "bg-white" : "bg-neutral-700"
-              }`}
-            >
-              <div
-                className={`w-3 h-3 rounded-full transition-transform ${
-                  options.removeBg
-                    ? "translate-x-3 bg-neutral-950"
-                    : "translate-x-0 bg-neutral-400"
-                }`}
-              />
-            </div>
-          </button>
-        </div>
-      </section>
 
-      {/* SVG Preview Card */}
-      {traceResult && (
+            {/* Bulk Actions */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => handleSelectAllLayers(true)}
+                className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-[11px] font-medium text-neutral-300"
+                title="Aktifkan Semua"
+              >
+                Semua
+              </button>
+              <button
+                onClick={() => handleSelectAllLayers(false)}
+                className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-[11px] font-medium text-neutral-300"
+                title="Kosongkan Semua"
+              >
+                Kosong
+              </button>
+              <button
+                onClick={handleInvertLayers}
+                className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-[11px] font-medium text-neutral-300"
+                title="Balik Pilihan"
+              >
+                Balik
+              </button>
+            </div>
+          </div>
+
+          {/* Layer List Scroll */}
+          {activeLayers.length === 0 ? (
+            <p className="text-xs text-neutral-400 py-4 text-center">Belum ada layer yang diproses.</p>
+          ) : (
+            <div className="max-h-60 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+              {activeLayers.map((layer) => {
+                const isSelected = selectedLayerIds.has(layer.i);
+                return (
+                  <div
+                    key={layer.i}
+                    onClick={() => toggleLayer(layer.i)}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg border cursor-pointer transition-all ${
+                      isSelected
+                        ? "bg-neutral-900/90 border-neutral-800 hover:border-neutral-700 text-white"
+                        : "bg-neutral-950/60 border-neutral-900/80 text-neutral-400 opacity-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
+                          isSelected
+                            ? "bg-white border-white text-neutral-950"
+                            : "border-neutral-600 bg-transparent"
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+
+                      {layer.color && (
+                        <div
+                          className="w-4 h-4 rounded shadow-inner border border-white/20 shrink-0"
+                          style={{ backgroundColor: layer.color }}
+                        />
+                      )}
+
+                      <span className="text-xs font-mono font-medium">{layer.name}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 font-mono text-[11px] text-neutral-400">
+                      <span>{layer.nodes} node</span>
+                      {layer.grad && <span className="text-[10px] text-amber-400">grad</span>}
+                      {layer.stroke && <span className="text-[10px] text-cyan-400">strk</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* SVG & Vector Preview Card */}
+      {currentSvg && (
         <section className="bg-gradient-to-b from-neutral-900/90 to-neutral-950 border border-neutral-800/90 rounded-xl p-4 shadow-2xl space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
             {/* Background Selector */}
@@ -692,155 +1059,130 @@ export const AutoTraceTool: React.FC = () => {
                 : "bg-white"
             }`}
           >
-            {liveSvgString ? (
-              <div
-                style={{
-                  transform: `scale(${zoomLevel})`,
-                  transformOrigin: "center center",
-                  transition: "transform 0.15s ease-out",
-                }}
-                className="m-auto flex items-center justify-center max-w-full max-h-full"
-                dangerouslySetInnerHTML={{ __html: liveSvgString }}
-              />
-            ) : (
-              <p className="text-xs text-neutral-400">Memuat pratinjau SVG...</p>
-            )}
+            <div
+              style={{
+                transform: `scale(${zoomLevel})`,
+                transformOrigin: "center center",
+                transition: "transform 0.15s ease-out",
+              }}
+              className="m-auto flex items-center justify-center max-w-full max-h-full"
+              dangerouslySetInnerHTML={{ __html: currentSvg }}
+            />
           </div>
 
           {/* Stats Bar (2 Columns / 4 Cells) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-            <div className="bg-neutral-900/80 border border-neutral-800 rounded-lg p-2.5">
-              <p className="text-[10px] font-mono text-neutral-400 uppercase">Jumlah Shape</p>
-              <p className="text-sm font-mono font-bold text-white">{activeLayersCount}</p>
-            </div>
-            <div className="bg-neutral-900/80 border border-neutral-800 rounded-lg p-2.5">
-              <p className="text-[10px] font-mono text-neutral-400 uppercase">Jumlah Warna</p>
-              <p className="text-sm font-mono font-bold text-white">{traceResult.totalColors}</p>
-            </div>
-            <div className="bg-neutral-900/80 border border-neutral-800 rounded-lg p-2.5">
-              <p className="text-[10px] font-mono text-neutral-400 uppercase">Ukuran Berkas</p>
-              <p className="text-sm font-mono font-bold text-white">
-                {(currentSvgBytes / 1024).toFixed(1)} KB
-              </p>
-            </div>
-            <div className="bg-neutral-900/80 border border-neutral-800 rounded-lg p-2.5">
-              <p className="text-[10px] font-mono text-neutral-400 uppercase">Dimensi SVG</p>
-              <p className="text-sm font-mono font-bold text-white">
-                {traceResult.width}×{traceResult.height}
-              </p>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Layer List Card */}
-      {layers.length > 0 && (
-        <section className="bg-gradient-to-b from-neutral-900/90 to-neutral-950 border border-neutral-800/90 rounded-xl p-4 shadow-xl space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-neutral-300" />
-              <h3 className="text-sm font-semibold text-white">
-                Daftar Layer / Path ({activeLayersCount}/{layers.length})
-              </h3>
-            </div>
-
-            {/* Bulk Actions */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => handleSelectAllLayers(true)}
-                className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-[11px] font-medium text-neutral-300"
-                title="Aktifkan Semua"
-              >
-                Semua
-              </button>
-              <button
-                onClick={() => handleSelectAllLayers(false)}
-                className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-[11px] font-medium text-neutral-300"
-                title="Kosongkan Semua"
-              >
-                Kosong
-              </button>
-              <button
-                onClick={handleInvertLayers}
-                className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-[11px] font-medium text-neutral-300"
-                title="Balik Pilihan"
-              >
-                Balik
-              </button>
-            </div>
-          </div>
-
-          {/* Layer List Scroll */}
-          <div className="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
-            {layers.map((layer) => (
-              <div
-                key={layer.id}
-                onClick={() => toggleLayer(layer.id)}
-                className={`flex items-center justify-between px-3 py-2 rounded-lg border cursor-pointer transition-all ${
-                  layer.enabled
-                    ? "bg-neutral-900/90 border-neutral-800 hover:border-neutral-700 text-white"
-                    : "bg-neutral-950/60 border-neutral-900/80 text-neutral-400 opacity-60"
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
-                      layer.enabled
-                        ? "bg-white border-white text-neutral-950"
-                        : "border-neutral-600 bg-transparent"
-                    }`}
-                  >
-                    {layer.enabled && <Check className="w-3 h-3 stroke-[3]" />}
-                  </div>
-
-                  <div
-                    className="w-4 h-4 rounded shadow-inner border border-white/20"
-                    style={{ backgroundColor: layer.hex }}
-                  />
-
-                  <span className="text-xs font-mono font-medium">{layer.name}</span>
-                </div>
-
-                <div className="flex items-center gap-2 font-mono text-[11px] text-neutral-400">
-                  <span>{layer.pointsCount} pts</span>
-                  <span className="text-[10px] uppercase">{layer.hex}</span>
-                </div>
+          {alightResult && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+              <div className="bg-neutral-900/80 border border-neutral-800 rounded-lg p-2.5">
+                <p className="text-[10px] font-mono text-neutral-400 uppercase">Layer Dipilih</p>
+                <p className="text-sm font-mono font-bold text-white">
+                  {selectedCount} / {totalLayersCount}
+                </p>
               </div>
-            ))}
-          </div>
+              <div className="bg-neutral-900/80 border border-neutral-800 rounded-lg p-2.5">
+                <p className="text-[10px] font-mono text-neutral-400 uppercase">Warna Palet</p>
+                <p className="text-sm font-mono font-bold text-white">{alightResult.stats.colors}</p>
+              </div>
+              <div className="bg-neutral-900/80 border border-neutral-800 rounded-lg p-2.5">
+                <p className="text-[10px] font-mono text-neutral-400 uppercase">Alight XML</p>
+                <p className="text-sm font-mono font-bold text-white">
+                  {(alightResult.xmlBytes / 1024).toFixed(1)} KB
+                </p>
+              </div>
+              <div className="bg-neutral-900/80 border border-neutral-800 rounded-lg p-2.5">
+                <p className="text-[10px] font-mono text-neutral-400 uppercase">Kanvas AM</p>
+                <p className="text-sm font-mono font-bold text-white">
+                  {alightResult.canvas.w}×{alightResult.canvas.h}
+                </p>
+              </div>
+            </div>
+          )}
         </section>
       )}
 
-      {/* Main Action Buttons */}
-      <div className="grid grid-cols-2 gap-3 pt-1">
-        <button
-          onClick={handleCopySvg}
-          disabled={!liveSvgString}
-          className="flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-xl bg-gradient-to-b from-neutral-800 to-neutral-900 hover:from-neutral-700 hover:to-neutral-800 border border-neutral-700 text-white font-semibold text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
-        >
-          <Copy className="w-4 h-4" />
-          <span>Salin Kode SVG</span>
-        </button>
+      {/* Main Action Buttons Grid: Alight Motion XML & SVG */}
+      <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            onClick={handleDownloadAlightXml}
+            disabled={!alightResult?.xml}
+            className="flex items-center justify-center gap-2 min-h-[44px] px-3.5 rounded-xl bg-gradient-to-b from-white to-neutral-200 hover:from-neutral-100 hover:to-neutral-300 text-neutral-950 font-bold text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-white/10"
+          >
+            <Download className="w-4 h-4" />
+            <span>Unduh Alight XML</span>
+          </button>
 
-        <button
-          onClick={handleDownloadSvg}
-          disabled={!liveSvgString}
-          className="flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-xl bg-gradient-to-b from-white to-neutral-200 hover:from-neutral-100 hover:to-neutral-300 text-neutral-950 font-bold text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-white/10"
-        >
-          <Download className="w-4 h-4" />
-          <span>Unduh Berkas SVG</span>
-        </button>
+          <button
+            onClick={handleCopyAlightXml}
+            disabled={!alightResult?.xml}
+            className="flex items-center justify-center gap-2 min-h-[44px] px-3.5 rounded-xl bg-gradient-to-b from-neutral-800 to-neutral-900 hover:from-neutral-700 hover:to-neutral-800 border border-neutral-700 text-white font-semibold text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
+          >
+            <Copy className="w-4 h-4" />
+            <span>Salin XML Alight</span>
+          </button>
+        </div>
 
-        <a
-          href="/auto-trace.html"
-          target="_blank"
-          rel="noreferrer"
-          className="col-span-2 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border border-neutral-800 bg-neutral-950/60 hover:bg-neutral-900 text-[11px] font-mono text-neutral-400 hover:text-white transition-colors"
-        >
-          <FileCode className="w-3.5 h-3.5" />
-          <span>Buka / Unduh Versi Standalone Single-File (index.html)</span>
-        </a>
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            onClick={handleDownloadSvg}
+            disabled={!currentSvg}
+            className="flex items-center justify-center gap-2 min-h-[40px] px-3 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-xs font-medium text-neutral-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Unduh Berkas SVG</span>
+          </button>
+
+          <button
+            onClick={handleCopySvg}
+            disabled={!currentSvg}
+            className="flex items-center justify-center gap-2 min-h-[40px] px-3 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-xs font-medium text-neutral-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            <span>Salin Kode SVG</span>
+          </button>
+        </div>
+
+        {alightResult?.xml && (
+          <button
+            onClick={() => setIsXmlModalOpen(true)}
+            className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border border-neutral-800 bg-neutral-950/60 hover:bg-neutral-900 text-[11px] font-mono text-neutral-400 hover:text-white transition-colors"
+          >
+            <FileCode className="w-3.5 h-3.5" />
+            <span>Lihat Isi XML Alight Motion Lengkap ({((alightResult.xmlBytes || 0) / 1024).toFixed(1)} KB)</span>
+          </button>
+        )}
       </div>
+
+      {/* XML Full Inspector Modal */}
+      {isXmlModalOpen && alightResult?.xml && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col p-4 animate-fade-in">
+          <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+            <div className="flex items-center gap-2">
+              <FileCode className="w-4 h-4 text-white" />
+              <h4 className="text-sm font-bold text-white">XML Proyek Alight Motion</h4>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopyAlightXml}
+                className="px-3 py-1 rounded-lg bg-white text-neutral-950 font-bold text-xs"
+              >
+                Salin
+              </button>
+              <button
+                onClick={() => setIsXmlModalOpen(false)}
+                className="p-1.5 rounded-lg bg-neutral-900 text-neutral-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <textarea
+            readOnly
+            value={alightResult.xml}
+            className="flex-1 mt-3 bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-xs font-mono text-neutral-300 resize-none focus:outline-none"
+          />
+        </div>
+      )}
 
       {/* Bottom Floating Toast */}
       {toast && (
