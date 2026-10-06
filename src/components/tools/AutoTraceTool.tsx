@@ -434,7 +434,7 @@ export const AutoTraceTool: React.FC<AutoTraceToolProps> = ({ onSelectTool }) =>
   const totalLayersCount = activeLayers.length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full overflow-hidden min-w-0">
       {/* Hidden File Input */}
       <input
         ref={fileInputRef}
@@ -451,7 +451,7 @@ export const AutoTraceTool: React.FC<AutoTraceToolProps> = ({ onSelectTool }) =>
       <div className="border-b border-black/5 dark:border-white/10 pb-4">
         <div className="flex items-center gap-2 text-[#007aff] dark:text-[#0a84ff] font-semibold text-xs mb-1">
           <Shapes className="w-4 h-4" />
-          <span>Alight Motion Suite • Vector Tracer</span>
+          <span>Vector Tracer & Alight Motion Project</span>
         </div>
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="text-xl sm:text-2xl font-bold text-black dark:text-white tracking-tight">
@@ -480,26 +480,6 @@ export const AutoTraceTool: React.FC<AutoTraceToolProps> = ({ onSelectTool }) =>
         <p className="text-[#8e8e93] dark:text-[#98989d] text-xs sm:text-sm mt-1">
           Ubah gambar raster (PNG/JPG/WebP/Sketsa Manga) menjadi vektor SVG berlapis warna & konversi langsung ke Alight Motion XML.
         </p>
-      </div>
-
-      {/* Alight Motion Suite Switcher */}
-      <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 text-xs font-semibold">
-        <button
-          type="button"
-          className="py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all bg-white dark:bg-[#1c1c1e] text-[#007aff] dark:text-[#0a84ff] shadow-sm font-bold"
-        >
-          <Shapes className="w-4 h-4" />
-          <span>Auto Trace (Raster → SVG/XML)</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onSelectTool?.("ampreset")}
-          className="py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all text-[#8e8e93] hover:text-black dark:hover:text-white cursor-pointer"
-        >
-          <Film className="w-4 h-4" />
-          <span>AM Preset Finder (TikTok)</span>
-        </button>
       </div>
 
       {/* Upload Zone / Active File Info */}
@@ -1145,7 +1125,7 @@ export const AutoTraceTool: React.FC<AutoTraceToolProps> = ({ onSelectTool }) =>
 
           {/* Canvas Viewport */}
           <div
-            className={`relative w-full h-80 rounded-xl overflow-auto border border-black/5 dark:border-white/10 flex items-center justify-center p-4 transition-colors ${
+            className={`relative w-full max-w-full h-80 rounded-xl overflow-hidden border border-black/5 dark:border-white/10 flex items-center justify-center p-4 transition-colors ${
               bgPattern === "grid"
                 ? "bg-[conic-gradient(#e2e8f0_25%,#ffffff_0_50%,#e2e8f0_0_75%,#ffffff_0)] dark:bg-[conic-gradient(#262626_25%,#171717_0_50%,#262626_0_75%,#171717_0)] bg-[size:16px_16px]"
                 : bgPattern === "dark"
@@ -1159,7 +1139,7 @@ export const AutoTraceTool: React.FC<AutoTraceToolProps> = ({ onSelectTool }) =>
                 transformOrigin: "center center",
                 transition: "transform 0.15s ease-out",
               }}
-              className="m-auto flex items-center justify-center max-w-full max-h-full"
+              className="m-auto flex items-center justify-center max-w-full max-h-full [&>svg]:max-w-full [&>svg]:max-h-full [&>svg]:h-auto overflow-hidden"
               dangerouslySetInnerHTML={{ __html: currentSvg }}
             />
           </div>

@@ -168,9 +168,9 @@ export default function App() {
       case "to-qr":
         return <ToQrTool onSelectTool={(id) => setActiveToolId(id)} />;
       case "auto-trace":
-        return <AutoTraceTool onSelectTool={(id) => setActiveToolId(id)} />;
+        return <AutoTraceTool />;
       case "ampreset":
-        return <AmPresetTool onSelectTool={(id) => setActiveToolId(id)} />;
+        return <AmPresetTool />;
       default:
         return null;
     }
