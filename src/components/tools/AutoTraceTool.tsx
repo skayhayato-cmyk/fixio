@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   TraceOptions,
-  TraceResult,
-  TraceLayerInfo,
   loadAndScaleImage,
   runAutoTrace,
 } from "../../services/tracerEngine";
@@ -20,14 +18,10 @@ import {
   Eraser,
   Spline,
   Shapes,
-  Droplets,
   Layers,
   Download,
   Copy,
   Check,
-  RotateCcw,
-  Sparkles,
-  Maximize2,
   ZoomIn,
   ZoomOut,
   Sun,
@@ -38,19 +32,18 @@ import {
   FileCode,
   Clock,
   Film,
-  FileText,
-  Sliders,
-  Shield,
-  Square,
-  CheckSquare,
+  CheckCircle2,
+  AlertCircle,
   X,
-  ExternalLink,
-  ChevronDown,
-  ChevronUp,
+  Sparkles,
 } from "lucide-react";
 
-export const AutoTraceTool: React.FC = () => {
-  // Input Mode: "raster" (Auto Trace) or "svg" (Direct SVG to Alight XML)
+interface AutoTraceToolProps {
+  onSelectTool?: (toolId: string) => void;
+}
+
+export const AutoTraceTool: React.FC<AutoTraceToolProps> = ({ onSelectTool }) => {
+  // Input Mode: "raster" (Auto Trace) or "svg" (Direct SVG)
   const [inputMode, setInputMode] = useState<"raster" | "svg">("raster");
 
   // Source Files & Previews
@@ -119,9 +112,7 @@ export const AutoTraceTool: React.FC = () => {
   };
 
   /**
-   * Run the full pipeline:
-   * 1. If raster: runAutoTrace -> produce SVG -> convert to Alight XML
-   * 2. If SVG: convert SVG -> Alight XML
+   * Run the full pipeline
    */
   const processPipeline = useCallback(
     async (file: File | string, currentTraceOpts: TraceOptions, currentAlightOpts: AlightOptions) => {
@@ -143,7 +134,7 @@ export const AutoTraceTool: React.FC = () => {
           const traceRes = await runAutoTrace(
             imageData,
             currentTraceOpts,
-            (pct, text) => {
+            (pct) => {
               if (!newAbortSignal.aborted) {
                 setStatusText(`TRACE ${Math.round(pct * 100)}%`);
               }
@@ -154,7 +145,6 @@ export const AutoTraceTool: React.FC = () => {
           if (newAbortSignal.aborted) return;
           svgString = traceRes.svgString;
         } else {
-          // Direct SVG string
           svgString = typeof file === "string" ? file : await (file as File).text();
         }
 
@@ -265,7 +255,6 @@ export const AutoTraceTool: React.FC = () => {
           }
           const avgDiff = diffSum / (48 * 48);
           if (avgDiff < 22) {
-            // High probability of black-and-white sketch / manga line art!
             const mangaOpts: TraceOptions = {
               ...traceOpts,
               mode: "lineart",
@@ -445,7 +434,7 @@ export const AutoTraceTool: React.FC = () => {
   const totalLayersCount = activeLayers.length;
 
   return (
-    <div className="w-full max-w-xl mx-auto space-y-4 font-sans text-neutral-100 pb-16 select-none">
+    <div className="space-y-6">
       {/* Hidden File Input */}
       <input
         ref={fileInputRef}
@@ -458,48 +447,64 @@ export const AutoTraceTool: React.FC = () => {
         }}
       />
 
-      {/* Header Sticky Bar */}
-      <header className="sticky top-16 z-20 backdrop-blur-md bg-neutral-950/85 border border-neutral-800/80 rounded-xl px-4 py-3 flex items-center justify-between shadow-2xl">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-white to-neutral-300 flex items-center justify-center text-neutral-950 shadow-sm font-bold">
-            <Shapes className="w-4 h-4" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold tracking-tight text-white flex items-center gap-1.5">
-              Auto Trace <span className="text-neutral-400 font-normal">→</span> Alight XML
-            </h1>
-            <p className="text-[10px] font-mono text-neutral-400">AM 5.0+ Native XML Project</p>
+      {/* Tool Header - Fixio Standard */}
+      <div className="border-b border-black/5 dark:border-white/10 pb-4">
+        <div className="flex items-center gap-2 text-[#007aff] dark:text-[#0a84ff] font-semibold text-xs mb-1">
+          <Shapes className="w-4 h-4" />
+          <span>Alight Motion Suite • Vector Tracer</span>
+        </div>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="text-xl sm:text-2xl font-bold text-black dark:text-white tracking-tight">
+            Auto Trace Image to SVG
+          </h2>
+          {/* Status Badge */}
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+              status === "busy"
+                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 animate-pulse"
+                : status === "done"
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                : status === "error"
+                ? "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
+                : "bg-black/5 dark:bg-white/10 text-[#8e8e93]"
+            }`}
+          >
+            {status === "busy" ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : status === "done" ? (
+              <Check className="w-3.5 h-3.5" />
+            ) : null}
+            <span>{statusText}</span>
           </div>
         </div>
+        <p className="text-[#8e8e93] dark:text-[#98989d] text-xs sm:text-sm mt-1">
+          Ubah gambar raster (PNG/JPG/WebP/Sketsa Manga) menjadi vektor SVG berlapis warna & konversi langsung ke Alight Motion XML.
+        </p>
+      </div>
 
-        {/* Status Pill */}
-        <div
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-medium transition-all ${
-            status === "busy"
-              ? "bg-neutral-800 text-neutral-200 border border-neutral-700 animate-pulse"
-              : status === "done"
-              ? "bg-white text-neutral-950 shadow-md font-semibold"
-              : status === "error"
-              ? "bg-red-950/40 text-red-400 border border-dashed border-red-800/60"
-              : "bg-neutral-900 text-neutral-400 border border-neutral-800"
-          }`}
+      {/* Alight Motion Suite Switcher */}
+      <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 text-xs font-semibold">
+        <button
+          type="button"
+          className="py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all bg-white dark:bg-[#1c1c1e] text-[#007aff] dark:text-[#0a84ff] shadow-sm font-bold"
         >
-          {status === "busy" ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
-          ) : status === "done" ? (
-            <Check className="w-3 h-3 text-emerald-600" />
-          ) : status === "error" ? (
-            <span className="w-2 h-2 rounded-full bg-red-500" />
-          ) : (
-            <span className="w-2 h-2 rounded-full bg-neutral-600" />
-          )}
-          <span>{statusText}</span>
-        </div>
-      </header>
+          <Shapes className="w-4 h-4" />
+          <span>Auto Trace (Raster → SVG/XML)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onSelectTool?.("ampreset")}
+          className="py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all text-[#8e8e93] hover:text-black dark:hover:text-white cursor-pointer"
+        >
+          <Film className="w-4 h-4" />
+          <span>AM Preset Finder (TikTok)</span>
+        </button>
+      </div>
 
       {/* Upload Zone / Active File Info */}
       {!sourceFile ? (
-        <section
+        <div
           onDragOver={(e) => {
             e.preventDefault();
             setIsDragOver(true);
@@ -512,40 +517,43 @@ export const AutoTraceTool: React.FC = () => {
             if (file) handleFileSelect(file);
           }}
           onClick={() => fileInputRef.current?.click()}
-          className={`relative border-2 border-dashed rounded-xl p-7 text-center cursor-pointer transition-all ${
+          className={`border-2 border-dashed rounded-2xl p-7 text-center cursor-pointer transition-all ${
             isDragOver
-              ? "border-white bg-neutral-900/70 shadow-lg"
-              : "border-neutral-800 hover:border-neutral-600 bg-gradient-to-b from-neutral-900/60 to-neutral-950"
+              ? "border-[#007aff] dark:border-[#0a84ff] bg-blue-50/50 dark:bg-blue-950/20"
+              : "border-black/10 dark:border-white/10 hover:border-[#007aff]/50 bg-slate-50/60 dark:bg-[#121214]"
           }`}
         >
-          <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gradient-to-b from-white to-neutral-300 flex items-center justify-center text-neutral-950 shadow-md">
+          <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-[#007aff]/10 dark:bg-[#0a84ff]/15 text-[#007aff] dark:text-[#0a84ff] flex items-center justify-center shadow-sm">
             <ImageIcon className="w-6 h-6" />
           </div>
-          <h2 className="text-base font-semibold text-white mb-1">Pilih Gambar atau SVG</h2>
-          <p className="text-xs text-neutral-400 max-w-sm mx-auto">
-            PNG, JPG, WebP di-trace otomatis jadi SVG vektor, atau langsung impor file .SVG untuk dibuatkan proyek Alight Motion XML.
+          <h3 className="text-sm sm:text-base font-bold text-black dark:text-white mb-1">
+            Pilih atau Tarik Gambar / SVG ke Sini
+          </h3>
+          <p className="text-xs text-[#8e8e93] dark:text-[#98989d] max-w-sm mx-auto">
+            Mendukung PNG, JPG, WebP, GIF, & berkas SVG. Diproses 100% cepat di browser tanpa batas ukuran.
           </p>
-          <div className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-mono text-neutral-300">
-            <span>Bisa Drag & Drop atau Paste (Ctrl + V)</span>
+          <div className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-black/5 dark:bg-white/10 text-xs font-medium text-black dark:text-white">
+            <Sparkles className="w-3.5 h-3.5 text-[#007aff]" />
+            <span>Mendukung Paste dari Clipboard (Ctrl + V)</span>
           </div>
-        </section>
+        </div>
       ) : (
-        <section className="bg-gradient-to-b from-neutral-900/80 to-neutral-950 border border-neutral-800 rounded-xl p-3 flex items-center justify-between gap-3 shadow-md">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="bg-slate-50/60 dark:bg-[#121214] border border-black/5 dark:border-white/10 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-3.5 min-w-0">
             {imagePreviewUrl ? (
               <img
                 src={imagePreviewUrl}
                 alt="Source"
-                className="w-10 h-10 object-cover rounded-lg border border-neutral-700 shrink-0"
+                className="w-12 h-12 object-cover rounded-xl border border-black/10 dark:border-white/10 shrink-0"
               />
             ) : (
-              <div className="w-10 h-10 rounded-lg bg-neutral-800 flex items-center justify-center text-neutral-300 shrink-0">
-                <FileCode className="w-5 h-5" />
+              <div className="w-12 h-12 rounded-xl bg-[#007aff]/10 dark:bg-[#0a84ff]/15 text-[#007aff] dark:text-[#0a84ff] flex items-center justify-center shrink-0">
+                <FileCode className="w-6 h-6" />
               </div>
             )}
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-white truncate">{fileName}</p>
-              <p className="text-[11px] font-mono text-neutral-400">
+              <p className="text-sm font-bold text-black dark:text-white truncate">{fileName}</p>
+              <p className="text-xs text-[#8e8e93] dark:text-[#98989d]">
                 {inputMode === "raster" ? "Auto Trace Raster" : "Direct SVG"} •{" "}
                 {alightResult ? `${alightResult.src.w}×${alightResult.src.h} px` : "Memproses..."}
               </p>
@@ -554,85 +562,69 @@ export const AutoTraceTool: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-2.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-xs font-medium text-neutral-200"
+              className="px-3 py-1.5 rounded-xl bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-xs font-semibold text-black dark:text-white transition-colors"
             >
               Ganti
             </button>
             <button
               onClick={handleReset}
-              className="p-1.5 rounded-lg bg-neutral-900 hover:bg-red-950/50 hover:text-red-400 border border-neutral-800 text-neutral-400"
+              className="p-2 rounded-xl bg-black/5 dark:bg-white/10 hover:bg-red-500/10 hover:text-red-500 text-[#8e8e93] transition-colors"
               title="Hapus"
             >
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
-        </section>
+        </div>
       )}
 
-      {/* Tabs Navigation for Settings */}
-      <div className="grid grid-cols-3 gap-1 bg-neutral-900/80 p-1 rounded-xl border border-neutral-800 text-xs font-semibold">
+      {/* Tabs Navigation for Settings - Fixio Standard */}
+      <div className="grid grid-cols-3 gap-1 bg-black/5 dark:bg-white/5 p-1 rounded-xl border border-black/5 dark:border-white/10 text-xs font-semibold">
         <button
           onClick={() => setActiveTab("trace")}
-          className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
+          className={`py-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
             activeTab === "trace"
-              ? "bg-white text-neutral-950 shadow-sm"
-              : "text-neutral-400 hover:text-white"
+              ? "bg-white dark:bg-[#2c2c2e] text-[#007aff] dark:text-[#0a84ff] shadow-sm"
+              : "text-[#8e8e93] hover:text-black dark:hover:text-white"
           }`}
         >
-          <Wand2 className="w-3.5 h-3.5" />
-          <span>Auto Trace</span>
+          <Wand2 className="w-4 h-4" />
+          <span>Pengaturan Trace</span>
         </button>
 
         <button
           onClick={() => setActiveTab("alight")}
-          className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
+          className={`py-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
             activeTab === "alight"
-              ? "bg-white text-neutral-950 shadow-sm"
-              : "text-neutral-400 hover:text-white"
+              ? "bg-white dark:bg-[#2c2c2e] text-[#007aff] dark:text-[#0a84ff] shadow-sm"
+              : "text-[#8e8e93] hover:text-black dark:hover:text-white"
           }`}
         >
-          <Film className="w-3.5 h-3.5" />
-          <span>Alight XML</span>
+          <Film className="w-4 h-4" />
+          <span>Alight Motion XML</span>
         </button>
 
         <button
           onClick={() => setActiveTab("layers")}
-          className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
+          className={`py-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
             activeTab === "layers"
-              ? "bg-white text-neutral-950 shadow-sm"
-              : "text-neutral-400 hover:text-white"
+              ? "bg-white dark:bg-[#2c2c2e] text-[#007aff] dark:text-[#0a84ff] shadow-sm"
+              : "text-[#8e8e93] hover:text-black dark:hover:text-white"
           }`}
         >
-          <Layers className="w-3.5 h-3.5" />
-          <span>Layers ({selectedCount}/{totalLayersCount})</span>
+          <Layers className="w-4 h-4" />
+          <span>Layer ({selectedCount}/{totalLayersCount})</span>
         </button>
       </div>
 
       {/* TAB 1: Auto Trace Engine Settings */}
       {activeTab === "trace" && (
-        <section className="bg-gradient-to-b from-neutral-900/90 to-neutral-950 border border-neutral-800/90 rounded-xl p-4 shadow-xl space-y-3.5">
-          <div className="flex items-center justify-between pb-2 border-b border-neutral-800/80">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-neutral-800 flex items-center justify-center text-neutral-200">
-                <Wand2 className="w-3.5 h-3.5" />
-              </div>
-              <h3 className="text-sm font-semibold text-white">Preset & Pengaturan Trace</h3>
-            </div>
-            <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wide">
-              {traceOpts.mode === "lineart"
-                ? "⚡ Manga & Line Art"
-                : traceOpts.mode === "silhouette"
-                ? "⚫ Siluet 2-Tone"
-                : traceOpts.mode === "manga3"
-                ? "📑 Manga 3-Tone"
-                : "🎨 Full Color"}
-            </span>
-          </div>
-
-          {/* Mode Selector Presets */}
-          <div className="space-y-1.5">
-            <p className="text-xs font-medium text-neutral-300">Pilih Mode / Karakteristik Gambar:</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+        <div className="space-y-4 bg-slate-50/60 dark:bg-[#121214] p-4 sm:p-5 rounded-2xl border border-black/5 dark:border-white/10 shadow-sm">
+          {/* Preset Mode Selection */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-black dark:text-white">
+              Pilih Karakteristik / Mode Gambar:
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button
                 type="button"
                 onClick={() =>
@@ -647,16 +639,16 @@ export const AutoTraceTool: React.FC = () => {
                     contrastBoost: true,
                   }))
                 }
-                className={`p-2 rounded-lg border text-left transition-all ${
+                className={`p-3 rounded-xl border text-left transition-all ${
                   traceOpts.mode === "lineart"
-                    ? "bg-white text-neutral-950 font-bold border-white shadow-sm"
-                    : "bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                    ? "bg-[#007aff]/10 dark:bg-[#0a84ff]/15 border-[#007aff] dark:border-[#0a84ff] text-[#007aff] dark:text-[#0a84ff] font-bold shadow-sm"
+                    : "bg-white dark:bg-[#1c1c1e] border-black/5 dark:border-white/10 text-black dark:text-white hover:border-[#007aff]/40"
                 }`}
               >
-                <p className="text-xs">⚡ Manga / Sketsa</p>
-                <p className={`text-[9px] ${traceOpts.mode === "lineart" ? "text-neutral-700" : "text-neutral-400"}`}>
-                  Tinta & arsir detail
+                <p className="text-xs font-bold flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5" /> Manga / Sketsa
                 </p>
+                <p className="text-[10px] text-[#8e8e93] mt-0.5">Tinta & arsir detail</p>
               </button>
 
               <button
@@ -672,16 +664,14 @@ export const AutoTraceTool: React.FC = () => {
                     lineSensitivity: 50,
                   }))
                 }
-                className={`p-2 rounded-lg border text-left transition-all ${
+                className={`p-3 rounded-xl border text-left transition-all ${
                   traceOpts.mode === "silhouette"
-                    ? "bg-white text-neutral-950 font-bold border-white shadow-sm"
-                    : "bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                    ? "bg-[#007aff]/10 dark:bg-[#0a84ff]/15 border-[#007aff] dark:border-[#0a84ff] text-[#007aff] dark:text-[#0a84ff] font-bold shadow-sm"
+                    : "bg-white dark:bg-[#1c1c1e] border-black/5 dark:border-white/10 text-black dark:text-white hover:border-[#007aff]/40"
                 }`}
               >
-                <p className="text-xs">⚫ Siluet 2-Tone</p>
-                <p className={`text-[9px] ${traceOpts.mode === "silhouette" ? "text-neutral-700" : "text-neutral-400"}`}>
-                  Hitam murni tegas
-                </p>
+                <p className="text-xs font-bold">Siluet 2-Tone</p>
+                <p className="text-[10px] text-[#8e8e93] mt-0.5">Hitam murni tegas</p>
               </button>
 
               <button
@@ -697,16 +687,14 @@ export const AutoTraceTool: React.FC = () => {
                     lineSensitivity: 50,
                   }))
                 }
-                className={`p-2 rounded-lg border text-left transition-all ${
+                className={`p-3 rounded-xl border text-left transition-all ${
                   traceOpts.mode === "manga3"
-                    ? "bg-white text-neutral-950 font-bold border-white shadow-sm"
-                    : "bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                    ? "bg-[#007aff]/10 dark:bg-[#0a84ff]/15 border-[#007aff] dark:border-[#0a84ff] text-[#007aff] dark:text-[#0a84ff] font-bold shadow-sm"
+                    : "bg-white dark:bg-[#1c1c1e] border-black/5 dark:border-white/10 text-black dark:text-white hover:border-[#007aff]/40"
                 }`}
               >
-                <p className="text-xs">📑 Manga 3-Tone</p>
-                <p className={`text-[9px] ${traceOpts.mode === "manga3" ? "text-neutral-700" : "text-neutral-400"}`}>
-                  Tinta + abu bayang
-                </p>
+                <p className="text-xs font-bold">Manga 3-Tone</p>
+                <p className="text-[10px] text-[#8e8e93] mt-0.5">Tinta + abu bayang</p>
               </button>
 
               <button
@@ -721,29 +709,29 @@ export const AutoTraceTool: React.FC = () => {
                     transparentPaper: false,
                   }))
                 }
-                className={`p-2 rounded-lg border text-left transition-all ${
+                className={`p-3 rounded-xl border text-left transition-all ${
                   traceOpts.mode === "standard"
-                    ? "bg-white text-neutral-950 font-bold border-white shadow-sm"
-                    : "bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                    ? "bg-[#007aff]/10 dark:bg-[#0a84ff]/15 border-[#007aff] dark:border-[#0a84ff] text-[#007aff] dark:text-[#0a84ff] font-bold shadow-sm"
+                    : "bg-white dark:bg-[#1c1c1e] border-black/5 dark:border-white/10 text-black dark:text-white hover:border-[#007aff]/40"
                 }`}
               >
-                <p className="text-xs">🎨 Full Color</p>
-                <p className={`text-[9px] ${traceOpts.mode === "standard" ? "text-neutral-700" : "text-neutral-400"}`}>
-                  Vektor warna K-Means
-                </p>
+                <p className="text-xs font-bold">Multi-Warna</p>
+                <p className="text-[10px] text-[#8e8e93] mt-0.5">Vektor warna K-Means</p>
               </button>
             </div>
           </div>
 
-          <div className="border-t border-neutral-800/40" />
-
-          {/* Manga & Line Art Controls */}
+          {/* Manga Mode Specific Controls */}
           {traceOpts.mode !== "standard" && (
-            <div className="p-3 rounded-lg bg-neutral-950/70 border border-neutral-800 space-y-2.5">
+            <div className="p-3.5 rounded-xl bg-white dark:bg-[#1c1c1e] border border-black/5 dark:border-white/10 space-y-3 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold text-white">Sensitivitas Garis Tinta (Line Weight)</p>
-                  <p className="text-[10px] text-neutral-400">Tinggi = tangkap arsir halus & pensil tipis</p>
+                  <p className="text-xs font-semibold text-black dark:text-white">
+                    Sensitivitas Garis Tinta (Ambang Tinta)
+                  </p>
+                  <p className="text-[11px] text-[#8e8e93]">
+                    Semakin tinggi, semakin banyak arsir halus & pensil yang terdeteksi
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <input
@@ -757,18 +745,22 @@ export const AutoTraceTool: React.FC = () => {
                         lineSensitivity: parseInt(e.target.value, 10),
                       }))
                     }
-                    className="w-20 accent-white cursor-pointer"
+                    className="w-24 accent-[#007aff] dark:accent-[#0a84ff] cursor-pointer"
                   />
-                  <span className="w-7 text-right font-mono text-xs font-bold text-white">
+                  <span className="w-8 text-right font-mono text-xs font-bold text-black dark:text-white">
                     {traceOpts.lineSensitivity ?? 55}%
                   </span>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center justify-between pt-2 border-t border-black/5 dark:border-white/10">
                 <div>
-                  <p className="text-xs font-medium text-neutral-200">Hapus Latar Kertas Putih (Transparent Ink)</p>
-                  <p className="text-[10px] text-neutral-400">Hanya garis gambar yang menjadi vektor, latar transparan</p>
+                  <p className="text-xs font-semibold text-black dark:text-white">
+                    Hapus Latar Kertas Putih (Transparent Ink)
+                  </p>
+                  <p className="text-[11px] text-[#8e8e93]">
+                    Hanya garis tinta dan arsir yang menjadi vektor, latar menjadi transparan
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -778,15 +770,15 @@ export const AutoTraceTool: React.FC = () => {
                       transparentPaper: prev.transparentPaper === false ? true : false,
                     }))
                   }
-                  className={`w-7 h-4 rounded-full p-0.5 transition-colors ${
-                    traceOpts.transparentPaper !== false ? "bg-white" : "bg-neutral-700"
+                  className={`w-9 h-5 rounded-full p-0.5 transition-colors ${
+                    traceOpts.transparentPaper !== false
+                      ? "bg-[#007aff] dark:bg-[#0a84ff]"
+                      : "bg-black/20 dark:bg-white/20"
                   }`}
                 >
                   <div
-                    className={`w-3 h-3 rounded-full transition-transform ${
-                      traceOpts.transparentPaper !== false
-                        ? "translate-x-3 bg-neutral-950"
-                        : "translate-x-0 bg-neutral-400"
+                    className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                      traceOpts.transparentPaper !== false ? "translate-x-4" : "translate-x-0"
                     }`}
                   />
                 </button>
@@ -794,235 +786,126 @@ export const AutoTraceTool: React.FC = () => {
             </div>
           )}
 
-          {/* Row 1: Jumlah Warna (Untuk Standard atau Custom) */}
-          <div className="flex items-center justify-between py-1">
-            <div className="flex items-center gap-2.5">
-              <Palette className="w-4 h-4 text-neutral-400 shrink-0" />
-              <div>
-                <p className="text-xs font-medium text-neutral-200">Tingkat Warna / Arsir</p>
-                <p className="text-[10px] text-neutral-400">
-                  {traceOpts.mode === "lineart"
-                    ? "Tingkat gradasi tinta & bayangan"
-                    : "Jumlah warna palet"}
-                </p>
+          {/* Setting Sliders & Controls */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            {/* Jumlah Warna */}
+            <div className="bg-white dark:bg-[#1c1c1e] p-3 rounded-xl border border-black/5 dark:border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Palette className="w-4 h-4 text-[#007aff]" />
+                <div>
+                  <p className="text-xs font-semibold text-black dark:text-white">Jumlah Warna</p>
+                  <p className="text-[10px] text-[#8e8e93]">Gradasi warna/arsir</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min={2}
+                  max={traceOpts.mode !== "standard" ? 6 : 24}
+                  value={traceOpts.colors}
+                  onChange={(e) =>
+                    setTraceOpts((prev) => ({ ...prev, colors: parseInt(e.target.value, 10) }))
+                  }
+                  className="w-20 accent-[#007aff] dark:accent-[#0a84ff]"
+                />
+                <span className="w-6 text-right font-mono text-xs font-bold text-black dark:text-white">
+                  {traceOpts.colors}
+                </span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="range"
-                min={2}
-                max={traceOpts.mode !== "standard" ? 6 : 24}
-                value={traceOpts.colors}
+
+            {/* Resolusi */}
+            <div className="bg-white dark:bg-[#1c1c1e] p-3 rounded-xl border border-black/5 dark:border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Ruler className="w-4 h-4 text-[#007aff]" />
+                <div>
+                  <p className="text-xs font-semibold text-black dark:text-white">Detail Resolusi</p>
+                  <p className="text-[10px] text-[#8e8e93]">Sisi terpanjang kanvas</p>
+                </div>
+              </div>
+              <select
+                value={traceOpts.resolution}
                 onChange={(e) =>
-                  setTraceOpts((prev) => ({ ...prev, colors: parseInt(e.target.value, 10) }))
+                  setTraceOpts((prev) => ({ ...prev, resolution: parseInt(e.target.value, 10) }))
                 }
-                className="w-20 accent-white cursor-pointer"
-              />
-              <span className="w-7 text-right font-mono text-xs font-bold text-white">
-                {traceOpts.colors}
-              </span>
+                className="bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 rounded-lg px-2.5 py-1 text-xs font-semibold text-black dark:text-white focus:outline-none"
+              >
+                <option value={320}>320 px</option>
+                <option value={480}>480 px</option>
+                <option value={640}>640 px</option>
+                <option value={800}>800 px (Manga)</option>
+              </select>
             </div>
-          </div>
 
-          <div className="border-t border-neutral-800/40" />
-
-          {/* Row 2: Detail / Resolusi */}
-          <div className="flex items-center justify-between py-1">
-            <div className="flex items-center gap-2.5">
-              <Ruler className="w-4 h-4 text-neutral-400 shrink-0" />
-              <div>
-                <p className="text-xs font-medium text-neutral-200">Detail (Resolusi)</p>
-                <p className="text-[10px] text-neutral-400">800px direkomendasikan untuk sketsa manga</p>
+            {/* Buang Noise */}
+            <div className="bg-white dark:bg-[#1c1c1e] p-3 rounded-xl border border-black/5 dark:border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Eraser className="w-4 h-4 text-[#007aff]" />
+                <div>
+                  <p className="text-xs font-semibold text-black dark:text-white">Buang Noise</p>
+                  <p className="text-[10px] text-[#8e8e93]">Filter speckle debu</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min={0}
+                  max={40}
+                  value={traceOpts.speckle}
+                  onChange={(e) =>
+                    setTraceOpts((prev) => ({ ...prev, speckle: parseInt(e.target.value, 10) }))
+                  }
+                  className="w-20 accent-[#007aff] dark:accent-[#0a84ff]"
+                />
+                <span className="w-6 text-right font-mono text-xs font-bold text-black dark:text-white">
+                  {traceOpts.speckle}
+                </span>
               </div>
             </div>
-            <select
-              value={traceOpts.resolution}
-              onChange={(e) =>
-                setTraceOpts((prev) => ({ ...prev, resolution: parseInt(e.target.value, 10) }))
-              }
-              className="bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none focus:border-white"
-            >
-              <option value={320}>320 px (Cepat)</option>
-              <option value={480}>480 px</option>
-              <option value={640}>640 px (Standar)</option>
-              <option value={800}>800 px (Rinci / Manga)</option>
-            </select>
-          </div>
 
-          <div className="border-t border-neutral-800/40" />
-
-          {/* Row 3: Buang Noise */}
-          <div className="flex items-center justify-between py-1">
-            <div className="flex items-center gap-2.5">
-              <Eraser className="w-4 h-4 text-neutral-400 shrink-0" />
-              <div>
-                <p className="text-xs font-medium text-neutral-200">Buang Noise (Speckle)</p>
-                <p className="text-[10px] text-neutral-400">Garis arsir memanjang tetap dilindungi</p>
+            {/* Kehalusan */}
+            <div className="bg-white dark:bg-[#1c1c1e] p-3 rounded-xl border border-black/5 dark:border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Spline className="w-4 h-4 text-[#007aff]" />
+                <div>
+                  <p className="text-xs font-semibold text-black dark:text-white">Kehalusan Kontur</p>
+                  <p className="text-[10px] text-[#8e8e93]">Kurva Bezier</p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="range"
-                min={0}
-                max={40}
-                value={traceOpts.speckle}
+              <select
+                value={traceOpts.smoothness}
                 onChange={(e) =>
-                  setTraceOpts((prev) => ({ ...prev, speckle: parseInt(e.target.value, 10) }))
+                  setTraceOpts((prev) => ({ ...prev, smoothness: parseInt(e.target.value, 10) }))
                 }
-                className="w-20 accent-white cursor-pointer"
-              />
-              <span className="w-7 text-right font-mono text-xs font-bold text-white">
-                {traceOpts.speckle}
-              </span>
+                className="bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 rounded-lg px-2.5 py-1 text-xs font-semibold text-black dark:text-white focus:outline-none"
+              >
+                <option value={0}>0 - Tajam</option>
+                <option value={1}>1 - Halus</option>
+                <option value={2}>2 - Sangat Halus</option>
+              </select>
             </div>
           </div>
-
-          <div className="border-t border-neutral-800/40" />
-
-          {/* Row 4: Kehalusan Kontur */}
-          <div className="flex items-center justify-between py-1">
-            <div className="flex items-center gap-2.5">
-              <Spline className="w-4 h-4 text-neutral-400 shrink-0" />
-              <div>
-                <p className="text-xs font-medium text-neutral-200">Kehalusan Kontur</p>
-                <p className="text-[10px] text-neutral-400">Catmull-Rom dengan sudut tajam</p>
-              </div>
-            </div>
-            <select
-              value={traceOpts.smoothness}
-              onChange={(e) =>
-                setTraceOpts((prev) => ({ ...prev, smoothness: parseInt(e.target.value, 10) }))
-              }
-              className="bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none focus:border-white"
-            >
-              <option value={0}>0 - Tajam (Lurus)</option>
-              <option value={1}>1 - Halus (Standar)</option>
-              <option value={2}>2 - Sangat Halus</option>
-            </select>
-          </div>
-
-          <div className="border-t border-neutral-800/40" />
-
-          {/* Row 5: Switches */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-            <button
-              type="button"
-              onClick={() =>
-                setTraceOpts((prev) => ({ ...prev, splitPerPatch: !prev.splitPerPatch }))
-              }
-              className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
-                traceOpts.splitPerPatch
-                  ? "bg-neutral-800 border-white text-white"
-                  : "bg-neutral-950 border-neutral-800 text-neutral-400"
-              }`}
-            >
-              <div>
-                <p className="text-[11px] font-semibold">Pisah Patch</p>
-                <p className="text-[9px] text-neutral-400">Tiap bagian jadi shape</p>
-              </div>
-              <div
-                className={`w-7 h-4 rounded-full p-0.5 transition-colors ${
-                  traceOpts.splitPerPatch ? "bg-white" : "bg-neutral-700"
-                }`}
-              >
-                <div
-                  className={`w-3 h-3 rounded-full transition-transform ${
-                    traceOpts.splitPerPatch
-                      ? "translate-x-3 bg-neutral-950"
-                      : "translate-x-0 bg-neutral-400"
-                  }`}
-                />
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setTraceOpts((prev) => ({ ...prev, cleanEdges: !prev.cleanEdges }))}
-              className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
-                traceOpts.cleanEdges
-                  ? "bg-neutral-800 border-white text-white"
-                  : "bg-neutral-950 border-neutral-800 text-neutral-400"
-              }`}
-            >
-              <div>
-                <p className="text-[11px] font-semibold">Rapikan Tepi</p>
-                <p className="text-[9px] text-neutral-400">Anti-alias cleaner</p>
-              </div>
-              <div
-                className={`w-7 h-4 rounded-full p-0.5 transition-colors ${
-                  traceOpts.cleanEdges ? "bg-white" : "bg-neutral-700"
-                }`}
-              >
-                <div
-                  className={`w-3 h-3 rounded-full transition-transform ${
-                    traceOpts.cleanEdges
-                      ? "translate-x-3 bg-neutral-950"
-                      : "translate-x-0 bg-neutral-400"
-                  }`}
-                />
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                setAlightOpts((prev) => ({ ...prev, cstroke: !prev.cstroke }))
-              }
-              className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
-                alightOpts.cstroke
-                  ? "bg-neutral-800 border-white text-white"
-                  : "bg-neutral-950 border-neutral-800 text-neutral-400"
-              }`}
-            >
-              <div>
-                <p className="text-[11px] font-semibold">Hairline Stroke</p>
-                <p className="text-[9px] text-neutral-400">Buang stroke artefak</p>
-              </div>
-              <div
-                className={`w-7 h-4 rounded-full p-0.5 transition-colors ${
-                  alightOpts.cstroke ? "bg-white" : "bg-neutral-700"
-                }`}
-              >
-                <div
-                  className={`w-3 h-3 rounded-full transition-transform ${
-                    alightOpts.cstroke
-                      ? "translate-x-3 bg-neutral-950"
-                      : "translate-x-0 bg-neutral-400"
-                  }`}
-                />
-              </div>
-            </button>
-          </div>
-        </section>
+        </div>
       )}
 
-      {/* TAB 2: Alight Motion Project Canvas & Export Settings */}
+      {/* TAB 2: Alight Motion XML Settings */}
       {activeTab === "alight" && (
-        <section className="bg-gradient-to-b from-neutral-900/90 to-neutral-950 border border-neutral-800/90 rounded-xl p-4 shadow-xl space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-neutral-800/80">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-neutral-800 flex items-center justify-center text-neutral-200">
-                <Film className="w-3.5 h-3.5" />
-              </div>
-              <h3 className="text-sm font-semibold text-white">Canvas & Proyek Alight Motion</h3>
-            </div>
-            <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wide">
-              Alight Preset
-            </span>
-          </div>
-
-          {/* Aspect Ratio Chips */}
-          <div>
-            <p className="text-xs font-medium text-neutral-300 mb-1.5">Preset Kanvas</p>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+        <div className="space-y-4 bg-slate-50/60 dark:bg-[#121214] p-4 sm:p-5 rounded-2xl border border-black/5 dark:border-white/10 shadow-sm">
+          {/* Preset Rasio */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-black dark:text-white">
+              Preset Rasio Proyek Alight Motion:
+            </label>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
               {(["orig", "1:1", "16:9", "9:16", "4:5", "4:3"] as const).map((pr) => (
                 <button
                   key={pr}
+                  type="button"
                   onClick={() => setAlightOpts((prev) => ({ ...prev, preset: pr }))}
-                  className={`py-1.5 px-2 rounded-lg border text-xs font-mono font-medium transition-all ${
+                  className={`py-2 px-3 rounded-xl border text-xs font-mono font-bold transition-all ${
                     alightOpts.preset === pr
-                      ? "bg-white text-neutral-950 font-bold border-white"
-                      : "bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                      ? "bg-[#007aff] dark:bg-[#0a84ff] text-white border-transparent shadow-sm"
+                      : "bg-white dark:bg-[#1c1c1e] text-black dark:text-white border-black/5 dark:border-white/10"
                   }`}
                 >
                   {pr === "orig" ? "Asli" : pr}
@@ -1031,14 +914,11 @@ export const AutoTraceTool: React.FC = () => {
             </div>
           </div>
 
-          <div className="border-t border-neutral-800/40" />
-
-          {/* Durasi & FPS */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-center justify-between">
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <div className="bg-white dark:bg-[#1c1c1e] p-3 rounded-xl border border-black/5 dark:border-white/10 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-neutral-400" />
-                <span className="text-xs font-medium text-neutral-200">Durasi</span>
+                <Clock className="w-4 h-4 text-[#007aff]" />
+                <span className="text-xs font-semibold text-black dark:text-white">Durasi Proyek</span>
               </div>
               <div className="flex items-center gap-1">
                 <input
@@ -1050,23 +930,23 @@ export const AutoTraceTool: React.FC = () => {
                   onChange={(e) =>
                     setAlightOpts((prev) => ({ ...prev, duration: parseFloat(e.target.value) || 2 }))
                   }
-                  className="w-14 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs font-mono text-right text-white"
+                  className="w-14 bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 rounded-lg px-2 py-1 text-xs font-mono text-right text-black dark:text-white"
                 />
-                <span className="text-xs font-mono text-neutral-400">s</span>
+                <span className="text-xs text-[#8e8e93]">s</span>
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="bg-white dark:bg-[#1c1c1e] p-3 rounded-xl border border-black/5 dark:border-white/10 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Film className="w-4 h-4 text-neutral-400" />
-                <span className="text-xs font-medium text-neutral-200">FPS</span>
+                <Film className="w-4 h-4 text-[#007aff]" />
+                <span className="text-xs font-semibold text-black dark:text-white">FPS</span>
               </div>
               <select
                 value={alightOpts.fps}
                 onChange={(e) =>
                   setAlightOpts((prev) => ({ ...prev, fps: parseInt(e.target.value, 10) }))
                 }
-                className="bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs font-mono text-white"
+                className="bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 rounded-lg px-2.5 py-1 text-xs font-semibold text-black dark:text-white"
               >
                 <option value={24}>24 fps</option>
                 <option value={25}>25 fps</option>
@@ -1076,102 +956,98 @@ export const AutoTraceTool: React.FC = () => {
             </div>
           </div>
 
-          <div className="border-t border-neutral-800/40" />
-
-          {/* Struktur Export: Flat vs Nested */}
-          <div className="space-y-1.5">
-            <p className="text-xs font-medium text-neutral-300">Struktur Export Alight Motion</p>
+          {/* Struktur Export */}
+          <div className="space-y-1.5 pt-1">
+            <label className="text-xs font-bold text-black dark:text-white">
+              Struktur Export Alight Motion:
+            </label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setAlightOpts((prev) => ({ ...prev, grouping: "nested" }))}
-                className={`p-2.5 rounded-lg border text-left transition-all ${
+                className={`p-3 rounded-xl border text-left transition-all ${
                   alightOpts.grouping === "nested"
-                    ? "bg-neutral-800 border-white text-white"
-                    : "bg-neutral-950 border-neutral-800 text-neutral-400"
+                    ? "bg-[#007aff]/10 dark:bg-[#0a84ff]/15 border-[#007aff] dark:border-[#0a84ff] text-[#007aff] dark:text-[#0a84ff] font-bold"
+                    : "bg-white dark:bg-[#1c1c1e] border-black/5 dark:border-white/10 text-black dark:text-white"
                 }`}
               >
-                <p className="text-xs font-semibold">Nested (embedScene)</p>
-                <p className="text-[10px] text-neutral-400">Satu grup rapi di timeline</p>
+                <p className="text-xs font-bold">Nested (embedScene)</p>
+                <p className="text-[10px] text-[#8e8e93] mt-0.5">Satu grup rapi di timeline</p>
               </button>
 
               <button
                 type="button"
                 onClick={() => setAlightOpts((prev) => ({ ...prev, grouping: "flat" }))}
-                className={`p-2.5 rounded-lg border text-left transition-all ${
+                className={`p-3 rounded-xl border text-left transition-all ${
                   alightOpts.grouping === "flat"
-                    ? "bg-neutral-800 border-white text-white"
-                    : "bg-neutral-950 border-neutral-800 text-neutral-400"
+                    ? "bg-[#007aff]/10 dark:bg-[#0a84ff]/15 border-[#007aff] dark:border-[#0a84ff] text-[#007aff] dark:text-[#0a84ff] font-bold"
+                    : "bg-white dark:bg-[#1c1c1e] border-black/5 dark:border-white/10 text-black dark:text-white"
                 }`}
               >
-                <p className="text-xs font-semibold">Flat (Langsung)</p>
-                <p className="text-[10px] text-neutral-400">Semua shape di root layer</p>
+                <p className="text-xs font-bold">Flat (Langsung)</p>
+                <p className="text-[10px] text-[#8e8e93] mt-0.5">Semua shape di root layer</p>
               </button>
             </div>
           </div>
-        </section>
+        </div>
       )}
 
       {/* TAB 3: Layer List & Filtering */}
       {activeTab === "layers" && (
-        <section className="bg-gradient-to-b from-neutral-900/90 to-neutral-950 border border-neutral-800/90 rounded-xl p-4 shadow-xl space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
+        <div className="space-y-4 bg-slate-50/60 dark:bg-[#121214] p-4 sm:p-5 rounded-2xl border border-black/5 dark:border-white/10 shadow-sm">
+          <div className="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/10">
             <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-neutral-300" />
-              <h3 className="text-sm font-semibold text-white">
+              <Layers className="w-5 h-5 text-[#007aff] dark:text-[#0a84ff]" />
+              <h3 className="text-base font-bold text-black dark:text-white">
                 Daftar Layer / Patch ({selectedCount}/{totalLayersCount})
               </h3>
             </div>
 
             {/* Bulk Actions */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => handleSelectAllLayers(true)}
-                className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-[11px] font-medium text-neutral-300"
-                title="Aktifkan Semua"
+                className="px-2.5 py-1 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 text-xs font-semibold text-black dark:text-white"
               >
                 Semua
               </button>
               <button
                 onClick={() => handleSelectAllLayers(false)}
-                className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-[11px] font-medium text-neutral-300"
-                title="Kosongkan Semua"
+                className="px-2.5 py-1 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 text-xs font-semibold text-black dark:text-white"
               >
                 Kosong
               </button>
               <button
                 onClick={handleInvertLayers}
-                className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-[11px] font-medium text-neutral-300"
-                title="Balik Pilihan"
+                className="px-2.5 py-1 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 text-xs font-semibold text-black dark:text-white"
               >
                 Balik
               </button>
             </div>
           </div>
 
-          {/* Layer List Scroll */}
           {activeLayers.length === 0 ? (
-            <p className="text-xs text-neutral-400 py-4 text-center">Belum ada layer yang diproses.</p>
+            <p className="text-xs text-[#8e8e93] py-4 text-center">Belum ada layer yang diproses.</p>
           ) : (
-            <div className="max-h-60 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+            <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
               {activeLayers.map((layer) => {
                 const isSelected = selectedLayerIds.has(layer.i);
                 return (
                   <div
                     key={layer.i}
                     onClick={() => toggleLayer(layer.i)}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg border cursor-pointer transition-all ${
+                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border cursor-pointer transition-all ${
                       isSelected
-                        ? "bg-neutral-900/90 border-neutral-800 hover:border-neutral-700 text-white"
-                        : "bg-neutral-950/60 border-neutral-900/80 text-neutral-400 opacity-50"
+                        ? "bg-white dark:bg-[#1c1c1e] border-black/5 dark:border-white/10 text-black dark:text-white shadow-sm"
+                        : "bg-black/5 dark:bg-white/5 border-transparent text-[#8e8e93] opacity-50"
                     }`}
                   >
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-3">
                       <div
-                        className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
+                        className={`w-4 h-4 rounded-md flex items-center justify-center border transition-colors ${
                           isSelected
-                            ? "bg-white border-white text-neutral-950"
-                            : "border-neutral-600 bg-transparent"
+                            ? "bg-[#007aff] dark:bg-[#0a84ff] border-transparent text-white"
+                            : "border-black/20 dark:border-white/20 bg-transparent"
                         }`}
                       >
                         {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
@@ -1179,7 +1055,7 @@ export const AutoTraceTool: React.FC = () => {
 
                       {layer.color && (
                         <div
-                          className="w-4 h-4 rounded shadow-inner border border-white/20 shrink-0"
+                          className="w-4 h-4 rounded-md shadow-inner border border-black/10 dark:border-white/20 shrink-0"
                           style={{ backgroundColor: layer.color }}
                         />
                       )}
@@ -1187,91 +1063,91 @@ export const AutoTraceTool: React.FC = () => {
                       <span className="text-xs font-mono font-medium">{layer.name}</span>
                     </div>
 
-                    <div className="flex items-center gap-2 font-mono text-[11px] text-neutral-400">
+                    <div className="flex items-center gap-2 font-mono text-xs text-[#8e8e93]">
                       <span>{layer.nodes} node</span>
-                      {layer.grad && <span className="text-[10px] text-amber-400">grad</span>}
-                      {layer.stroke && <span className="text-[10px] text-cyan-400">strk</span>}
+                      {layer.grad && <span className="text-[10px] text-amber-500 font-bold">grad</span>}
+                      {layer.stroke && <span className="text-[10px] text-cyan-500 font-bold">strk</span>}
                     </div>
                   </div>
                 );
               })}
             </div>
           )}
-        </section>
+        </div>
       )}
 
       {/* SVG & Vector Preview Card */}
       {currentSvg && (
-        <section className="bg-gradient-to-b from-neutral-900/90 to-neutral-950 border border-neutral-800/90 rounded-xl p-4 shadow-2xl space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
+        <div className="space-y-4 bg-slate-50/60 dark:bg-[#121214] p-4 sm:p-5 rounded-2xl border border-black/5 dark:border-white/10 shadow-sm">
+          <div className="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/10">
             {/* Background Selector */}
-            <div className="flex items-center gap-1 bg-neutral-900 p-1 rounded-lg border border-neutral-800">
+            <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1 rounded-xl">
               <button
                 onClick={() => setBgPattern("grid")}
-                className={`p-1.5 rounded-md text-xs transition-colors ${
+                className={`p-1.5 rounded-lg text-xs transition-colors ${
                   bgPattern === "grid"
-                    ? "bg-neutral-800 text-white shadow-sm"
-                    : "text-neutral-400 hover:text-white"
+                    ? "bg-white dark:bg-[#2c2c2e] text-black dark:text-white shadow-sm"
+                    : "text-[#8e8e93] hover:text-black dark:hover:text-white"
                 }`}
                 title="Latar Transparan / Grid"
               >
-                <Grid className="w-3.5 h-3.5" />
+                <Grid className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setBgPattern("dark")}
-                className={`p-1.5 rounded-md text-xs transition-colors ${
+                className={`p-1.5 rounded-lg text-xs transition-colors ${
                   bgPattern === "dark"
-                    ? "bg-neutral-800 text-white shadow-sm"
-                    : "text-neutral-400 hover:text-white"
+                    ? "bg-white dark:bg-[#2c2c2e] text-black dark:text-white shadow-sm"
+                    : "text-[#8e8e93] hover:text-black dark:hover:text-white"
                 }`}
                 title="Latar Hitam"
               >
-                <Moon className="w-3.5 h-3.5" />
+                <Moon className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setBgPattern("white")}
-                className={`p-1.5 rounded-md text-xs transition-colors ${
+                className={`p-1.5 rounded-lg text-xs transition-colors ${
                   bgPattern === "white"
-                    ? "bg-neutral-800 text-white shadow-sm"
-                    : "text-neutral-400 hover:text-white"
+                    ? "bg-white dark:bg-[#2c2c2e] text-black dark:text-white shadow-sm"
+                    : "text-[#8e8e93] hover:text-black dark:hover:text-white"
                 }`}
                 title="Latar Putih"
               >
-                <Sun className="w-3.5 h-3.5" />
+                <Sun className="w-4 h-4" />
               </button>
             </div>
 
             {/* Zoom Controls */}
-            <div className="flex items-center gap-1 bg-neutral-900 p-1 rounded-lg border border-neutral-800">
+            <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1 rounded-xl">
               <button
                 onClick={() => setZoomLevel((z) => Math.max(0.5, Number((z - 0.25).toFixed(2))))}
-                className="p-1.5 rounded-md text-neutral-400 hover:text-white"
+                className="p-1.5 rounded-lg text-[#8e8e93] hover:text-black dark:hover:text-white"
                 title="Perkecil"
               >
-                <ZoomOut className="w-3.5 h-3.5" />
+                <ZoomOut className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setZoomLevel(1)}
-                className="px-2 py-1 text-[11px] font-mono font-semibold text-neutral-300 hover:text-white"
+                className="px-2 py-1 text-xs font-mono font-bold text-black dark:text-white"
                 title="Pas Layar (100%)"
               >
                 {Math.round(zoomLevel * 100)}%
               </button>
               <button
                 onClick={() => setZoomLevel((z) => Math.min(3, Number((z + 0.25).toFixed(2))))}
-                className="p-1.5 rounded-md text-neutral-400 hover:text-white"
+                className="p-1.5 rounded-lg text-[#8e8e93] hover:text-black dark:hover:text-white"
                 title="Perbesar"
               >
-                <ZoomIn className="w-3.5 h-3.5" />
+                <ZoomIn className="w-4 h-4" />
               </button>
             </div>
           </div>
 
           {/* Canvas Viewport */}
           <div
-            className={`relative w-full h-80 rounded-lg overflow-auto border border-neutral-800 flex items-center justify-center p-4 transition-colors ${
+            className={`relative w-full h-80 rounded-xl overflow-auto border border-black/5 dark:border-white/10 flex items-center justify-center p-4 transition-colors ${
               bgPattern === "grid"
-                ? "bg-[conic-gradient(#262626_25%,#171717_0_50%,#262626_0_75%,#171717_0)] bg-[size:16px_16px]"
+                ? "bg-[conic-gradient(#e2e8f0_25%,#ffffff_0_50%,#e2e8f0_0_75%,#ffffff_0)] dark:bg-[conic-gradient(#262626_25%,#171717_0_50%,#262626_0_75%,#171717_0)] bg-[size:16px_16px]"
                 : bgPattern === "dark"
                 ? "bg-neutral-950"
                 : "bg-white"
@@ -1288,43 +1164,45 @@ export const AutoTraceTool: React.FC = () => {
             />
           </div>
 
-          {/* Stats Bar (2 Columns / 4 Cells) */}
+          {/* Stats Bar */}
           {alightResult && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-              <div className="bg-neutral-900/80 border border-neutral-800 rounded-lg p-2.5">
-                <p className="text-[10px] font-mono text-neutral-400 uppercase">Layer Dipilih</p>
-                <p className="text-sm font-mono font-bold text-white">
+              <div className="bg-white dark:bg-[#1c1c1e] border border-black/5 dark:border-white/10 rounded-xl p-3 text-center">
+                <p className="text-[10px] text-[#8e8e93] uppercase font-bold">Layer Aktif</p>
+                <p className="text-sm font-mono font-bold text-black dark:text-white mt-0.5">
                   {selectedCount} / {totalLayersCount}
                 </p>
               </div>
-              <div className="bg-neutral-900/80 border border-neutral-800 rounded-lg p-2.5">
-                <p className="text-[10px] font-mono text-neutral-400 uppercase">Warna Palet</p>
-                <p className="text-sm font-mono font-bold text-white">{alightResult.stats.colors}</p>
+              <div className="bg-white dark:bg-[#1c1c1e] border border-black/5 dark:border-white/10 rounded-xl p-3 text-center">
+                <p className="text-[10px] text-[#8e8e93] uppercase font-bold">Palet Warna</p>
+                <p className="text-sm font-mono font-bold text-black dark:text-white mt-0.5">
+                  {alightResult.stats.colors}
+                </p>
               </div>
-              <div className="bg-neutral-900/80 border border-neutral-800 rounded-lg p-2.5">
-                <p className="text-[10px] font-mono text-neutral-400 uppercase">Alight XML</p>
-                <p className="text-sm font-mono font-bold text-white">
+              <div className="bg-white dark:bg-[#1c1c1e] border border-black/5 dark:border-white/10 rounded-xl p-3 text-center">
+                <p className="text-[10px] text-[#8e8e93] uppercase font-bold">Ukuran XML</p>
+                <p className="text-sm font-mono font-bold text-black dark:text-white mt-0.5">
                   {(alightResult.xmlBytes / 1024).toFixed(1)} KB
                 </p>
               </div>
-              <div className="bg-neutral-900/80 border border-neutral-800 rounded-lg p-2.5">
-                <p className="text-[10px] font-mono text-neutral-400 uppercase">Kanvas AM</p>
-                <p className="text-sm font-mono font-bold text-white">
+              <div className="bg-white dark:bg-[#1c1c1e] border border-black/5 dark:border-white/10 rounded-xl p-3 text-center">
+                <p className="text-[10px] text-[#8e8e93] uppercase font-bold">Dimensi Kanvas</p>
+                <p className="text-sm font-mono font-bold text-black dark:text-white mt-0.5">
                   {alightResult.canvas.w}×{alightResult.canvas.h}
                 </p>
               </div>
             </div>
           )}
-        </section>
+        </div>
       )}
 
-      {/* Main Action Buttons Grid: Alight Motion XML & SVG */}
-      <div className="space-y-2">
+      {/* Main Action Buttons Grid - Fixio Standard */}
+      <div className="space-y-2.5">
         <div className="grid grid-cols-2 gap-2.5">
           <button
             onClick={handleDownloadAlightXml}
             disabled={!alightResult?.xml}
-            className="flex items-center justify-center gap-2 min-h-[44px] px-3.5 rounded-xl bg-gradient-to-b from-white to-neutral-200 hover:from-neutral-100 hover:to-neutral-300 text-neutral-950 font-bold text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-white/10"
+            className="flex items-center justify-center gap-2 min-h-[46px] px-4 rounded-xl bg-[#007aff] dark:bg-[#0a84ff] hover:bg-[#0062cc] dark:hover:bg-[#0071e3] text-white font-bold text-xs sm:text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm cursor-pointer"
           >
             <Download className="w-4 h-4" />
             <span>Unduh Alight XML</span>
@@ -1333,7 +1211,7 @@ export const AutoTraceTool: React.FC = () => {
           <button
             onClick={handleCopyAlightXml}
             disabled={!alightResult?.xml}
-            className="flex items-center justify-center gap-2 min-h-[44px] px-3.5 rounded-xl bg-gradient-to-b from-neutral-800 to-neutral-900 hover:from-neutral-700 hover:to-neutral-800 border border-neutral-700 text-white font-semibold text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
+            className="flex items-center justify-center gap-2 min-h-[46px] px-4 rounded-xl bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-black dark:text-white font-semibold text-xs sm:text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed border border-black/5 dark:border-white/10 cursor-pointer"
           >
             <Copy className="w-4 h-4" />
             <span>Salin XML Alight</span>
@@ -1344,7 +1222,7 @@ export const AutoTraceTool: React.FC = () => {
           <button
             onClick={handleDownloadSvg}
             disabled={!currentSvg}
-            className="flex items-center justify-center gap-2 min-h-[40px] px-3 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-xs font-medium text-neutral-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-2 min-h-[42px] px-3 rounded-xl bg-white dark:bg-[#1c1c1e] hover:bg-black/5 dark:hover:bg-white/5 border border-black/10 dark:border-white/10 text-xs font-semibold text-black dark:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Unduh Berkas SVG</span>
@@ -1353,7 +1231,7 @@ export const AutoTraceTool: React.FC = () => {
           <button
             onClick={handleCopySvg}
             disabled={!currentSvg}
-            className="flex items-center justify-center gap-2 min-h-[40px] px-3 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-xs font-medium text-neutral-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-2 min-h-[42px] px-3 rounded-xl bg-white dark:bg-[#1c1c1e] hover:bg-black/5 dark:hover:bg-white/5 border border-black/10 dark:border-white/10 text-xs font-semibold text-black dark:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           >
             <Copy className="w-3.5 h-3.5" />
             <span>Salin Kode SVG</span>
@@ -1363,59 +1241,61 @@ export const AutoTraceTool: React.FC = () => {
         {alightResult?.xml && (
           <button
             onClick={() => setIsXmlModalOpen(true)}
-            className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border border-neutral-800 bg-neutral-950/60 hover:bg-neutral-900 text-[11px] font-mono text-neutral-400 hover:text-white transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-black/5 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs font-medium text-[#8e8e93] hover:text-black dark:hover:text-white transition-colors cursor-pointer"
           >
-            <FileCode className="w-3.5 h-3.5" />
-            <span>Lihat Isi XML Alight Motion Lengkap ({((alightResult.xmlBytes || 0) / 1024).toFixed(1)} KB)</span>
+            <FileCode className="w-4 h-4" />
+            <span>Lihat Isi XML Proyek Lengkap ({((alightResult.xmlBytes || 0) / 1024).toFixed(1)} KB)</span>
           </button>
         )}
       </div>
 
       {/* XML Full Inspector Modal */}
       {isXmlModalOpen && alightResult?.xml && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col p-4 animate-fade-in">
-          <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-            <div className="flex items-center gap-2">
-              <FileCode className="w-4 h-4 text-white" />
-              <h4 className="text-sm font-bold text-white">XML Proyek Alight Motion</h4>
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl p-4 flex flex-col h-full max-h-[90vh] max-w-2xl mx-auto w-full shadow-2xl border border-black/10 dark:border-white/10">
+            <div className="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/10">
+              <div className="flex items-center gap-2">
+                <FileCode className="w-5 h-5 text-[#007aff]" />
+                <h4 className="text-sm font-bold text-black dark:text-white">XML Proyek Alight Motion</h4>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopyAlightXml}
+                  className="px-3 py-1.5 rounded-lg bg-[#007aff] text-white font-bold text-xs"
+                >
+                  Salin
+                </button>
+                <button
+                  onClick={() => setIsXmlModalOpen(false)}
+                  className="p-1.5 rounded-lg text-[#8e8e93] hover:text-black dark:hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleCopyAlightXml}
-                className="px-3 py-1 rounded-lg bg-white text-neutral-950 font-bold text-xs"
-              >
-                Salin
-              </button>
-              <button
-                onClick={() => setIsXmlModalOpen(false)}
-                className="p-1.5 rounded-lg bg-neutral-900 text-neutral-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+            <textarea
+              readOnly
+              value={alightResult.xml}
+              className="flex-1 mt-3 bg-slate-50 dark:bg-black/60 border border-black/10 dark:border-white/10 rounded-xl p-3 text-xs font-mono text-black dark:text-white resize-none focus:outline-none"
+            />
           </div>
-          <textarea
-            readOnly
-            value={alightResult.xml}
-            className="flex-1 mt-3 bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-xs font-mono text-neutral-300 resize-none focus:outline-none"
-          />
         </div>
       )}
 
-      {/* Bottom Floating Toast */}
+      {/* Floating Toast Notification */}
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-fade-in pointer-events-none">
           <div
-            className={`flex items-center gap-2 px-4 py-2 rounded-full shadow-2xl text-xs font-medium border ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg text-xs font-semibold ${
               toast.type === "ok"
-                ? "bg-neutral-900 text-white border-neutral-700 shadow-emerald-950/20"
-                : "bg-red-950 text-red-200 border-red-800 shadow-red-950/40"
+                ? "bg-black/90 text-white dark:bg-white dark:text-black"
+                : "bg-red-600 text-white"
             }`}
           >
             {toast.type === "ok" ? (
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <Check className="w-3.5 h-3.5 text-emerald-400 dark:text-emerald-600" />
             ) : (
-              <span className="w-2 h-2 rounded-full bg-red-400" />
+              <span className="w-2 h-2 rounded-full bg-red-200" />
             )}
             <span>{toast.message}</span>
           </div>
