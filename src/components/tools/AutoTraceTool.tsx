@@ -61,13 +61,17 @@ export const AutoTraceTool: React.FC = () => {
 
   // Trace Settings
   const [traceOpts, setTraceOpts] = useState<TraceOptions>({
-    colors: 8,
-    resolution: 640,
-    speckle: 6,
+    mode: "lineart",
+    colors: 3,
+    resolution: 800,
+    speckle: 4,
     smoothness: 1,
     splitPerPatch: true,
     cleanEdges: true,
     removeBg: false,
+    transparentPaper: true,
+    lineSensitivity: 55,
+    contrastBoost: true,
   });
 
   // Alight Motion XML Settings
@@ -244,7 +248,46 @@ export const AutoTraceTool: React.FC = () => {
       setDirectSvgText("");
       const objUrl = URL.createObjectURL(file);
       setImagePreviewUrl(objUrl);
-      processPipeline(file, traceOpts, alightOpts);
+
+      // Analyze image to auto-detect Manga / Line Art vs Color Illustration
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement("canvas");
+        c.width = 48;
+        c.height = 48;
+        const ctx = c.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, 48, 48);
+          const p = ctx.getImageData(0, 0, 48, 48).data;
+          let diffSum = 0;
+          for (let i = 0; i < p.length; i += 4) {
+            diffSum += Math.abs(p[i] - p[i + 1]) + Math.abs(p[i + 1] - p[i + 2]);
+          }
+          const avgDiff = diffSum / (48 * 48);
+          if (avgDiff < 22) {
+            // High probability of black-and-white sketch / manga line art!
+            const mangaOpts: TraceOptions = {
+              ...traceOpts,
+              mode: "lineart",
+              colors: 3,
+              resolution: 800,
+              speckle: 4,
+              transparentPaper: true,
+              lineSensitivity: 55,
+              contrastBoost: true,
+            };
+            setTraceOpts(mangaOpts);
+            showToast("Mode Manga / Line Art aktif otomatis untuk sketsa", "ok");
+            processPipeline(file, mangaOpts, alightOpts);
+            return;
+          }
+        }
+        processPipeline(file, traceOpts, alightOpts);
+      };
+      img.onerror = () => {
+        processPipeline(file, traceOpts, alightOpts);
+      };
+      img.src = objUrl;
     }
   };
 
@@ -567,33 +610,208 @@ export const AutoTraceTool: React.FC = () => {
 
       {/* TAB 1: Auto Trace Engine Settings */}
       {activeTab === "trace" && (
-        <section className="bg-gradient-to-b from-neutral-900/90 to-neutral-950 border border-neutral-800/90 rounded-xl p-4 shadow-xl space-y-3">
+        <section className="bg-gradient-to-b from-neutral-900/90 to-neutral-950 border border-neutral-800/90 rounded-xl p-4 shadow-xl space-y-3.5">
           <div className="flex items-center justify-between pb-2 border-b border-neutral-800/80">
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-md bg-neutral-800 flex items-center justify-center text-neutral-200">
                 <Wand2 className="w-3.5 h-3.5" />
               </div>
-              <h3 className="text-sm font-semibold text-white">Pengaturan Auto Trace</h3>
+              <h3 className="text-sm font-semibold text-white">Preset & Pengaturan Trace</h3>
             </div>
             <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wide">
-              Raster → Vektor
+              {traceOpts.mode === "lineart"
+                ? "⚡ Manga & Line Art"
+                : traceOpts.mode === "silhouette"
+                ? "⚫ Siluet 2-Tone"
+                : traceOpts.mode === "manga3"
+                ? "📑 Manga 3-Tone"
+                : "🎨 Full Color"}
             </span>
           </div>
 
-          {/* Row 1: Jumlah Warna */}
-          <div className="flex items-center justify-between py-1.5">
+          {/* Mode Selector Presets */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-neutral-300">Pilih Mode / Karakteristik Gambar:</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  setTraceOpts((prev) => ({
+                    ...prev,
+                    mode: "lineart",
+                    colors: 3,
+                    resolution: 800,
+                    speckle: 4,
+                    transparentPaper: true,
+                    lineSensitivity: 55,
+                    contrastBoost: true,
+                  }))
+                }
+                className={`p-2 rounded-lg border text-left transition-all ${
+                  traceOpts.mode === "lineart"
+                    ? "bg-white text-neutral-950 font-bold border-white shadow-sm"
+                    : "bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                }`}
+              >
+                <p className="text-xs">⚡ Manga / Sketsa</p>
+                <p className={`text-[9px] ${traceOpts.mode === "lineart" ? "text-neutral-700" : "text-neutral-400"}`}>
+                  Tinta & arsir detail
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setTraceOpts((prev) => ({
+                    ...prev,
+                    mode: "silhouette",
+                    colors: 2,
+                    resolution: 800,
+                    speckle: 5,
+                    transparentPaper: true,
+                    lineSensitivity: 50,
+                  }))
+                }
+                className={`p-2 rounded-lg border text-left transition-all ${
+                  traceOpts.mode === "silhouette"
+                    ? "bg-white text-neutral-950 font-bold border-white shadow-sm"
+                    : "bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                }`}
+              >
+                <p className="text-xs">⚫ Siluet 2-Tone</p>
+                <p className={`text-[9px] ${traceOpts.mode === "silhouette" ? "text-neutral-700" : "text-neutral-400"}`}>
+                  Hitam murni tegas
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setTraceOpts((prev) => ({
+                    ...prev,
+                    mode: "manga3",
+                    colors: 3,
+                    resolution: 800,
+                    speckle: 4,
+                    transparentPaper: true,
+                    lineSensitivity: 50,
+                  }))
+                }
+                className={`p-2 rounded-lg border text-left transition-all ${
+                  traceOpts.mode === "manga3"
+                    ? "bg-white text-neutral-950 font-bold border-white shadow-sm"
+                    : "bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                }`}
+              >
+                <p className="text-xs">📑 Manga 3-Tone</p>
+                <p className={`text-[9px] ${traceOpts.mode === "manga3" ? "text-neutral-700" : "text-neutral-400"}`}>
+                  Tinta + abu bayang
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setTraceOpts((prev) => ({
+                    ...prev,
+                    mode: "standard",
+                    colors: 8,
+                    resolution: 640,
+                    speckle: 6,
+                    transparentPaper: false,
+                  }))
+                }
+                className={`p-2 rounded-lg border text-left transition-all ${
+                  traceOpts.mode === "standard"
+                    ? "bg-white text-neutral-950 font-bold border-white shadow-sm"
+                    : "bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                }`}
+              >
+                <p className="text-xs">🎨 Full Color</p>
+                <p className={`text-[9px] ${traceOpts.mode === "standard" ? "text-neutral-700" : "text-neutral-400"}`}>
+                  Vektor warna K-Means
+                </p>
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-neutral-800/40" />
+
+          {/* Manga & Line Art Controls */}
+          {traceOpts.mode !== "standard" && (
+            <div className="p-3 rounded-lg bg-neutral-950/70 border border-neutral-800 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-white">Sensitivitas Garis Tinta (Line Weight)</p>
+                  <p className="text-[10px] text-neutral-400">Tinggi = tangkap arsir halus & pensil tipis</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={10}
+                    max={90}
+                    value={traceOpts.lineSensitivity ?? 55}
+                    onChange={(e) =>
+                      setTraceOpts((prev) => ({
+                        ...prev,
+                        lineSensitivity: parseInt(e.target.value, 10),
+                      }))
+                    }
+                    className="w-20 accent-white cursor-pointer"
+                  />
+                  <span className="w-7 text-right font-mono text-xs font-bold text-white">
+                    {traceOpts.lineSensitivity ?? 55}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <div>
+                  <p className="text-xs font-medium text-neutral-200">Hapus Latar Kertas Putih (Transparent Ink)</p>
+                  <p className="text-[10px] text-neutral-400">Hanya garis gambar yang menjadi vektor, latar transparan</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setTraceOpts((prev) => ({
+                      ...prev,
+                      transparentPaper: prev.transparentPaper === false ? true : false,
+                    }))
+                  }
+                  className={`w-7 h-4 rounded-full p-0.5 transition-colors ${
+                    traceOpts.transparentPaper !== false ? "bg-white" : "bg-neutral-700"
+                  }`}
+                >
+                  <div
+                    className={`w-3 h-3 rounded-full transition-transform ${
+                      traceOpts.transparentPaper !== false
+                        ? "translate-x-3 bg-neutral-950"
+                        : "translate-x-0 bg-neutral-400"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Row 1: Jumlah Warna (Untuk Standard atau Custom) */}
+          <div className="flex items-center justify-between py-1">
             <div className="flex items-center gap-2.5">
               <Palette className="w-4 h-4 text-neutral-400 shrink-0" />
               <div>
-                <p className="text-xs font-medium text-neutral-200">Jumlah Warna</p>
-                <p className="text-[10px] text-neutral-400">Palet K-Means (2 - 24)</p>
+                <p className="text-xs font-medium text-neutral-200">Tingkat Warna / Arsir</p>
+                <p className="text-[10px] text-neutral-400">
+                  {traceOpts.mode === "lineart"
+                    ? "Tingkat gradasi tinta & bayangan"
+                    : "Jumlah warna palet"}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <input
                 type="range"
                 min={2}
-                max={24}
+                max={traceOpts.mode !== "standard" ? 6 : 24}
                 value={traceOpts.colors}
                 onChange={(e) =>
                   setTraceOpts((prev) => ({ ...prev, colors: parseInt(e.target.value, 10) }))
@@ -609,12 +827,12 @@ export const AutoTraceTool: React.FC = () => {
           <div className="border-t border-neutral-800/40" />
 
           {/* Row 2: Detail / Resolusi */}
-          <div className="flex items-center justify-between py-1.5">
+          <div className="flex items-center justify-between py-1">
             <div className="flex items-center gap-2.5">
               <Ruler className="w-4 h-4 text-neutral-400 shrink-0" />
               <div>
                 <p className="text-xs font-medium text-neutral-200">Detail (Resolusi)</p>
-                <p className="text-[10px] text-neutral-400">Sisi terpanjang raster trace</p>
+                <p className="text-[10px] text-neutral-400">800px direkomendasikan untuk sketsa manga</p>
               </div>
             </div>
             <select
@@ -627,26 +845,26 @@ export const AutoTraceTool: React.FC = () => {
               <option value={320}>320 px (Cepat)</option>
               <option value={480}>480 px</option>
               <option value={640}>640 px (Standar)</option>
-              <option value={800}>800 px (Rinci)</option>
+              <option value={800}>800 px (Rinci / Manga)</option>
             </select>
           </div>
 
           <div className="border-t border-neutral-800/40" />
 
           {/* Row 3: Buang Noise */}
-          <div className="flex items-center justify-between py-1.5">
+          <div className="flex items-center justify-between py-1">
             <div className="flex items-center gap-2.5">
               <Eraser className="w-4 h-4 text-neutral-400 shrink-0" />
               <div>
-                <p className="text-xs font-medium text-neutral-200">Buang Noise</p>
-                <p className="text-[10px] text-neutral-400">Patch di bawah nilai ini dibuang</p>
+                <p className="text-xs font-medium text-neutral-200">Buang Noise (Speckle)</p>
+                <p className="text-[10px] text-neutral-400">Garis arsir memanjang tetap dilindungi</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <input
                 type="range"
                 min={0}
-                max={60}
+                max={40}
                 value={traceOpts.speckle}
                 onChange={(e) =>
                   setTraceOpts((prev) => ({ ...prev, speckle: parseInt(e.target.value, 10) }))
@@ -662,12 +880,12 @@ export const AutoTraceTool: React.FC = () => {
           <div className="border-t border-neutral-800/40" />
 
           {/* Row 4: Kehalusan Kontur */}
-          <div className="flex items-center justify-between py-1.5">
+          <div className="flex items-center justify-between py-1">
             <div className="flex items-center gap-2.5">
               <Spline className="w-4 h-4 text-neutral-400 shrink-0" />
               <div>
                 <p className="text-xs font-medium text-neutral-200">Kehalusan Kontur</p>
-                <p className="text-[10px] text-neutral-400">Sudut tajam dipertahankan</p>
+                <p className="text-[10px] text-neutral-400">Catmull-Rom dengan sudut tajam</p>
               </div>
             </div>
             <select
@@ -678,7 +896,7 @@ export const AutoTraceTool: React.FC = () => {
               className="bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none focus:border-white"
             >
               <option value={0}>0 - Tajam (Lurus)</option>
-              <option value={1}>1 - Halus (Catmull-Rom)</option>
+              <option value={1}>1 - Halus (Standar)</option>
               <option value={2}>2 - Sangat Halus</option>
             </select>
           </div>
@@ -728,7 +946,7 @@ export const AutoTraceTool: React.FC = () => {
             >
               <div>
                 <p className="text-[11px] font-semibold">Rapikan Tepi</p>
-                <p className="text-[9px] text-neutral-400">Anti-alias fringe cleaner</p>
+                <p className="text-[9px] text-neutral-400">Anti-alias cleaner</p>
               </div>
               <div
                 className={`w-7 h-4 rounded-full p-0.5 transition-colors ${

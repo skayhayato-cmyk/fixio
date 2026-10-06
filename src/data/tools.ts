@@ -108,6 +108,15 @@ export const TOOLS_LIST: ToolDefinition[] = [
     badge: "Sumber Alt",
   },
   {
+    id: "ampreset",
+    title: "Alight Motion Preset Finder",
+    description: "Cari dan dapatkan link preset Alight Motion (5MB & XML) dari video TikTok secara otomatis.",
+    category: "social",
+    iconName: "Film",
+    badge: "AM Preset",
+    popular: true,
+  },
+  {
     id: "ig-dl",
     title: "Instagram Downloader",
     description: "Unduh Reels, video, atau foto dari postingan Instagram publik dalam kualitas asli.",

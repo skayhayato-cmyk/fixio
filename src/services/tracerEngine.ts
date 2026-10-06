@@ -4,7 +4,10 @@
  * Douglas-Peucker polygon simplification, Hole-parent matching, and Catmull-Rom to Bezier curve smoothing.
  */
 
+export type TraceMode = "standard" | "lineart" | "silhouette" | "manga3";
+
 export interface TraceOptions {
+  mode?: TraceMode; // "standard" | "lineart" | "silhouette" | "manga3"
   colors: number; // 2 - 24
   resolution: number; // 320, 480, 640, 800
   speckle: number; // 0 - 200 px²
@@ -12,6 +15,9 @@ export interface TraceOptions {
   splitPerPatch: boolean; // true: 1 path per patch, false: 1 path per layer
   cleanEdges: boolean; // mergeSimilar & cleanFringe
   removeBg: boolean; // Remove rank 0 canvas background layer
+  transparentPaper?: boolean; // Hapus kertas putih otomatis (hanya garis tinta & arsir)
+  lineSensitivity?: number; // 0 - 100: sensitivitas garis tinta manga (default 50)
+  contrastBoost?: boolean; // Pertajam kontras garis arsir
 }
 
 export interface TraceProgressCallback {
@@ -257,84 +263,168 @@ export async function runAutoTrace(
     throw new Error("Gambar kosong atau transparan penuh.");
   }
 
-  // 5.2 Palette (k-means) with farthest-point initialization
-  const K = Math.max(2, Math.min(24, options.colors));
-  const step = Math.max(1, Math.floor(opaqueIndices.length / 20000));
-  const samplePixels: [number, number, number][] = [];
-  for (let i = 0; i < opaqueIndices.length; i += step) {
-    const idx = opaqueIndices[i];
-    samplePixels.push([data[idx * 4], data[idx * 4 + 1], data[idx * 4 + 2]]);
-  }
+  // 5.2 Palette generation: Smart Manga/Line-Art mode or general K-Means
+  const isMangaMode = options.mode === "lineart" || options.mode === "manga3" || options.mode === "silhouette";
+  const sens = Math.max(0, Math.min(100, options.lineSensitivity ?? 50));
+  const transparentPaper = options.transparentPaper !== false;
+  const paperThreshold = Math.max(160, Math.min(252, 230 - (sens - 50) * 0.7));
 
-  // Farthest-point initialization
   const palette: [number, number, number][] = [];
-  if (samplePixels.length > 0) {
-    palette.push(samplePixels[0]);
-    while (palette.length < K && palette.length < samplePixels.length) {
-      let maxDist = -1;
-      let bestSample = samplePixels[0];
-      for (const [r, g, b] of samplePixels) {
-        let minDistToPal = Infinity;
-        for (const [pr, pg, pb] of palette) {
-          const d = distSq(r, g, b, pr, pg, pb);
-          if (d < minDistToPal) minDistToPal = d;
+  const pixelIdx = new Int16Array(N);
+  pixelIdx.fill(-1);
+
+  if (isMangaMode) {
+    onProgress?.(0.08, "Mengoptimalkan garis tinta & arsir manga...");
+    // Specialized high-contrast Manga / Line Art quantization
+    if (options.mode === "silhouette") {
+      palette.push([10, 10, 10]); // Pure Jet Black Ink
+      if (!transparentPaper) palette.push([255, 255, 255]); // Paper White
+
+      for (const idx of opaqueIndices) {
+        let r = data[idx * 4];
+        let g = data[idx * 4 + 1];
+        let b = data[idx * 4 + 2];
+        let lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (options.contrastBoost !== false && lum < 190) {
+          lum = Math.pow(lum / 190, 1.25) * 190;
         }
-        if (minDistToPal > maxDist) {
-          maxDist = minDistToPal;
-          bestSample = [r, g, b];
+
+        if (lum < paperThreshold) {
+          pixelIdx[idx] = 0;
+        } else if (!transparentPaper) {
+          pixelIdx[idx] = 1;
         }
       }
-      if (maxDist < 16) break;
-      palette.push(bestSample);
-    }
-  }
+    } else if (options.mode === "manga3") {
+      palette.push([10, 10, 10]); // Deep Black Ink
+      palette.push([90, 90, 90]); // Shading / Cross-hatching Gray
+      if (!transparentPaper) palette.push([255, 255, 255]); // Paper White
 
-  // 8 Iterations of K-Means
-  for (let iter = 0; iter < 8; iter++) {
-    const sums = palette.map(() => [0, 0, 0, 0]); // [rSum, gSum, bSum, count]
-    for (const [r, g, b] of samplePixels) {
-      let bestPal = 0;
+      const darkThresh = Math.max(35, Math.min(150, 90 + (sens - 50) * 0.7));
+      for (const idx of opaqueIndices) {
+        let r = data[idx * 4];
+        let g = data[idx * 4 + 1];
+        let b = data[idx * 4 + 2];
+        let lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (options.contrastBoost !== false && lum < 190) {
+          lum = Math.pow(lum / 190, 1.25) * 190;
+        }
+
+        if (lum < darkThresh) {
+          pixelIdx[idx] = 0;
+        } else if (lum < paperThreshold) {
+          pixelIdx[idx] = 1;
+        } else if (!transparentPaper) {
+          pixelIdx[idx] = 2;
+        }
+      }
+    } else {
+      // "lineart" - Manga Sketch with fine ink & hatching gradations
+      palette.push([10, 10, 10]); // Tinta Pekat / Kontur Utama
+      palette.push([65, 65, 65]); // Arsir Gelap / Bayangan Mata
+      palette.push([125, 125, 125]); // Arsir Halus / Tekstur Pensil
+      if (options.colors >= 4) {
+        palette.push([175, 175, 175]); // Tone Lembut
+      }
+      if (!transparentPaper) palette.push([255, 255, 255]); // Kertas Putih
+
+      const numInkLevels = options.colors >= 4 ? 4 : 3;
+      const stepLum = paperThreshold / numInkLevels;
+
+      for (const idx of opaqueIndices) {
+        let r = data[idx * 4];
+        let g = data[idx * 4 + 1];
+        let b = data[idx * 4 + 2];
+        let lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (options.contrastBoost !== false && lum < 190) {
+          lum = Math.pow(lum / 190, 1.25) * 190;
+        }
+
+        if (lum < paperThreshold) {
+          const level = Math.min(numInkLevels - 1, Math.floor(lum / stepLum));
+          pixelIdx[idx] = level;
+        } else if (!transparentPaper) {
+          pixelIdx[idx] = numInkLevels;
+        }
+      }
+    }
+  } else {
+    // 5.2 General Palette (k-means) with farthest-point initialization
+    const K = Math.max(2, Math.min(24, options.colors));
+    const step = Math.max(1, Math.floor(opaqueIndices.length / 20000));
+    const samplePixels: [number, number, number][] = [];
+    for (let i = 0; i < opaqueIndices.length; i += step) {
+      const idx = opaqueIndices[i];
+      samplePixels.push([data[idx * 4], data[idx * 4 + 1], data[idx * 4 + 2]]);
+    }
+
+    // Farthest-point initialization
+    if (samplePixels.length > 0) {
+      palette.push(samplePixels[0]);
+      while (palette.length < K && palette.length < samplePixels.length) {
+        let maxDist = -1;
+        let bestSample = samplePixels[0];
+        for (const [r, g, b] of samplePixels) {
+          let minDistToPal = Infinity;
+          for (const [pr, pg, pb] of palette) {
+            const d = distSq(r, g, b, pr, pg, pb);
+            if (d < minDistToPal) minDistToPal = d;
+          }
+          if (minDistToPal > maxDist) {
+            maxDist = minDistToPal;
+            bestSample = [r, g, b];
+          }
+        }
+        if (maxDist < 16) break;
+        palette.push(bestSample);
+      }
+    }
+
+    // 8 Iterations of K-Means
+    for (let iter = 0; iter < 8; iter++) {
+      const sums = palette.map(() => [0, 0, 0, 0]); // [rSum, gSum, bSum, count]
+      for (const [r, g, b] of samplePixels) {
+        let bestPal = 0;
+        let bestDist = Infinity;
+        for (let p = 0; p < palette.length; p++) {
+          const d = distSq(r, g, b, palette[p][0], palette[p][1], palette[p][2]);
+          if (d < bestDist) {
+            bestDist = d;
+            bestPal = p;
+          }
+        }
+        sums[bestPal][0] += r;
+        sums[bestPal][1] += g;
+        sums[bestPal][2] += b;
+        sums[bestPal][3]++;
+      }
+      for (let p = 0; p < palette.length; p++) {
+        if (sums[p][3] > 0) {
+          palette[p] = [
+            Math.round(sums[p][0] / sums[p][3]),
+            Math.round(sums[p][1] / sums[p][3]),
+            Math.round(sums[p][2] / sums[p][3]),
+          ];
+        }
+      }
+    }
+
+    // 5.3 Pixel Labeling
+    for (const idx of opaqueIndices) {
+      const r = data[idx * 4];
+      const g = data[idx * 4 + 1];
+      const b = data[idx * 4 + 2];
+      let bestP = 0;
       let bestDist = Infinity;
       for (let p = 0; p < palette.length; p++) {
         const d = distSq(r, g, b, palette[p][0], palette[p][1], palette[p][2]);
         if (d < bestDist) {
           bestDist = d;
-          bestPal = p;
+          bestP = p;
         }
       }
-      sums[bestPal][0] += r;
-      sums[bestPal][1] += g;
-      sums[bestPal][2] += b;
-      sums[bestPal][3]++;
+      pixelIdx[idx] = bestP;
     }
-    for (let p = 0; p < palette.length; p++) {
-      if (sums[p][3] > 0) {
-        palette[p] = [
-          Math.round(sums[p][0] / sums[p][3]),
-          Math.round(sums[p][1] / sums[p][3]),
-          Math.round(sums[p][2] / sums[p][3]),
-        ];
-      }
-    }
-  }
-
-  // 5.3 Pixel Labeling
-  const pixelIdx = new Int16Array(N);
-  pixelIdx.fill(-1);
-  for (const idx of opaqueIndices) {
-    const r = data[idx * 4];
-    const g = data[idx * 4 + 1];
-    const b = data[idx * 4 + 2];
-    let bestP = 0;
-    let bestDist = Infinity;
-    for (let p = 0; p < palette.length; p++) {
-      const d = distSq(r, g, b, palette[p][0], palette[p][1], palette[p][2]);
-      if (d < bestDist) {
-        bestDist = d;
-        bestP = p;
-      }
-    }
-    pixelIdx[idx] = bestP;
   }
 
   // 5.4 Edge Cleaning (mergeSimilar & cleanFringe) if tClean ON
@@ -442,6 +532,8 @@ export async function runAutoTrace(
 
       for (const c of sortedByCount) {
         if (curCounts[c] === 0) continue;
+        // In manga mode, protect primary jet black ink from being dissolved
+        if (isMangaMode && c === 0) continue;
         if (thinCounts[c] >= 0.6 * curCounts[c] && neighbors[c].size >= 2) {
           const topNeighbors = Array.from(neighbors[c].entries()).sort((a, b) => b[1] - a[1]);
           if (topNeighbors.length >= 2) {
@@ -759,9 +851,6 @@ export async function runAutoTrace(
       const simplified = simplifyClosedLoop(clampedPts, eps);
       if (simplified.length < 3) continue;
 
-      const sArea = signedArea(simplified);
-      if (Math.abs(sArea) < options.speckle) continue;
-
       let minX = Infinity,
         minY = Infinity,
         maxX = -Infinity,
@@ -772,6 +861,15 @@ export async function runAutoTrace(
         if (p.x > maxX) maxX = p.x;
         if (p.y > maxY) maxY = p.y;
       }
+
+      const sArea = signedArea(simplified);
+      const spanX = maxX - minX;
+      const spanY = maxY - minY;
+      const maxSpan = Math.max(spanX, spanY);
+      const minSpan = Math.max(1, Math.min(spanX, spanY));
+      const isElongatedLine = isMangaMode && maxSpan >= 10 && maxSpan / minSpan >= 2.0;
+
+      if (!isElongatedLine && Math.abs(sArea) < options.speckle) continue;
 
       processedLoops.push({
         pts: simplified,
