@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
   reactStrictMode: true,
   serverExternalPackages: ["@napi-rs/canvas", "ffmpeg-static", "ffprobe-static"],
   typescript: {
