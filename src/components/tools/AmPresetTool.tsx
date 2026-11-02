@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import {
   Film,
   Download,
@@ -29,11 +29,15 @@ import {
   Clock,
   Ratio,
   Info,
+  Pin,
+  MessageSquare,
+  Filter,
 } from "lucide-react";
 
 export interface PresetLinkItem {
   type: string;
   url: string;
+  download?: string;
   title?: string;
   thumb?: string;
   thumbs?: string[];
@@ -41,6 +45,9 @@ export interface PresetLinkItem {
   ratio?: string;
   source?: string;
   detail?: string;
+  commenter?: string;
+  byAuthor?: boolean;
+  pinned?: boolean;
   verified?: boolean;
 }
 
@@ -76,6 +83,15 @@ export interface NormalizedAmPresetData {
   platform: string;
   input: string;
   total: number;
+  types?: {
+    xml?: number;
+    "5mb"?: number;
+    [key: string]: number | undefined;
+  };
+  scanned?: {
+    comments?: number;
+    replies?: number;
+  };
   presets: PresetLinkItem[];
   video?: NormalizedVideo;
   author?: NormalizedAuthor;
@@ -160,7 +176,7 @@ function normalizeAmPresetResponse(raw: any, fallbackInput = ""): NormalizedAmPr
     stats,
   };
 
-  // 3. Presets
+  // 3. Presets Normalization
   const presetsList: PresetLinkItem[] = [];
 
   // A. From raw.presets (array of strings or objects)
@@ -179,8 +195,8 @@ function normalizeAmPresetResponse(raw: any, fallbackInput = ""): NormalizedAmPr
           type = "5mb";
           title = "Preset 5MB (Alight Creative)";
         } else if (isDrive) {
-          type = "drive";
-          title = "Preset Google Drive (XML)";
+          type = "xml";
+          title = "Preset XML (Google Drive)";
         } else if (isMediafire) {
           type = "mediafire";
           title = "Preset MediaFire (XML)";
@@ -192,30 +208,59 @@ function normalizeAmPresetResponse(raw: any, fallbackInput = ""): NormalizedAmPr
         presetsList.push({
           type,
           url,
+          download: isDrive ? url : undefined,
           title,
           source: is5Mb ? "Alight Motion 5MB" : "Tautan Eksternal",
           verified: is5Mb || isDrive,
         });
-      } else if (p && typeof p === "object" && p.url) {
+      } else if (p && typeof p === "object") {
+        // Resolve primary URL and download URL
+        const rawUrl = (p.url || "").trim();
+        const rawDownload = (p.download || "").trim();
+        const primaryUrl = rawUrl || rawDownload;
+        const downloadUrl = rawDownload || (primaryUrl.includes("drive.google.com") ? primaryUrl : "");
+
+        const is5Mb =
+          p.type?.toLowerCase().includes("5mb") ||
+          primaryUrl.includes("alightcreative.com") ||
+          primaryUrl.includes("alight.link");
+        const isXml =
+          p.type?.toLowerCase().includes("xml") ||
+          primaryUrl.includes("drive.google.com") ||
+          downloadUrl.includes("drive.google.com") ||
+          primaryUrl.toLowerCase().endsWith(".xml");
+
+        let inferredType = p.type || (is5Mb ? "5mb" : isXml ? "xml" : "link");
+        let defaultTitle = is5Mb
+          ? "Preset 5MB (Alight Creative)"
+          : isXml
+          ? "Preset XML (Google Drive)"
+          : `Preset #${idx + 1}`;
+
         presetsList.push({
-          type: p.type || "preset",
-          url: p.url,
-          title: p.title || `Preset #${idx + 1}`,
+          type: inferredType,
+          url: primaryUrl,
+          download: downloadUrl || undefined,
+          title: p.title || defaultTitle,
           thumb: p.thumb,
+          commenter: p.commenter,
+          detail: p.detail,
+          source: p.source || "comment",
+          byAuthor: Boolean(p.byAuthor),
+          pinned: Boolean(p.pinned),
           size: p.size,
           ratio: p.ratio,
-          source: p.source || "Preset API",
-          detail: p.detail,
-          verified: p.verified ?? true,
+          verified: p.verified ?? (is5Mb || isXml),
         });
       }
     });
   }
 
-  // B. From raw.data?.presetLinks
+  // B. From raw.data?.presetLinks (legacy nested)
   if (Array.isArray(raw.data?.presetLinks)) {
     raw.data.presetLinks.forEach((item: PresetLinkItem) => {
-      if (item.url && !presetsList.some((p) => p.url === item.url)) {
+      const itemUrl = item.url || item.download;
+      if (itemUrl && !presetsList.some((p) => (p.url || p.download) === itemUrl)) {
         presetsList.push(item);
       }
     });
@@ -225,22 +270,31 @@ function normalizeAmPresetResponse(raw: any, fallbackInput = ""): NormalizedAmPr
   const combinedText = `${raw.description || ""} ${videoObj.description || ""} ${authorObj.bio || ""}`;
   const foundUrls = combinedText.match(/https?:\/\/[^\s"'<>]+/gi) || [];
   foundUrls.forEach((url) => {
-    if (!presetsList.some((p) => p.url === url)) {
+    if (!presetsList.some((p) => p.url === url || p.download === url)) {
       const is5Mb = url.includes("alightcreative.com") || url.includes("alight.link");
       const isDrive = url.includes("drive.google.com");
       const isMediafire = url.includes("mediafire.com");
       const isXml = url.toLowerCase().endsWith(".xml");
       if (is5Mb || isDrive || isMediafire || isXml || url.includes("mega.nz") || url.includes("sfile")) {
         presetsList.push({
-          type: is5Mb ? "5mb" : isDrive ? "drive" : isMediafire ? "mediafire" : "xml",
+          type: is5Mb ? "5mb" : isDrive ? "xml" : isMediafire ? "mediafire" : "xml",
           url,
-          title: is5Mb ? "Preset 5MB (Alight Motion)" : `Preset Link (${new URL(url).hostname})`,
+          download: isDrive ? url : undefined,
+          title: is5Mb ? "Preset 5MB (Alight Motion)" : `Preset XML (${new URL(url).hostname})`,
           source: "Deskripsi Video",
           verified: true,
         });
       }
     }
   });
+
+  // Calculate types breakdown if not provided
+  const typesObj = raw.types || {
+    xml: presetsList.filter((p) => p.type === "xml" || p.download?.includes("drive.google.com")).length,
+    "5mb": presetsList.filter((p) => p.type === "5mb" || p.url.includes("alightcreative.com")).length,
+  };
+
+  const scannedObj = raw.scanned || raw.data?.scanned;
 
   return {
     ok: true,
@@ -249,6 +303,8 @@ function normalizeAmPresetResponse(raw: any, fallbackInput = ""): NormalizedAmPr
     platform: raw.platform || "tiktok",
     input: raw.input || fallbackInput,
     total: typeof raw.total === "number" ? Math.max(raw.total, presetsList.length) : presetsList.length,
+    types: typesObj,
+    scanned: scannedObj,
     presets: presetsList,
     video: videoObj,
     author: authorObj,
@@ -269,6 +325,7 @@ export const AmPresetTool: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const [finderTab, setFinderTab] = useState<"presets" | "video" | "creator">("presets");
+  const [presetTypeFilter, setPresetTypeFilter] = useState<"all" | "5mb" | "xml">("all");
   const [manualLinkInput, setManualLinkInput] = useState<string>("");
 
   // --- CONVERTER STATES ---
@@ -324,6 +381,7 @@ export const AmPresetTool: React.FC = () => {
     setErrorMsg(null);
     setResult(null);
     setRawData(null);
+    setPresetTypeFilter("all");
 
     try {
       const resp = await fetch(`/api/ampreset?url=${encodeURIComponent(target)}`);
@@ -396,25 +454,26 @@ export const AmPresetTool: React.FC = () => {
   };
 
   // --- BRIDGE: SEND PRESET FROM FINDER DIRECTLY TO CONVERTER ---
-  const handleSendToConverter = (preset: { url: string; type?: string; title?: string }) => {
-    if (!preset.url) {
+  const handleSendToConverter = (preset: { url?: string; download?: string; type?: string; title?: string }) => {
+    const targetLink = (preset.url || preset.download || "").trim();
+    if (!targetLink) {
       showToast("Preset ini belum memiliki tautan langsung", "bad");
       return;
     }
 
     setActiveMode("converter");
-    if (preset.type?.toLowerCase().includes("5mb") || preset.url.includes("alightcreative.com")) {
+    if (preset.type?.toLowerCase().includes("5mb") || targetLink.includes("alightcreative.com")) {
       setXmlInputMode("link5mb");
-      setShare5mbUrl(preset.url);
+      setShare5mbUrl(targetLink);
       setProjectTitle(preset.title ? preset.title.replace(/[^a-zA-Z0-9_]/g, "_") : "Preset_5MB");
-      handleConvert5MbToXml(preset.url, preset.title || "Preset_5MB");
+      handleConvert5MbToXml(targetLink, preset.title || "Preset_5MB");
     } else {
       setXmlInputMode("xmlcode");
       setProjectTitle(preset.title ? preset.title.replace(/[^a-zA-Z0-9_]/g, "_") : "Preset_XML");
-      if (preset.url.startsWith("<?xml") || preset.url.includes("<scene") || preset.url.includes("<project")) {
-        setXmlContent(preset.url);
+      if (targetLink.startsWith("<?xml") || targetLink.includes("<scene") || targetLink.includes("<project")) {
+        setXmlContent(targetLink);
       } else {
-        setXmlContent(`<!-- Tautan XML Sumber: ${preset.url} -->\n<!-- Silakan tempel atau unduh XML dari tautan di atas -->`);
+        setXmlContent(`<!-- Tautan XML Sumber: ${targetLink} -->\n<!-- Silakan tempel atau unduh XML dari tautan di atas -->`);
       }
     }
     showToast("Preset dialihkan ke mode Konverter XML", "ok");
@@ -562,9 +621,29 @@ ${raw}
     showToast(`Berkas ${xmlFileName} diunduh!`, "ok");
   };
 
-  const presetLinks = result?.presets || [];
+  const allPresetLinks = result?.presets || [];
   const videoData = result?.video;
   const authorData = result?.author;
+
+  // Filtered preset links based on user filter pill
+  const filteredPresets = useMemo(() => {
+    if (presetTypeFilter === "all") return allPresetLinks;
+    if (presetTypeFilter === "5mb") {
+      return allPresetLinks.filter(
+        (p) => p.type === "5mb" || p.url?.includes("alightcreative.com") || p.url?.includes("alight.link")
+      );
+    }
+    if (presetTypeFilter === "xml") {
+      return allPresetLinks.filter(
+        (p) =>
+          p.type === "xml" ||
+          p.download?.includes("drive.google.com") ||
+          p.url?.includes("drive.google.com") ||
+          p.url?.endsWith(".xml")
+      );
+    }
+    return allPresetLinks;
+  }, [allPresetLinks, presetTypeFilter]);
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-hidden min-w-0">
@@ -708,7 +787,7 @@ ${raw}
                 {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                    <span>Memindai Video TikTok & Preset...</span>
+                    <span>Memindai Komentar & Bio Video...</span>
                   </>
                 ) : (
                   <>
@@ -759,7 +838,7 @@ ${raw}
                 >
                   <Film className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate">
-                    Preset ({presetLinks.length})
+                    Preset ({allPresetLinks.length})
                   </span>
                 </button>
 
@@ -797,7 +876,7 @@ ${raw}
                     <div className="flex items-center gap-2 min-w-0">
                       <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
                       <h3 className="text-base font-bold text-black dark:text-white truncate">
-                        Tautan Preset Alight Motion ({presetLinks.length})
+                        Tautan Preset Alight Motion ({allPresetLinks.length})
                       </h3>
                     </div>
                     {authorData && (
@@ -807,14 +886,85 @@ ${raw}
                     )}
                   </div>
 
-                  {presetLinks.length > 0 ? (
+                  {/* Scanned Comments Stats Bar */}
+                  {result.scanned && (
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-700 dark:text-blue-300">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                        <span>
+                          Memindai <strong>{result.scanned.comments || 0}</strong> komentar &amp;{" "}
+                          <strong>{result.scanned.replies || 0}</strong> balasan TikTok
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-semibold bg-white/70 dark:bg-black/30 px-2 py-0.5 rounded-md">
+                        {allPresetLinks.length} Preset Ditemukan
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Type Filter Pills (5MB, XML, Semua) */}
+                  {allPresetLinks.length > 0 && (
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                      <span className="text-xs font-semibold text-[#8e8e93] flex items-center gap-1 shrink-0">
+                        <Filter className="w-3.5 h-3.5" /> Filter:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPresetTypeFilter("all")}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+                          presetTypeFilter === "all"
+                            ? "bg-[#007aff] text-white shadow-sm"
+                            : "bg-black/5 dark:bg-white/10 text-black dark:text-white hover:bg-black/10"
+                        }`}
+                      >
+                        Semua ({allPresetLinks.length})
+                      </button>
+
+                      {result.types?.["5mb"] !== undefined && result.types["5mb"] > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setPresetTypeFilter("5mb")}
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+                            presetTypeFilter === "5mb"
+                              ? "bg-emerald-600 text-white shadow-sm"
+                              : "bg-black/5 dark:bg-white/10 text-black dark:text-white hover:bg-black/10"
+                          }`}
+                        >
+                          5MB Link ({result.types["5mb"]})
+                        </button>
+                      )}
+
+                      {result.types?.["xml"] !== undefined && result.types["xml"] > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setPresetTypeFilter("xml")}
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+                            presetTypeFilter === "xml"
+                              ? "bg-blue-600 text-white shadow-sm"
+                              : "bg-black/5 dark:bg-white/10 text-black dark:text-white hover:bg-black/10"
+                          }`}
+                        >
+                          XML Drive ({result.types["xml"]})
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {filteredPresets.length > 0 ? (
                     <div className="space-y-3">
-                      {presetLinks.map((preset, index) => {
+                      {filteredPresets.map((preset, index) => {
                         const is5Mb =
                           preset.type?.toLowerCase().includes("5mb") ||
-                          preset.url?.includes("alightcreative.com");
+                          preset.url?.includes("alightcreative.com") ||
+                          preset.url?.includes("alight.link");
+                        const isXml =
+                          preset.type?.toLowerCase().includes("xml") ||
+                          preset.download?.includes("drive.google.com") ||
+                          preset.url?.includes("drive.google.com");
+
+                        const targetLink = preset.url || preset.download || "";
+                        const hasUrl = Boolean(targetLink);
                         const uniqueId = `preset-${index}`;
-                        const hasUrl = Boolean(preset.url);
 
                         return (
                           <div
@@ -822,9 +972,9 @@ ${raw}
                             className="bg-white dark:bg-[#1c1c1e] border border-black/5 dark:border-white/10 rounded-xl p-4 shadow-sm space-y-3 w-full max-w-full overflow-hidden"
                           >
                             <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-center gap-3 min-w-0">
+                              <div className="flex items-start gap-3 min-w-0">
                                 <div
-                                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
                                     is5Mb
                                       ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
                                       : "bg-[#007aff]/10 text-[#007aff] dark:text-[#0a84ff] border border-[#007aff]/20"
@@ -835,31 +985,59 @@ ${raw}
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="text-sm font-bold text-black dark:text-white truncate">
-                                      {preset.title || (is5Mb ? "Preset 5MB" : "Preset XML")}
+                                      {preset.title || (is5Mb ? "Preset 5MB (Alight Creative)" : "Preset XML (Google Drive)")}
                                     </span>
+
+                                    {/* Type Badge */}
                                     <span
-                                      className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-md shrink-0 ${
+                                      className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md shrink-0 ${
                                         is5Mb
-                                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                                          : "bg-[#007aff]/10 text-[#007aff] dark:text-[#0a84ff]"
+                                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                                          : "bg-[#007aff]/10 text-[#007aff] dark:text-[#0a84ff] border border-[#007aff]/20"
                                       }`}
                                     >
-                                      {preset.type?.toUpperCase() || (is5Mb ? "5MB LINK" : "XML")}
+                                      {preset.type?.toUpperCase() || (is5Mb ? "5MB LINK" : "XML DRIVE")}
                                     </span>
-                                    {preset.ratio && (
-                                      <span className="text-[10px] bg-black/5 dark:bg-white/10 text-[#8e8e93] px-2 py-0.5 rounded-md font-mono shrink-0">
-                                        {preset.ratio}
+
+                                    {/* Pinned Comment Badge */}
+                                    {preset.pinned && (
+                                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md shrink-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-0.5">
+                                        <Pin className="w-2.5 h-2.5" /> Pinned
                                       </span>
                                     )}
-                                    {preset.size && (
-                                      <span className="text-[10px] bg-black/5 dark:bg-white/10 text-[#8e8e93] px-2 py-0.5 rounded-md font-mono shrink-0">
-                                        {preset.size}
+
+                                    {/* By Author Badge */}
+                                    {preset.byAuthor && (
+                                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md shrink-0 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                                        👑 Kreator
                                       </span>
                                     )}
                                   </div>
-                                  <p className="text-xs text-[#8e8e93] dark:text-[#98989d] mt-1 truncate">
-                                    Sumber: {preset.source || "Komentar"} {preset.detail ? `(${preset.detail})` : ""}
-                                  </p>
+
+                                  {/* Commenter Row if present */}
+                                  {preset.commenter && (
+                                    <div className="flex items-center gap-1.5 mt-1 text-xs text-[#8e8e93] dark:text-[#98989d]">
+                                      {preset.thumb && (
+                                        <img
+                                          src={preset.thumb}
+                                          alt={preset.commenter}
+                                          className="w-4 h-4 rounded-full object-cover shrink-0"
+                                        />
+                                      )}
+                                      <span>
+                                        Komentar oleh <strong className="text-black dark:text-white">{preset.commenter}</strong>
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* Comment Detail / Context */}
+                                  {preset.detail && (
+                                    <div className="mt-1.5 p-2 bg-black/5 dark:bg-white/5 rounded-lg border border-black/5 dark:border-white/5">
+                                      <p className="text-[11px] font-mono text-[#8e8e93] dark:text-[#98989d] line-clamp-2 break-all">
+                                        &ldquo;{preset.detail}&rdquo;
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -870,28 +1048,12 @@ ${raw}
                               )}
                             </div>
 
-                            {/* Thumbnail preview */}
-                            {preset.thumb && (
-                              <div className="relative rounded-xl overflow-hidden border border-black/5 dark:border-white/10 h-32 bg-slate-100 dark:bg-black/50 w-full max-w-full">
-                                <img
-                                  src={preset.thumb}
-                                  alt="Preset Thumbnail"
-                                  className="w-full h-full object-cover"
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-2.5">
-                                  <span className="text-xs text-white/90 font-medium">
-                                    Pratinjau Alight Creative
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-
                             {/* Action Buttons for this preset */}
                             {hasUrl ? (
                               <div className="space-y-2 pt-1">
                                 <div className="flex items-center gap-2">
                                   <a
-                                    href={preset.url}
+                                    href={targetLink}
                                     target="_blank"
                                     rel="noreferrer"
                                     className={`flex-1 min-w-0 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-semibold text-xs transition-colors shadow-sm cursor-pointer ${
@@ -900,12 +1062,21 @@ ${raw}
                                         : "bg-[#007aff] hover:bg-[#0062cc] dark:bg-[#0a84ff] dark:hover:bg-[#0071e3] text-white"
                                     }`}
                                   >
-                                    <ExternalLink className="w-4 h-4 shrink-0" />
-                                    <span className="truncate">{is5Mb ? "Buka di Alight Motion" : "Unduh / Buka XML"}</span>
+                                    {is5Mb ? (
+                                      <>
+                                        <ExternalLink className="w-4 h-4 shrink-0" />
+                                        <span className="truncate">Buka di Alight Motion (5MB)</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Download className="w-4 h-4 shrink-0" />
+                                        <span className="truncate">Unduh / Buka XML (Google Drive)</span>
+                                      </>
+                                    )}
                                   </a>
 
                                   <button
-                                    onClick={() => handleCopy(preset.url, uniqueId, "Tautan preset disalin!")}
+                                    onClick={() => handleCopy(targetLink, uniqueId, "Tautan preset disalin!")}
                                     className="p-2.5 rounded-xl bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-black dark:text-white transition-colors cursor-pointer shrink-0"
                                     title="Salin Tautan"
                                   >
@@ -919,11 +1090,21 @@ ${raw}
 
                                 {/* Direct Bridge Button to XML Converter */}
                                 <button
-                                  onClick={() => handleSendToConverter(preset)}
+                                  onClick={() =>
+                                    handleSendToConverter({
+                                      url: targetLink,
+                                      type: preset.type,
+                                      title: preset.title,
+                                    })
+                                  }
                                   className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-[#007aff]/10 hover:text-[#007aff] dark:hover:bg-[#0a84ff]/15 dark:hover:text-[#0a84ff] text-xs font-semibold text-black dark:text-white transition-colors border border-black/5 dark:border-white/10 cursor-pointer"
                                 >
                                   <Wand2 className="w-3.5 h-3.5 shrink-0 text-[#007aff] dark:text-[#0a84ff]" />
-                                  <span>Konversi & Sesuaikan Rasio / FPS di Editor XML</span>
+                                  <span>
+                                    {is5Mb
+                                      ? "Konversi Link 5MB ke File XML Alight Motion Resmi"
+                                      : "Sesuaikan Rasio / FPS Proyek Ini di Editor XML"}
+                                  </span>
                                 </button>
                               </div>
                             ) : null}
