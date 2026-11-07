@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="112" fill="#000000"/>
+  <rect x="24" y="24" width="464" height="464" rx="96" fill="#0F1015" stroke="rgba(255,255,255,0.08)" stroke-width="4"/>
+  <!-- Modern iOS F glyph / Fixio mark -->
+  <path d="M168 140h176c11 0 20 9 20 20s-9 20-20 20H208v76h116c11 0 20 9 20 20s-9 20-20 20H208v96c0 11-9 20-20 20s-20-9-20-20V160c0-11 9-20 20-20z" fill="#FFFFFF"/>
+  <circle cx="344" cy="372" r="16" fill="#10B981"/>
+</svg>
