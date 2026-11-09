@@ -1,4 +1,5 @@
 import React from "react";
+import { motion } from "motion/react";
 import { ToolDefinition } from "../types";
 import { 
   Sparkles, 
@@ -54,45 +55,120 @@ const ICON_MAP: Record<string, any> = {
   Share2
 };
 
-// Distinctive brand color styling matching Screenshot_20261108-051355_7dae6052.jpg
-function getToolStyle(id: string, category: string): { bg: string; text: string; status: string } {
+// Harmonious palette: balanced, high-contrast, strictly anti-slop
+function getToolBadge(id: string, category: string): { 
+  iconBg: string; 
+  iconColor: string; 
+  badgeColor: string;
+  status: string;
+} {
   switch (id) {
     case "tiktok-dl":
     case "tiktok-dl-v2":
     case "tiktok-stalker":
-      return { bg: "bg-neutral-900 border border-neutral-700", text: "text-cyan-400", status: "Tersedia" };
+      return { 
+        iconBg: "bg-cyan-950/40 border border-cyan-800/40", 
+        iconColor: "text-cyan-400", 
+        badgeColor: "text-cyan-400/90", 
+        status: "Tersedia" 
+      };
     case "ig-dl":
     case "ig-dl-v2":
     case "ig-stalker":
-      return { bg: "bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600", text: "text-white", status: "Tersedia" };
+      return { 
+        iconBg: "bg-rose-950/40 border border-rose-800/40", 
+        iconColor: "text-rose-400", 
+        badgeColor: "text-rose-400/90", 
+        status: "Tersedia" 
+      };
     case "spotify-dl":
     case "yt-play":
-      return { bg: "bg-emerald-600/20 border border-emerald-500/40", text: "text-emerald-400", status: "Tersedia" };
+      return { 
+        iconBg: "bg-emerald-950/40 border border-emerald-800/40", 
+        iconColor: "text-emerald-400", 
+        badgeColor: "text-emerald-400/90", 
+        status: "Audio HQ" 
+      };
     case "qcwa":
-      return { bg: "bg-emerald-600 text-white", text: "text-white", status: "Tersedia" };
+      return { 
+        iconBg: "bg-emerald-950/40 border border-emerald-800/40", 
+        iconColor: "text-emerald-400", 
+        badgeColor: "text-emerald-400/90", 
+        status: "Stiker WA" 
+      };
     case "ff-stalker":
     case "fake-ff":
-      return { bg: "bg-amber-500/20 border border-amber-500/40", text: "text-amber-400", status: "Aktif" };
+      return { 
+        iconBg: "bg-amber-950/40 border border-amber-800/40", 
+        iconColor: "text-amber-400", 
+        badgeColor: "text-amber-400/90", 
+        status: "Aktif" 
+      };
     case "roblox-stalker":
-      return { bg: "bg-rose-600/20 border border-rose-500/40", text: "text-rose-400", status: "Aktif" };
+      return { 
+        iconBg: "bg-red-950/40 border border-red-800/40", 
+        iconColor: "text-red-400", 
+        badgeColor: "text-red-400/90", 
+        status: "Aktif" 
+      };
     case "remini":
     case "wink-hd":
-      return { bg: "bg-purple-600/20 border border-purple-500/40", text: "text-purple-400", status: "AI HD" };
+      return { 
+        iconBg: "bg-violet-950/40 border border-violet-800/40", 
+        iconColor: "text-violet-400", 
+        badgeColor: "text-violet-400/90", 
+        status: "AI HD" 
+      };
     case "remove-bg":
-      return { bg: "bg-blue-600/20 border border-blue-500/40", text: "text-blue-400", status: "Transparan" };
+      return { 
+        iconBg: "bg-sky-950/40 border border-sky-800/40", 
+        iconColor: "text-sky-400", 
+        badgeColor: "text-sky-400/90", 
+        status: "Transparan" 
+      };
     case "info-gempa":
-      return { bg: "bg-rose-600 text-white", text: "text-white", status: "Live BMKG" };
+      return { 
+        iconBg: "bg-rose-950/40 border border-rose-800/40", 
+        iconColor: "text-rose-400", 
+        badgeColor: "text-rose-400/90", 
+        status: "Live BMKG" 
+      };
     case "ss-web":
-      return { bg: "bg-sky-600/20 border border-sky-500/40", text: "text-sky-400", status: "Multi-View" };
+      return { 
+        iconBg: "bg-blue-950/40 border border-blue-800/40", 
+        iconColor: "text-blue-400", 
+        badgeColor: "text-blue-400/90", 
+        status: "3-Viewport" 
+      };
     case "to-qr":
-      return { bg: "bg-neutral-800 text-neutral-100", text: "text-neutral-200", status: "Instant" };
+      return { 
+        iconBg: "bg-neutral-800/80 border border-neutral-700/60", 
+        iconColor: "text-neutral-200", 
+        badgeColor: "text-neutral-400", 
+        status: "Instant" 
+      };
     case "auto-trace":
-      return { bg: "bg-indigo-600/20 border border-indigo-500/40", text: "text-indigo-400", status: "Vector" };
+      return { 
+        iconBg: "bg-indigo-950/40 border border-indigo-800/40", 
+        iconColor: "text-indigo-400", 
+        badgeColor: "text-indigo-400/90", 
+        status: "Vektor SVG" 
+      };
     default:
-      if (category === "social") return { bg: "bg-pink-600/20 border border-pink-500/40", text: "text-pink-400", status: "Tersedia" };
-      if (category === "image") return { bg: "bg-purple-600/20 border border-purple-500/40", text: "text-purple-400", status: "Tersedia" };
-      if (category === "info") return { bg: "bg-amber-600/20 border border-amber-500/40", text: "text-amber-400", status: "Tersedia" };
-      return { bg: "bg-neutral-800 border border-neutral-700", text: "text-[#ffe600]", status: "Tersedia" };
+      if (category === "social") {
+        return { 
+          iconBg: "bg-pink-950/40 border border-pink-800/40", 
+          iconColor: "text-pink-400", 
+          badgeColor: "text-pink-400/90", 
+          status: "Tersedia" 
+        };
+      }
+      return { 
+        iconBg: "bg-amber-950/30 border border-amber-800/30", 
+        iconColor: "text-[#ffe600]", 
+        badgeColor: "text-neutral-400", 
+        status: "Tersedia" 
+      };
   }
 }
 
@@ -103,22 +179,24 @@ interface ToolCardProps {
 
 export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelect }) => {
   const Icon = ICON_MAP[tool.iconName] || Sparkles;
-  const style = getToolStyle(tool.id, tool.category);
+  const style = getToolBadge(tool.id, tool.category);
 
   return (
-    <div
+    <motion.div
+      whileHover={{ y: -2, transition: { duration: 0.15, ease: "easeOut" } }}
+      whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}
       onClick={() => onSelect(tool.id)}
-      className="group tool-card-interactive bg-[#151519] hover:bg-[#1c1c22] border border-neutral-800/80 hover:border-neutral-700/80 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl cursor-pointer flex items-center justify-between gap-2.5 sm:gap-3 select-none w-full max-w-full overflow-hidden"
+      className="group bg-[#131317] hover:bg-[#18181e] border border-neutral-800/80 hover:border-neutral-700 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl cursor-pointer flex items-center justify-between gap-2.5 sm:gap-3 select-none w-full max-w-full overflow-hidden transition-colors"
     >
       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-        {/* Rounded square icon container (like in screenshot) */}
-        <div className={`w-10 h-10 rounded-xl ${style.bg} ${style.text} flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-105`}>
-          <Icon className="w-5 h-5" />
+        {/* Curated Rounded Square Icon container */}
+        <div className={`w-10 h-10 rounded-xl ${style.iconBg} ${style.iconColor} flex items-center justify-center shrink-0 shadow-sm transition-transform duration-200 group-hover:scale-105`}>
+          <Icon className="w-5 h-5 stroke-[2.2]" />
         </div>
 
-        {/* Clean, un-cluttered typography */}
+        {/* Clean, readable typography */}
         <div className="min-w-0">
-          <h3 className="text-xs sm:text-sm font-bold text-white tracking-tight truncate group-hover:text-neutral-100">
+          <h3 className="text-xs sm:text-sm font-bold text-neutral-100 tracking-tight truncate group-hover:text-white transition-colors">
             {tool.title}
           </h3>
           <p className="text-[11px] font-medium text-neutral-400 truncate mt-0.5">
@@ -127,12 +205,12 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelect }) => {
         </div>
       </div>
 
-      {/* Mini badge / chevron indicator */}
+      {/* Subtle indicator tag */}
       {tool.badge && (
-        <span className="hidden xs:inline-block text-[10px] font-semibold text-neutral-400 bg-neutral-800/60 px-1.5 py-0.5 rounded border border-neutral-700/40 shrink-0">
+        <span className="hidden xs:inline-block text-[10px] font-semibold text-neutral-400 bg-neutral-800/60 px-1.5 py-0.5 rounded border border-neutral-700/50 shrink-0">
           {tool.badge}
         </span>
       )}
-    </div>
+    </motion.div>
   );
 };

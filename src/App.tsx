@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Navbar } from "./components/Navbar";
 import { Footer } from "./components/Footer";
 import { AmbientBackground } from "./components/AmbientBackground";
@@ -49,13 +50,12 @@ import {
   WifiOff, 
   LayoutGrid, 
   Zap, 
-  AlertTriangle,
-  ArrowRight
+  Sparkles
 } from "lucide-react";
 
 export default function App() {
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
-  const [hasEnteredApp, setHasEnteredApp] = useState<boolean>(true); // Default direct to modern dashboard view
+  const [hasEnteredApp, setHasEnteredApp] = useState<boolean>(true);
   const [selectedCategory, setSelectedCategory] = useState<ToolCategory>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -230,113 +230,130 @@ export default function App() {
           />
 
           <div className="relative z-10 flex flex-col flex-1 max-w-full overflow-x-hidden">
-            <main className="flex-1 max-w-5xl w-full mx-auto px-3.5 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-5">
-              {activeTool ? (
-                /* Active Tool View */
-                <div className="space-y-4 animate-in fade-in duration-200">
-                  {/* Top Bar with Back Navigation */}
-                  <div className="flex items-center justify-between gap-3">
-                    <button
-                      onClick={() => setActiveToolId(null)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#141418] hover:bg-[#1a1a20] border border-neutral-800 rounded-xl text-xs font-bold text-neutral-200 hover:text-white transition cursor-pointer active:scale-95 shadow-sm"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                      <span>{t("allTools")}</span>
-                    </button>
+            <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-5">
+              <AnimatePresence mode="wait">
+                {activeTool ? (
+                  /* Active Tool View with smooth transition */
+                  <motion.div 
+                    key={activeTool.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className="space-y-4"
+                  >
+                    {/* Top Bar with Back Navigation */}
+                    <div className="flex items-center justify-between gap-3">
+                      <motion.button
+                        whileTap={{ scale: 0.96 }}
+                        onClick={() => setActiveToolId(null)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#141418] hover:bg-[#1a1a20] border border-neutral-800 rounded-xl text-xs font-bold text-neutral-200 hover:text-white transition cursor-pointer shadow-sm"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        <span>{t("allTools")}</span>
+                      </motion.button>
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-neutral-400 bg-[#18181d] px-2.5 py-1 rounded-lg border border-neutral-800">
-                        {activeTool.title}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold text-neutral-300 bg-[#16161b] px-2.5 py-1 rounded-lg border border-neutral-800">
+                          {activeTool.title}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Tool Surface (Rounded, clean border, zero horizontal overflow) */}
+                    <div className="bg-[#121215] p-4 sm:p-6 rounded-2xl border border-neutral-800/80 shadow-xl overflow-hidden w-full max-w-full">
+                      {renderActiveToolComponent()}
+                    </div>
+                  </motion.div>
+                ) : (
+                  /* Main Tools Dashboard View with smooth transition */
+                  <motion.div 
+                    key="dashboard"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.16, ease: "easeOut" }}
+                    className="space-y-4 sm:space-y-5"
+                  >
+                    {/* Alert/Status Banner matching Screenshot_20261108-051355_7dae6052.jpg */}
+                    <div className="bg-[#141418] border border-amber-500/35 rounded-2xl p-4 sm:p-4.5 shadow-sm relative overflow-hidden">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                          <Zap className="w-4 h-4 fill-amber-400" />
+                        </div>
+
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <h2 className="text-xs sm:text-sm font-bold text-white tracking-tight">
+                              Fixio Multi-Utility Engine • 28+ Alat
+                            </h2>
+                            <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                              Aktif
+                            </span>
+                          </div>
+                          <p className="text-[11px] sm:text-xs text-neutral-400 leading-relaxed">
+                            Download media, AI enhance foto, cek akun game, dan sensor gempa BMKG langsung tanpa antre.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section Title with Icon */}
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-2">
+                        <LayoutGrid className="w-4 h-4 text-[#ffe600]" />
+                        <h2 className="text-sm font-extrabold text-white tracking-tight">
+                          {selectedCategory === "all" ? "Layanan Populer" : `Kategori: ${selectedCategory.toUpperCase()}`}
+                        </h2>
+                      </div>
+
+                      <span className="text-xs font-semibold text-neutral-400">
+                        {filteredTools.length} Layanan
                       </span>
                     </div>
-                  </div>
 
-                  {/* Tool Surface (Rounded, clean border, no horizontal overflow) */}
-                  <div className="bg-[#121215] p-4 sm:p-6 rounded-2xl border border-neutral-800/80 shadow-xl overflow-hidden w-full max-w-full">
-                    {renderActiveToolComponent()}
-                  </div>
-                </div>
-              ) : (
-                /* Main Tools Dashboard View */
-                <div className="space-y-4 sm:space-y-5 animate-in fade-in duration-200">
-                  {/* Alert/Status Banner matching Screenshot_20261108-051355_7dae6052.jpg */}
-                  <div className="bg-[#141418] border border-amber-500/35 rounded-2xl p-4 sm:p-4.5 shadow-sm relative overflow-hidden">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                        <Zap className="w-4 h-4 fill-amber-400" />
+                    {/* Horizontal Category Pill Filter Bar */}
+                    <CategoryFilter
+                      activeCategory={selectedCategory}
+                      onSelectCategory={setSelectedCategory}
+                      counts={categoryCounts}
+                      settings={settings}
+                    />
+
+                    {/* 2-Column Responsive Tool Grid (Clean, rounded, no overflow) */}
+                    {filteredTools.length > 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5 w-full max-w-full">
+                        {filteredTools.map((tool) => (
+                          <ToolCard
+                            key={tool.id}
+                            tool={tool}
+                            onSelect={(id) => setActiveToolId(id)}
+                          />
+                        ))}
                       </div>
-
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <h2 className="text-xs sm:text-sm font-bold text-white tracking-tight">
-                            Fixio Multi-Utility Engine • 28+ Alat
-                          </h2>
-                          <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                            Aktif
-                          </span>
+                    ) : (
+                      /* Clean Empty State */
+                      <div className="bg-[#141418] rounded-2xl border border-neutral-800 p-8 sm:p-10 text-center space-y-3">
+                        <div className="w-10 h-10 bg-neutral-800 text-neutral-400 rounded-full flex items-center justify-center mx-auto">
+                          <Search className="w-5 h-5" />
                         </div>
-                        <p className="text-[11px] sm:text-xs text-neutral-400 leading-relaxed">
-                          Download media, AI enhance foto, cek akun game, dan sensor gempa BMKG langsung tanpa antre.
+                        <p className="text-xs sm:text-sm font-semibold text-white">
+                          {language === "id" ? "Tidak ada alat yang cocok" : "No utilities found"}
                         </p>
+                        <button
+                          onClick={() => {
+                            setSearchQuery("");
+                            setSelectedCategory("all");
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl bg-white text-black text-xs font-bold hover:bg-neutral-200 cursor-pointer transition"
+                        >
+                          {language === "id" ? "Reset Pencarian" : "Reset Search"}
+                        </button>
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Section Title with Icon (like Layanan Populer in screenshot) */}
-                  <div className="flex items-center justify-between pt-1">
-                    <div className="flex items-center gap-2">
-                      <LayoutGrid className="w-4 h-4 text-[#ffe600]" />
-                      <h2 className="text-sm font-extrabold text-white tracking-tight">
-                        {selectedCategory === "all" ? "Layanan Populer" : `Kategori: ${selectedCategory.toUpperCase()}`}
-                      </h2>
-                    </div>
-
-                    <span className="text-xs font-semibold text-neutral-400">
-                      {filteredTools.length} Layanan
-                    </span>
-                  </div>
-
-                  {/* Horizontal Category Pill Filter Bar */}
-                  <CategoryFilter
-                    activeCategory={selectedCategory}
-                    onSelectCategory={setSelectedCategory}
-                    counts={categoryCounts}
-                    settings={settings}
-                  />
-
-                  {/* 2-Column Responsive Tool Grid (Exact match for Screenshot_20261108-051355_7dae6052.jpg) */}
-                  {filteredTools.length > 0 ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3.5 w-full max-w-full">
-                      {filteredTools.map((tool) => (
-                        <ToolCard
-                          key={tool.id}
-                          tool={tool}
-                          onSelect={(id) => setActiveToolId(id)}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    /* Clean Empty State */
-                    <div className="bg-[#141418] rounded-2xl border border-neutral-800 p-8 sm:p-10 text-center space-y-3">
-                      <div className="w-10 h-10 bg-neutral-800 text-neutral-400 rounded-full flex items-center justify-center mx-auto">
-                        <Search className="w-5 h-5" />
-                      </div>
-                      <p className="text-xs sm:text-sm font-semibold text-white">
-                        {language === "id" ? "Tidak ada alat yang cocok" : "No utilities found"}
-                      </p>
-                      <button
-                        onClick={() => {
-                          setSearchQuery("");
-                          setSelectedCategory("all");
-                        }}
-                        className="px-3.5 py-1.5 rounded-xl bg-white text-black text-xs font-bold hover:bg-neutral-200 cursor-pointer transition"
-                      >
-                        {language === "id" ? "Reset Pencarian" : "Reset Search"}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </main>
 
             {/* Footer */}
@@ -348,7 +365,7 @@ export default function App() {
         </>
       )}
 
-      {/* SINGLE Persistent YtPlay Background Player */}
+      {/* Persistent YtPlay Background Player */}
       {ytPlayerMounted && (
         <YtPlayTool
           onBack={() => setActiveToolId(null)}

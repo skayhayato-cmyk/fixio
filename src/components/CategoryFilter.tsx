@@ -1,4 +1,5 @@
 import React from "react";
+import { motion } from "motion/react";
 import { ToolCategory } from "../types";
 import { 
   Sparkles, 
@@ -44,13 +45,14 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
         const Icon = cat.icon;
 
         return (
-          <button
+          <motion.button
             key={cat.id}
+            whileTap={{ scale: 0.96 }}
             onClick={() => onSelectCategory(cat.id)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 flex items-center gap-1.5 shrink-0 cursor-pointer select-none border ${
+            className={`relative px-3 py-1.5 rounded-full text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer select-none border ${
               isActive
                 ? "bg-white text-black border-white shadow-xs font-bold"
-                : "bg-[#18181d] text-neutral-400 hover:text-white border-neutral-800/80 hover:border-neutral-700"
+                : "bg-[#141418] text-neutral-400 hover:text-white border-neutral-800/80 hover:border-neutral-700"
             }`}
           >
             <Icon className={`w-3.5 h-3.5 ${isActive ? "text-black" : "text-neutral-400"}`} />
@@ -62,7 +64,7 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
             >
               {count}
             </span>
-          </button>
+          </motion.button>
         );
       })}
     </div>
