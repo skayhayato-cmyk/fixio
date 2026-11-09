@@ -25,7 +25,9 @@ import {
   QrCode, 
   Wand2,
   Shapes,
-  Share2
+  Share2,
+  Film,
+  Type
 } from "lucide-react";
 
 const ICON_MAP: Record<string, any> = {
@@ -52,106 +54,148 @@ const ICON_MAP: Record<string, any> = {
   QrCode,
   Wand2,
   Shapes,
-  Share2
+  Share2,
+  Film,
+  Type
 };
 
-function getToolBadge(id: string, category: string): { 
-  iconBg: string; 
+// Brand-authentic squircle styling (matching Zireku & modern fintech dashboards)
+function getToolBrandStyle(id: string): { 
+  badgeBg: string; 
   iconColor: string; 
-  status: string;
+  title: string;
 } {
   switch (id) {
     case "tiktok-dl":
     case "tiktok-dl-v2":
+      return { 
+        badgeBg: "bg-black text-cyan-400 border border-white/10 dark:border-white/15", 
+        iconColor: "text-cyan-400", 
+        title: "TikTok Downloader" 
+      };
     case "tiktok-stalker":
       return { 
-        iconBg: "bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200/70 dark:border-cyan-800/40", 
-        iconColor: "text-cyan-600 dark:text-cyan-400", 
-        status: "Tersedia" 
+        badgeBg: "bg-black text-pink-500 border border-white/10 dark:border-white/15", 
+        iconColor: "text-pink-500", 
+        title: "TikTok Stalker" 
       };
     case "ig-dl":
     case "ig-dl-v2":
+      return { 
+        badgeBg: "bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white", 
+        iconColor: "text-white", 
+        title: "Instagram Downloader" 
+      };
     case "ig-stalker":
       return { 
-        iconBg: "bg-rose-50 dark:bg-rose-950/40 border border-rose-200/70 dark:border-rose-800/40", 
-        iconColor: "text-rose-600 dark:text-rose-400", 
-        status: "Tersedia" 
+        badgeBg: "bg-gradient-to-tr from-purple-600 via-rose-500 to-amber-500 text-white", 
+        iconColor: "text-white", 
+        title: "Instagram Stalker" 
       };
     case "spotify-dl":
+      return { 
+        badgeBg: "bg-[#1DB954] text-black", 
+        iconColor: "text-black", 
+        title: "Spotify MP3" 
+      };
     case "yt-play":
       return { 
-        iconBg: "bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/40", 
-        iconColor: "text-emerald-600 dark:text-emerald-400", 
-        status: "Audio HQ" 
+        badgeBg: "bg-[#FF0000] text-white", 
+        iconColor: "text-white", 
+        title: "YouTube Music" 
       };
     case "qcwa":
+    case "fake-call":
       return { 
-        iconBg: "bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/40", 
-        iconColor: "text-emerald-600 dark:text-emerald-400", 
-        status: "Stiker WA" 
+        badgeBg: "bg-[#25D366] text-white", 
+        iconColor: "text-white", 
+        title: id === "qcwa" ? "WhatsApp Quote" : "WhatsApp Call" 
+      };
+    case "remini":
+      return { 
+        badgeBg: "bg-violet-600 text-white", 
+        iconColor: "text-white", 
+        title: "Remini AI HD" 
+      };
+    case "wink-hd":
+      return { 
+        badgeBg: "bg-indigo-600 text-white", 
+        iconColor: "text-white", 
+        title: "Wink HD Enhancer" 
+      };
+    case "remove-bg":
+      return { 
+        badgeBg: "bg-sky-500 text-white", 
+        iconColor: "text-white", 
+        title: "Remove Background" 
       };
     case "ff-stalker":
     case "fake-ff":
       return { 
-        iconBg: "bg-amber-50 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800/40", 
-        iconColor: "text-amber-600 dark:text-amber-400", 
-        status: "Aktif" 
+        badgeBg: "bg-amber-500 text-black", 
+        iconColor: "text-black", 
+        title: id === "ff-stalker" ? "Free Fire Stalker" : "Free Fire Lobby" 
       };
     case "roblox-stalker":
       return { 
-        iconBg: "bg-red-50 dark:bg-red-950/40 border border-red-200/70 dark:border-red-800/40", 
-        iconColor: "text-red-600 dark:text-red-400", 
-        status: "Aktif" 
-      };
-    case "remini":
-    case "wink-hd":
-      return { 
-        iconBg: "bg-violet-50 dark:bg-violet-950/40 border border-violet-200/70 dark:border-violet-800/40", 
-        iconColor: "text-violet-600 dark:text-violet-400", 
-        status: "AI HD" 
-      };
-    case "remove-bg":
-      return { 
-        iconBg: "bg-sky-50 dark:bg-sky-950/40 border border-sky-200/70 dark:border-sky-800/40", 
-        iconColor: "text-sky-600 dark:text-sky-400", 
-        status: "Transparan" 
+        badgeBg: "bg-neutral-800 text-red-500 border border-neutral-700", 
+        iconColor: "text-red-500", 
+        title: "Roblox Stalker" 
       };
     case "info-gempa":
       return { 
-        iconBg: "bg-rose-50 dark:bg-rose-950/40 border border-rose-200/70 dark:border-rose-800/40", 
-        iconColor: "text-rose-600 dark:text-rose-400", 
-        status: "Live BMKG" 
+        badgeBg: "bg-rose-600 text-white", 
+        iconColor: "text-white", 
+        title: "Gempa BMKG" 
       };
     case "ss-web":
       return { 
-        iconBg: "bg-blue-50 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-800/40", 
-        iconColor: "text-blue-600 dark:text-blue-400", 
-        status: "3-Viewport" 
-      };
-    case "to-qr":
-      return { 
-        iconBg: "bg-zinc-100 dark:bg-neutral-800/80 border border-zinc-200 dark:border-neutral-700/60", 
-        iconColor: "text-zinc-700 dark:text-neutral-200", 
-        status: "Instant" 
+        badgeBg: "bg-blue-600 text-white", 
+        iconColor: "text-white", 
+        title: "Web Screenshot" 
       };
     case "auto-trace":
       return { 
-        iconBg: "bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/70 dark:border-indigo-800/40", 
-        iconColor: "text-indigo-600 dark:text-indigo-400", 
-        status: "Vektor SVG" 
+        badgeBg: "bg-teal-600 text-white", 
+        iconColor: "text-white", 
+        title: "Image to SVG" 
+      };
+    case "imgtopromt":
+      return { 
+        badgeBg: "bg-purple-600 text-white", 
+        iconColor: "text-white", 
+        title: "Image to Prompt" 
+      };
+    case "to-qr":
+      return { 
+        badgeBg: "bg-slate-700 text-white", 
+        iconColor: "text-white", 
+        title: "QR Generator" 
+      };
+    case "uploader":
+      return { 
+        badgeBg: "bg-emerald-600 text-white", 
+        iconColor: "text-white", 
+        title: "CDN Uploader" 
+      };
+    case "ampreset":
+      return { 
+        badgeBg: "bg-fuchsia-600 text-white", 
+        iconColor: "text-white", 
+        title: "Alight Motion" 
+      };
+    case "story-edit":
+    case "bratvid":
+      return { 
+        badgeBg: "bg-lime-500 text-black", 
+        iconColor: "text-black", 
+        title: id === "bratvid" ? "Brat Video" : "Story Typography" 
       };
     default:
-      if (category === "social") {
-        return { 
-          iconBg: "bg-pink-50 dark:bg-pink-950/40 border border-pink-200/70 dark:border-pink-800/40", 
-          iconColor: "text-pink-600 dark:text-pink-400", 
-          status: "Tersedia" 
-        };
-      }
       return { 
-        iconBg: "bg-amber-50 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/30", 
-        iconColor: "text-amber-600 dark:text-amber-400", 
-        status: "Tersedia" 
+        badgeBg: "bg-zinc-800 text-white border border-zinc-700", 
+        iconColor: "text-white", 
+        title: "" 
       };
   }
 }
@@ -163,38 +207,33 @@ interface ToolCardProps {
 
 export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelect }) => {
   const Icon = ICON_MAP[tool.iconName] || Sparkles;
-  const style = getToolBadge(tool.id, tool.category);
+  const brand = getToolBrandStyle(tool.id);
+  const displayTitle = brand.title || tool.title;
 
   return (
-    <motion.div
-      whileHover={{ y: -2, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }}
-      whileTap={{ scale: 0.985, transition: { duration: 0.1 } }}
+    <motion.button
+      type="button"
+      layout
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ type: "spring", stiffness: 450, damping: 30 }}
       onClick={() => onSelect(tool.id)}
-      className="group bg-white dark:bg-[#131317] hover:bg-zinc-50/80 dark:hover:bg-[#18181e] border border-zinc-200/90 dark:border-white/[0.08] hover:border-zinc-300 dark:hover:border-white/[0.18] shadow-[0_1px_3px_rgba(0,0,0,0.03)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.35)] p-3 sm:p-3.5 rounded-xl sm:rounded-2xl cursor-pointer flex items-center justify-between gap-2.5 sm:gap-3 select-none w-full max-w-full overflow-hidden transition-all duration-150"
+      className="group w-full text-left bg-white dark:bg-[#141416] hover:bg-zinc-50 dark:hover:bg-[#19191d] border border-zinc-200/90 dark:border-white/[0.07] hover:border-zinc-300 dark:hover:border-white/[0.16] shadow-[0_1px_2px_rgba(0,0,0,0.03)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)] p-3 sm:p-3.5 rounded-2xl cursor-pointer flex items-center gap-3 select-none transition-colors duration-150 relative overflow-hidden"
     >
-      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-        {/* Curated Rounded Square Icon container */}
-        <div className={`w-10 h-10 rounded-xl ${style.iconBg} ${style.iconColor} flex items-center justify-center shrink-0 shadow-2xs transition-transform duration-200 group-hover:scale-105`}>
-          <Icon className="w-5 h-5 stroke-[2.2]" />
-        </div>
-
-        {/* Clean, readable typography */}
-        <div className="min-w-0">
-          <h3 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100 tracking-tight truncate group-hover:text-black dark:group-hover:text-white transition-colors duration-150">
-            {tool.title}
-          </h3>
-          <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
-            {style.status}
-          </p>
-        </div>
+      {/* Brand Icon Squircle (Exact match with screenshot) */}
+      <div className={`w-10 h-10 sm:w-10.5 sm:h-10.5 rounded-xl ${brand.badgeBg} flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform duration-200`}>
+        <Icon className="w-5 h-5 stroke-[2.2]" />
       </div>
 
-      {/* Subtle indicator tag */}
-      {tool.badge && (
-        <span className="hidden xs:inline-block text-[10px] font-semibold text-zinc-600 dark:text-neutral-400 bg-zinc-100 dark:bg-neutral-800/60 px-1.5 py-0.5 rounded border border-zinc-200/80 dark:border-neutral-700/50 shrink-0">
-          {tool.badge}
-        </span>
-      )}
-    </motion.div>
+      {/* Clean, unboxed text hierarchy */}
+      <div className="min-w-0 flex-1">
+        <h3 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100 tracking-tight truncate group-hover:text-amber-600 dark:group-hover:text-white transition-colors duration-150">
+          {displayTitle}
+        </h3>
+        <p className="text-[11px] font-medium text-zinc-400 dark:text-zinc-400 mt-0.5 tracking-normal">
+          Tersedia
+        </p>
+      </div>
+    </motion.button>
   );
 };

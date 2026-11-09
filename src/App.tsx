@@ -48,10 +48,39 @@ import {
   ChevronLeft, 
   Search, 
   WifiOff, 
-  LayoutGrid, 
-  Zap, 
-  Sparkles
+  Sparkles,
+  CheckCircle2,
+  AlertTriangle,
+  ArrowRight,
+  X
 } from "lucide-react";
+
+import { Variants } from "motion/react";
+
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.025,
+      delayChildren: 0.04,
+    },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 10, scale: 0.98 },
+  visible: { 
+    opacity: 1, 
+    y: 0, 
+    scale: 1,
+    transition: {
+      type: "spring" as const,
+      stiffness: 420,
+      damping: 28,
+    }
+  },
+};
 
 export default function App() {
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
@@ -179,10 +208,10 @@ export default function App() {
   const isLandingView = !hasEnteredApp && !activeToolId;
 
   return (
-    <div className="min-h-screen flex flex-col bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 transition-colors duration-250 ease-out overflow-x-hidden max-w-full">
+    <div className="min-h-screen flex flex-col bg-zinc-50 dark:bg-[#0a0a0c] text-zinc-900 dark:text-zinc-100 transition-colors duration-250 ease-out overflow-x-hidden max-w-full">
       <AmbientBackground />
 
-      {/* Modern Slide-over Sidebar Drawer */}
+      {/* Slide-over Sidebar Drawer */}
       <SidebarDrawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
@@ -215,7 +244,7 @@ export default function App() {
         </div>
       ) : (
         <>
-          {/* Top Modern Dashboard Navbar */}
+          {/* Top Modern Navbar */}
           <Navbar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -230,16 +259,16 @@ export default function App() {
           />
 
           <div className="relative z-10 flex flex-col flex-1 max-w-full overflow-x-hidden">
-            <main className="flex-1 max-w-5xl w-full mx-auto px-3.5 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-5">
+            <main className="flex-1 max-w-5xl w-full mx-auto px-3.5 sm:px-6 py-4 sm:py-6 space-y-4">
               <AnimatePresence mode="wait">
                 {activeTool ? (
                   /* Active Tool View with smooth transition */
                   <motion.div 
                     key={activeTool.id}
-                    initial={{ opacity: 0, y: 6 }}
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.16, ease: "easeOut" }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                     className="space-y-4"
                   >
                     {/* Top Bar with Back Navigation */}
@@ -247,14 +276,14 @@ export default function App() {
                       <motion.button
                         whileTap={{ scale: 0.96 }}
                         onClick={() => setActiveToolId(null)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-[#141418] hover:bg-zinc-100 dark:hover:bg-[#1a1a20] border border-zinc-200 dark:border-white/[0.08] rounded-xl text-xs font-bold text-zinc-800 dark:text-neutral-200 transition cursor-pointer shadow-2xs"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white dark:bg-[#141416] hover:bg-zinc-100 dark:hover:bg-[#1c1c20] border border-zinc-200 dark:border-white/[0.08] rounded-xl text-xs font-bold text-zinc-800 dark:text-neutral-200 transition cursor-pointer shadow-2xs"
                       >
                         <ChevronLeft className="w-4 h-4" />
                         <span>{t("allTools")}</span>
                       </motion.button>
 
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-bold text-zinc-700 dark:text-neutral-300 bg-white dark:bg-[#16161b] px-2.5 py-1 rounded-lg border border-zinc-200/90 dark:border-white/[0.08] shadow-2xs">
+                        <span className="text-xs font-bold text-zinc-800 dark:text-neutral-200 bg-white dark:bg-[#141416] px-3 py-1 rounded-xl border border-zinc-200 dark:border-white/[0.08] shadow-2xs">
                           {activeTool.title}
                         </span>
                       </div>
@@ -266,79 +295,137 @@ export default function App() {
                     </div>
                   </motion.div>
                 ) : (
-                  /* Main Tools Dashboard View with smooth transition */
+                  /* Main Tools Dashboard View */
                   <motion.div 
                     key="dashboard"
-                    initial={{ opacity: 0, y: 6 }}
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.16, ease: "easeOut" }}
-                    className="space-y-4 sm:space-y-5"
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                    className="space-y-3.5 sm:space-y-4"
                   >
-                    {/* Alert/Status Banner with dual-theme styling */}
-                    <div className="bg-amber-50/70 dark:bg-[#141418] border border-amber-200 dark:border-amber-500/35 rounded-2xl p-4 sm:p-4.5 shadow-2xs relative overflow-hidden">
+                    {/* 1. Status / Balance Banner (Screenshot 1 Authentic Match) */}
+                    <div className="bg-amber-500/10 dark:bg-[#1b1509] border border-amber-500/30 dark:border-amber-500/35 rounded-2xl p-4 sm:p-4.5 shadow-2xs relative overflow-hidden">
                       <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                          <Zap className="w-4 h-4 fill-amber-500" />
+                        <div className="text-amber-500 shrink-0 mt-0.5">
+                          <AlertTriangle className="w-5 h-5 fill-amber-500/20" />
                         </div>
 
                         <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <h2 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white tracking-tight">
-                              Fixio Multi-Utility Engine • 28+ Alat
-                            </h2>
-                            <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                              Aktif
-                            </span>
-                          </div>
-                          <p className="text-[11px] sm:text-xs text-zinc-600 dark:text-neutral-400 leading-relaxed">
-                            Download media sosial, AI enhance foto HD, cek akun game, dan sensor gempa BMKG langsung siap pakai.
+                          <h2 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-amber-100 tracking-tight">
+                            Layanan Fixio Multi-Utility (Bebas Biaya)
+                          </h2>
+                          <p className="text-[11px] sm:text-xs text-zinc-600 dark:text-amber-200/70 leading-relaxed">
+                            Semua 28+ alat aktif dan siap digunakan langsung tanpa registrasi, saldo, atau kuota token.
                           </p>
+                          <div className="pt-2">
+                            <button
+                              onClick={() => {
+                                const el = document.getElementById("search-input-field");
+                                if (el) el.focus();
+                              }}
+                              className="px-3.5 py-1.5 rounded-lg bg-white dark:bg-white text-black text-xs font-bold shadow-xs hover:bg-neutral-100 active:scale-95 transition cursor-pointer flex items-center gap-1.5"
+                            >
+                              <span>Mulai Gunakan Alat</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Section Title with Icon */}
-                    <div className="flex items-center justify-between pt-1">
-                      <div className="flex items-center gap-2">
-                        <LayoutGrid className="w-4 h-4 text-amber-500" />
-                        <h2 className="text-sm font-extrabold text-zinc-900 dark:text-white tracking-tight">
-                          {selectedCategory === "all" ? "Layanan Populer" : `Kategori: ${selectedCategory.toUpperCase()}`}
-                        </h2>
+                    {/* 2. Order/Workflow Step Card (Screenshot 1 Authentic Match) */}
+                    <div className="bg-white dark:bg-[#141416] border border-zinc-200/90 dark:border-white/[0.08] rounded-2xl p-4 sm:p-5 shadow-2xs space-y-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <h2 className="text-sm sm:text-base font-extrabold text-zinc-900 dark:text-white tracking-tight">
+                            Pusat Media & Pemroses Otomatis
+                          </h2>
+                        </div>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          Pilih layanan di bawah untuk unduh video tanpa watermark, tingkatkan foto HD, atau stalking profil game.
+                        </p>
                       </div>
 
-                      <span className="text-xs font-semibold text-zinc-500 dark:text-neutral-400">
+                      {/* Status Badges */}
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-800 dark:text-zinc-200 bg-zinc-100 dark:bg-zinc-800/80 px-2.5 py-1 rounded-full border border-zinc-200/80 dark:border-white/10">
+                          <Sparkles className="w-3 h-3 text-amber-500" />
+                          Real-time
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          28 Server Aktif
+                        </span>
+                      </div>
+
+                      {/* Step Indicator (Screenshot 1 Style) */}
+                      <div className="pt-2 border-t border-zinc-100 dark:border-white/[0.06] flex items-center gap-2 sm:gap-4 overflow-x-auto no-scrollbar text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                        <span className="text-zinc-900 dark:text-white font-bold flex items-center gap-1 shrink-0">
+                          <span className="w-4.5 h-4.5 rounded-full bg-amber-500 text-black text-[10px] font-extrabold flex items-center justify-center">1</span>
+                          Pilih Alat
+                        </span>
+                        <span className="text-zinc-300 dark:text-zinc-700">/</span>
+                        <span className="flex items-center gap-1 shrink-0">
+                          <span className="w-4 h-4 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[10px] flex items-center justify-center">2</span>
+                          Tempel Link/Input
+                        </span>
+                        <span className="text-zinc-300 dark:text-zinc-700">/</span>
+                        <span className="flex items-center gap-1 shrink-0">
+                          <span className="w-4 h-4 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[10px] flex items-center justify-center">3</span>
+                          Proses Cepat
+                        </span>
+                        <span className="text-zinc-300 dark:text-zinc-700">/</span>
+                        <span className="flex items-center gap-1 shrink-0">
+                          <span className="w-4 h-4 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[10px] flex items-center justify-center">4</span>
+                          Unduh Hasil
+                        </span>
+                      </div>
+
+                      {/* Guarantee note */}
+                      <div className="text-[11px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 pt-0.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Kualitas asli tanpa watermark, jernih HD, dan gratis selamanya</span>
+                      </div>
+                    </div>
+
+                    {/* Section Header */}
+                    <div className="flex items-center justify-between pt-1">
+                      <h2 className="text-sm font-extrabold text-zinc-900 dark:text-white tracking-tight flex items-center gap-1.5">
+                        <span className="text-amber-500">::</span>
+                        <span>{selectedCategory === "all" ? "Layanan Populer" : `Kategori: ${selectedCategory.toUpperCase()}`}</span>
+                      </h2>
+
+                      <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500">
                         {filteredTools.length} Layanan
                       </span>
                     </div>
 
-                    {/* Horizontal Category Pill Filter Bar */}
-                    <CategoryFilter
-                      activeCategory={selectedCategory}
-                      onSelectCategory={setSelectedCategory}
-                      counts={categoryCounts}
-                      settings={settings}
-                    />
-
-                    {/* 2-Column Responsive Tool Grid */}
+                    {/* 2-Column Responsive Tool Grid with Spring Staggering */}
                     {filteredTools.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5 w-full max-w-full">
+                      <motion.div 
+                        variants={containerVariants}
+                        initial="hidden"
+                        animate="visible"
+                        className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3 w-full max-w-full"
+                      >
                         {filteredTools.map((tool) => (
-                          <ToolCard
-                            key={tool.id}
-                            tool={tool}
-                            onSelect={(id) => setActiveToolId(id)}
-                          />
+                          <motion.div key={tool.id} variants={itemVariants} layout>
+                            <ToolCard
+                              tool={tool}
+                              onSelect={(id) => setActiveToolId(id)}
+                            />
+                          </motion.div>
                         ))}
-                      </div>
+                      </motion.div>
                     ) : (
                       /* Clean Empty State */
-                      <div className="bg-white dark:bg-[#141418] rounded-2xl border border-zinc-200 dark:border-white/[0.08] p-8 sm:p-10 text-center space-y-3">
-                        <div className="w-10 h-10 bg-zinc-100 dark:bg-neutral-800 text-zinc-400 dark:text-neutral-400 rounded-full flex items-center justify-center mx-auto">
+                      <div className="bg-white dark:bg-[#141416] rounded-2xl border border-zinc-200 dark:border-white/[0.08] p-8 sm:p-10 text-center space-y-3">
+                        <div className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 text-zinc-400 rounded-full flex items-center justify-center mx-auto">
                           <Search className="w-5 h-5" />
                         </div>
                         <p className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-white">
-                          {language === "id" ? "Tidak ada alat yang cocok" : "No utilities found"}
+                          {language === "id" ? "Tidak ada layanan yang sesuai" : "No utilities found"}
                         </p>
                         <button
                           onClick={() => {
@@ -351,6 +438,40 @@ export default function App() {
                         </button>
                       </div>
                     )}
+
+                    {/* Bottom Search Bar & Quick Categories (Screenshot 1 Authentic Match) */}
+                    <div className="space-y-2 pt-3 pb-2">
+                      <div className="relative">
+                        <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          id="search-input-field"
+                          type="text"
+                          placeholder="Cari layanan..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full pl-9 pr-24 py-2.5 bg-white dark:bg-[#141416] border border-zinc-200/90 dark:border-white/[0.08] focus:border-amber-500 dark:focus:border-amber-400 rounded-xl text-xs sm:text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/15 transition-all shadow-2xs"
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-xs text-zinc-400 font-medium">
+                          {searchQuery && (
+                            <button
+                              onClick={() => setSearchQuery("")}
+                              className="text-zinc-400 hover:text-zinc-700 dark:hover:text-white p-0.5"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <span>{TOOLS_LIST.length} layanan</span>
+                        </div>
+                      </div>
+
+                      {/* Category Pills Bar */}
+                      <CategoryFilter
+                        activeCategory={selectedCategory}
+                        onSelectCategory={setSelectedCategory}
+                        counts={categoryCounts}
+                        settings={settings}
+                      />
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
