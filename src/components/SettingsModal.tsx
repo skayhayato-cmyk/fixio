@@ -100,23 +100,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 dark:bg-black/80 backdrop-blur-xs animate-in fade-in duration-200">
       <div 
-        className="w-full max-w-md bg-[#131317] text-neutral-100 rounded-2xl border border-neutral-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors"
+        className="w-full max-w-md bg-white dark:bg-[#131317] text-zinc-900 dark:text-neutral-100 rounded-2xl border border-zinc-200 dark:border-white/[0.08] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors duration-250"
         role="dialog"
         aria-modal="true"
       >
         {/* Header */}
-        <div className="px-5 py-4 bg-[#18181d] border-b border-neutral-800 flex items-center justify-between shrink-0">
+        <div className="px-5 py-4 bg-zinc-50 dark:bg-[#18181d] border-b border-zinc-200 dark:border-white/[0.08] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-[#ffe600]" />
-            <h2 className="text-sm font-bold text-white tracking-tight">
+            <Sliders className="w-4 h-4 text-amber-500" />
+            <h2 className="text-sm font-bold text-zinc-900 dark:text-white tracking-tight">
               {t("settingsTitle")}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition cursor-pointer"
+            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-white hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -126,20 +126,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs">
           {/* 1. TAMPILAN & TEMA */}
           <div className="space-y-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 px-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-neutral-500 px-1">
               Tampilan & Tema
             </span>
 
-            <div className="bg-[#18181d] rounded-xl border border-neutral-800 p-3 space-y-3">
-              <div className="flex items-center justify-between">
+            <div className="bg-zinc-50 dark:bg-[#18181d] rounded-xl border border-zinc-200/90 dark:border-white/[0.08] p-3 space-y-3">
+              <div className="flex items-center justify-between gap-2">
                 <div>
-                  <span className="font-semibold text-white block">Mode Tema</span>
-                  <span className="text-[11px] text-neutral-400">
+                  <span className="font-semibold text-zinc-900 dark:text-white block">Mode Tema</span>
+                  <span className="text-[11px] text-zinc-500 dark:text-neutral-400">
                     {appearance === "dark" ? "Dark (Gelap)" : appearance === "light" ? "Light (Terang)" : "Sistem"}
                   </span>
                 </div>
 
-                <div className="inline-flex bg-[#121215] p-1 rounded-xl border border-neutral-700/60">
+                <div className="inline-flex bg-zinc-200/80 dark:bg-[#121215] p-1 rounded-xl border border-zinc-300/60 dark:border-neutral-700/60">
                   {(["system", "light", "dark"] as AppearanceMode[]).map((mode) => {
                     const isActive = appearance === mode;
                     return (
@@ -148,8 +148,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onClick={() => setAppearance(mode)}
                         className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all capitalize cursor-pointer flex items-center gap-1 ${
                           isActive
-                            ? "bg-white text-black font-bold shadow-xs"
-                            : "text-neutral-400 hover:text-white"
+                            ? "bg-white dark:bg-[#25252d] text-zinc-900 dark:text-white font-bold shadow-xs"
+                            : "text-zinc-500 dark:text-neutral-400 hover:text-zinc-900 dark:hover:text-white"
                         }`}
                       >
                         {mode === "system" && <Monitor className="w-3 h-3" />}
@@ -163,15 +163,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               {/* Bahasa */}
-              <div className="flex items-center justify-between pt-2 border-t border-neutral-800/80">
+              <div className="flex items-center justify-between pt-2 border-t border-zinc-200 dark:border-neutral-800/80">
                 <div>
-                  <span className="font-semibold text-white block">Bahasa Aplikasi</span>
-                  <span className="text-[11px] text-neutral-400">
+                  <span className="font-semibold text-zinc-900 dark:text-white block">Bahasa Aplikasi</span>
+                  <span className="text-[11px] text-zinc-500 dark:text-neutral-400">
                     {language === "id" ? "Bahasa Indonesia" : "English (US)"}
                   </span>
                 </div>
 
-                <div className="inline-flex bg-[#121215] p-1 rounded-xl border border-neutral-700/60">
+                <div className="inline-flex bg-zinc-200/80 dark:bg-[#121215] p-1 rounded-xl border border-zinc-300/60 dark:border-neutral-700/60">
                   {(["id", "en"] as LanguageCode[]).map((code) => {
                     const isActive = language === code;
                     return (
@@ -180,8 +180,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onClick={() => setLanguage(code)}
                         className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                           isActive
-                            ? "bg-[#ffe600] text-black font-bold shadow-xs"
-                            : "text-neutral-400 hover:text-white"
+                            ? "bg-amber-500 text-black font-bold shadow-xs"
+                            : "text-zinc-500 dark:text-neutral-400 hover:text-zinc-900 dark:hover:text-white"
                         }`}
                       >
                         {code === "id" ? "ID" : "EN"}
@@ -195,20 +195,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* 2. APLIKASI PWA */}
           <div className="space-y-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 px-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-neutral-500 px-1">
               Aplikasi & Update
             </span>
 
-            <div className="bg-[#18181d] rounded-xl border border-neutral-800 divide-y divide-neutral-800/80">
+            <div className="bg-zinc-50 dark:bg-[#18181d] rounded-xl border border-zinc-200/90 dark:border-white/[0.08] divide-y divide-zinc-200 dark:divide-neutral-800/80">
               <div className="p-3 flex items-center justify-between">
                 <div>
-                  <span className="font-semibold text-white block">Versi Fixio</span>
-                  <span className="text-[11px] text-neutral-400">v{pwa.appVersion} Stable</span>
+                  <span className="font-semibold text-zinc-900 dark:text-white block">Versi Fixio</span>
+                  <span className="text-[11px] text-zinc-500 dark:text-neutral-400">v{pwa.appVersion} Stable</span>
                 </div>
                 <button
                   onClick={handleCheckUpdate}
                   disabled={isUpdating}
-                  className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-zinc-200/70 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-800 dark:text-white font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? "animate-spin" : ""}`} />
                   <span>{isUpdating ? "Memeriksa..." : "Cek Update"}</span>
@@ -218,20 +218,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {/* Install PWA */}
               <div className="p-3 flex items-center justify-between">
                 <div>
-                  <span className="font-semibold text-white block">Status Pasang</span>
-                  <span className="text-[11px] text-neutral-400">
+                  <span className="font-semibold text-zinc-900 dark:text-white block">Status Pasang</span>
+                  <span className="text-[11px] text-zinc-500 dark:text-neutral-400">
                     {pwa.isInstalled ? "Terpasang di perangkat" : "Aplikasi Web Siap Pasang"}
                   </span>
                 </div>
 
                 {pwa.isInstalled ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
                     <Check className="w-3 h-3" /> Terpasang
                   </span>
                 ) : (
                   <button
                     onClick={handleInstallClick}
-                    className="px-3 py-1.5 rounded-lg bg-[#ffe600] text-black font-bold text-xs flex items-center gap-1.5 hover:bg-[#ebd300] transition cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>Pasang</span>
@@ -243,10 +243,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 bg-[#18181d] border-t border-neutral-800 flex justify-end">
+        <div className="px-5 py-3 bg-zinc-50 dark:bg-[#18181d] border-t border-zinc-200 dark:border-white/[0.08] flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-white hover:bg-neutral-200 text-black font-bold text-xs rounded-xl transition cursor-pointer shadow-sm"
+            className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-neutral-200 text-white dark:text-black font-bold text-xs rounded-xl transition cursor-pointer shadow-xs"
           >
             Selesai
           </button>

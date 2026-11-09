@@ -49,17 +49,19 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
             key={cat.id}
             whileTap={{ scale: 0.96 }}
             onClick={() => onSelectCategory(cat.id)}
-            className={`relative px-3 py-1.5 rounded-full text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer select-none border ${
+            className={`relative px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 flex items-center gap-1.5 shrink-0 cursor-pointer select-none border ${
               isActive
-                ? "bg-white text-black border-white shadow-xs font-bold"
-                : "bg-[#141418] text-neutral-400 hover:text-white border-neutral-800/80 hover:border-neutral-700"
+                ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 border-zinc-900 dark:border-white shadow-xs font-bold"
+                : "bg-white dark:bg-[#141418] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-zinc-200/90 dark:border-white/[0.08] hover:border-zinc-300 dark:hover:border-white/[0.18]"
             }`}
           >
-            <Icon className={`w-3.5 h-3.5 ${isActive ? "text-black" : "text-neutral-400"}`} />
+            <Icon className={`w-3.5 h-3.5 ${isActive ? "text-white dark:text-zinc-950" : "text-zinc-400 dark:text-zinc-400"}`} />
             <span>{cat.label}</span>
             <span
               className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                isActive ? "bg-black/10 text-black font-bold" : "bg-neutral-800 text-neutral-400"
+                isActive 
+                  ? "bg-white/20 text-white dark:bg-black/10 dark:text-zinc-950 font-bold" 
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
               }`}
             >
               {count}

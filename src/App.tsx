@@ -179,7 +179,7 @@ export default function App() {
   const isLandingView = !hasEnteredApp && !activeToolId;
 
   return (
-    <div className="min-h-screen flex flex-col text-neutral-100 bg-[#09090b] transition-colors duration-200 overflow-x-hidden max-w-full">
+    <div className="min-h-screen flex flex-col bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 transition-colors duration-250 ease-out overflow-x-hidden max-w-full">
       <AmbientBackground />
 
       {/* Modern Slide-over Sidebar Drawer */}
@@ -230,16 +230,16 @@ export default function App() {
           />
 
           <div className="relative z-10 flex flex-col flex-1 max-w-full overflow-x-hidden">
-            <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-5">
+            <main className="flex-1 max-w-5xl w-full mx-auto px-3.5 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-5">
               <AnimatePresence mode="wait">
                 {activeTool ? (
                   /* Active Tool View with smooth transition */
                   <motion.div 
                     key={activeTool.id}
-                    initial={{ opacity: 0, y: 8 }}
+                    initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.16, ease: "easeOut" }}
                     className="space-y-4"
                   >
                     {/* Top Bar with Back Navigation */}
@@ -247,21 +247,21 @@ export default function App() {
                       <motion.button
                         whileTap={{ scale: 0.96 }}
                         onClick={() => setActiveToolId(null)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#141418] hover:bg-[#1a1a20] border border-neutral-800 rounded-xl text-xs font-bold text-neutral-200 hover:text-white transition cursor-pointer shadow-sm"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-[#141418] hover:bg-zinc-100 dark:hover:bg-[#1a1a20] border border-zinc-200 dark:border-white/[0.08] rounded-xl text-xs font-bold text-zinc-800 dark:text-neutral-200 transition cursor-pointer shadow-2xs"
                       >
                         <ChevronLeft className="w-4 h-4" />
                         <span>{t("allTools")}</span>
                       </motion.button>
 
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-bold text-neutral-300 bg-[#16161b] px-2.5 py-1 rounded-lg border border-neutral-800">
+                        <span className="text-[11px] font-bold text-zinc-700 dark:text-neutral-300 bg-white dark:bg-[#16161b] px-2.5 py-1 rounded-lg border border-zinc-200/90 dark:border-white/[0.08] shadow-2xs">
                           {activeTool.title}
                         </span>
                       </div>
                     </div>
 
                     {/* Tool Surface (Rounded, clean border, zero horizontal overflow) */}
-                    <div className="bg-[#121215] p-4 sm:p-6 rounded-2xl border border-neutral-800/80 shadow-xl overflow-hidden w-full max-w-full">
+                    <div className="bg-white dark:bg-[#121215] p-4 sm:p-6 rounded-2xl border border-zinc-200/90 dark:border-white/[0.08] shadow-xs dark:shadow-xl overflow-hidden w-full max-w-full">
                       {renderActiveToolComponent()}
                     </div>
                   </motion.div>
@@ -275,24 +275,24 @@ export default function App() {
                     transition={{ duration: 0.16, ease: "easeOut" }}
                     className="space-y-4 sm:space-y-5"
                   >
-                    {/* Alert/Status Banner matching Screenshot_20261108-051355_7dae6052.jpg */}
-                    <div className="bg-[#141418] border border-amber-500/35 rounded-2xl p-4 sm:p-4.5 shadow-sm relative overflow-hidden">
+                    {/* Alert/Status Banner with dual-theme styling */}
+                    <div className="bg-amber-50/70 dark:bg-[#141418] border border-amber-200 dark:border-amber-500/35 rounded-2xl p-4 sm:p-4.5 shadow-2xs relative overflow-hidden">
                       <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                          <Zap className="w-4 h-4 fill-amber-400" />
+                        <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                          <Zap className="w-4 h-4 fill-amber-500" />
                         </div>
 
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center justify-between">
-                            <h2 className="text-xs sm:text-sm font-bold text-white tracking-tight">
+                            <h2 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white tracking-tight">
                               Fixio Multi-Utility Engine • 28+ Alat
                             </h2>
-                            <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                            <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
                               Aktif
                             </span>
                           </div>
-                          <p className="text-[11px] sm:text-xs text-neutral-400 leading-relaxed">
-                            Download media, AI enhance foto, cek akun game, dan sensor gempa BMKG langsung tanpa antre.
+                          <p className="text-[11px] sm:text-xs text-zinc-600 dark:text-neutral-400 leading-relaxed">
+                            Download media sosial, AI enhance foto HD, cek akun game, dan sensor gempa BMKG langsung siap pakai.
                           </p>
                         </div>
                       </div>
@@ -301,13 +301,13 @@ export default function App() {
                     {/* Section Title with Icon */}
                     <div className="flex items-center justify-between pt-1">
                       <div className="flex items-center gap-2">
-                        <LayoutGrid className="w-4 h-4 text-[#ffe600]" />
-                        <h2 className="text-sm font-extrabold text-white tracking-tight">
+                        <LayoutGrid className="w-4 h-4 text-amber-500" />
+                        <h2 className="text-sm font-extrabold text-zinc-900 dark:text-white tracking-tight">
                           {selectedCategory === "all" ? "Layanan Populer" : `Kategori: ${selectedCategory.toUpperCase()}`}
                         </h2>
                       </div>
 
-                      <span className="text-xs font-semibold text-neutral-400">
+                      <span className="text-xs font-semibold text-zinc-500 dark:text-neutral-400">
                         {filteredTools.length} Layanan
                       </span>
                     </div>
@@ -320,7 +320,7 @@ export default function App() {
                       settings={settings}
                     />
 
-                    {/* 2-Column Responsive Tool Grid (Clean, rounded, no overflow) */}
+                    {/* 2-Column Responsive Tool Grid */}
                     {filteredTools.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5 w-full max-w-full">
                         {filteredTools.map((tool) => (
@@ -333,11 +333,11 @@ export default function App() {
                       </div>
                     ) : (
                       /* Clean Empty State */
-                      <div className="bg-[#141418] rounded-2xl border border-neutral-800 p-8 sm:p-10 text-center space-y-3">
-                        <div className="w-10 h-10 bg-neutral-800 text-neutral-400 rounded-full flex items-center justify-center mx-auto">
+                      <div className="bg-white dark:bg-[#141418] rounded-2xl border border-zinc-200 dark:border-white/[0.08] p-8 sm:p-10 text-center space-y-3">
+                        <div className="w-10 h-10 bg-zinc-100 dark:bg-neutral-800 text-zinc-400 dark:text-neutral-400 rounded-full flex items-center justify-center mx-auto">
                           <Search className="w-5 h-5" />
                         </div>
-                        <p className="text-xs sm:text-sm font-semibold text-white">
+                        <p className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-white">
                           {language === "id" ? "Tidak ada alat yang cocok" : "No utilities found"}
                         </p>
                         <button
@@ -345,7 +345,7 @@ export default function App() {
                             setSearchQuery("");
                             setSelectedCategory("all");
                           }}
-                          className="px-3.5 py-1.5 rounded-xl bg-white text-black text-xs font-bold hover:bg-neutral-200 cursor-pointer transition"
+                          className="px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-neutral-200 text-white dark:text-black text-xs font-bold cursor-pointer transition"
                         >
                           {language === "id" ? "Reset Pencarian" : "Reset Search"}
                         </button>
@@ -392,7 +392,7 @@ export default function App() {
       {/* Offline Toast */}
       {!pwa.isOnline && (
         <div
-          className="fixed bottom-4 inset-x-4 sm:inset-x-0 sm:mx-auto sm:w-fit z-50 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#27272a] text-white text-xs font-medium shadow-lg border border-neutral-700"
+          className="fixed bottom-4 inset-x-4 sm:inset-x-0 sm:mx-auto sm:w-fit z-50 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-zinc-800 dark:bg-[#27272a] text-white text-xs font-medium shadow-lg border border-zinc-700"
           title={t("noInternetDesc")}
         >
           <WifiOff className="w-4 h-4 text-amber-400 shrink-0" />

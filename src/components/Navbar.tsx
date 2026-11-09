@@ -4,7 +4,8 @@ import {
   Bell, 
   Search, 
   X, 
-  SlidersHorizontal,
+  Sun, 
+  Moon,
   Sparkles
 } from "lucide-react";
 import { AppSettings } from "../services/useAppSettings";
@@ -28,50 +29,51 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleDrawer,
   settings,
 }) => {
-  const [showSearchModal, setShowSearchModal] = useState(false);
+  const { appearance, toggleAppearance, t } = settings;
   const [hasNotifAlert, setHasNotifAlert] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 bg-[#0d0d10]/95 dark:bg-[#09090b]/95 backdrop-blur-md border-b border-neutral-800/80 transition-colors">
-      <div className="max-w-5xl mx-auto px-3.5 sm:px-6 h-14 flex items-center justify-between gap-3">
-        {/* Left: Hamburger menu toggle button */}
-        <div className="flex items-center gap-2.5">
+    <header className="sticky top-0 z-40 bg-white/85 dark:bg-[#0c0c0f]/85 backdrop-blur-md border-b border-zinc-200/80 dark:border-white/[0.08] transition-colors duration-250">
+      <div className="max-w-5xl mx-auto px-3.5 sm:px-6 h-14 sm:h-15 flex items-center justify-between gap-2.5 sm:gap-4">
+        {/* Left: Drawer Toggle & Brand */}
+        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
           <button
             onClick={onToggleDrawer}
-            className="w-9 h-9 rounded-xl bg-neutral-800/80 hover:bg-neutral-700/80 text-white flex items-center justify-center transition border border-neutral-700/50 cursor-pointer active:scale-95"
+            className="w-9 h-9 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 dark:bg-zinc-800/60 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 flex items-center justify-center transition-all duration-150 border border-zinc-200/80 dark:border-white/[0.08] cursor-pointer active:scale-95"
             aria-label="Buka Menu Samping"
+            title="Menu Samping"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="w-4.5 h-4.5" />
           </button>
 
           <button
             onClick={onHomeClick}
-            className="flex items-center gap-2 select-none cursor-pointer"
+            className="flex items-center gap-2 select-none cursor-pointer group"
           >
-            <div className="w-7 h-7 rounded-lg bg-[#ffe600] text-black font-black flex items-center justify-center text-xs shadow-sm">
+            <div className="w-7 h-7 rounded-lg bg-amber-500 text-black font-extrabold flex items-center justify-center text-xs shadow-xs group-hover:scale-105 transition-transform duration-150">
               Fx
             </div>
-            <span className="text-sm sm:text-base font-extrabold text-white tracking-tight">
+            <span className="text-sm sm:text-base font-extrabold text-zinc-900 dark:text-white tracking-tight">
               Fixio
             </span>
           </button>
         </div>
 
-        {/* Center: Search Field (Compact on Mobile, Clean on Desktop) */}
+        {/* Center: Search Field */}
         <div className="flex-1 max-w-xs sm:max-w-md mx-1">
           <div className="relative flex items-center">
-            <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 absolute left-3 pointer-events-none" />
             <input
               type="text"
-              placeholder="Cari alat (TikTok, Remini, Gempa)..."
+              placeholder={t("searchPlaceholder") || "Cari alat (TikTok, Remini, Gempa)..."}
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full pl-8 pr-8 py-1.5 bg-[#17171c] border border-neutral-800 focus:border-neutral-700 rounded-xl text-xs font-medium text-white placeholder-neutral-500 focus:outline-none transition-colors"
+              className="w-full pl-8.5 pr-8 py-1.5 sm:py-2 bg-zinc-100/90 dark:bg-[#16161c] border border-zinc-200 dark:border-white/[0.08] focus:border-amber-500 dark:focus:border-amber-400 rounded-xl text-xs font-medium text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/15 transition-all duration-150"
             />
             {searchQuery && (
               <button
                 onClick={() => onSearchChange("")}
-                className="absolute right-2.5 text-neutral-400 hover:text-white"
+                className="absolute right-2.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-white p-0.5"
                 aria-label="Hapus Pencarian"
               >
                 <X className="w-3.5 h-3.5" />
@@ -80,24 +82,38 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Right: Actions (Notification & Avatar pill matching Screenshot_20261108-051355_7dae6052.jpg) */}
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Notification bell icon button */}
+        {/* Right: Quick Controls */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Quick Theme Toggle Button */}
+          <button
+            onClick={toggleAppearance}
+            className="w-8.5 h-8.5 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 dark:bg-zinc-800/60 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 flex items-center justify-center transition-all duration-150 border border-zinc-200/80 dark:border-white/[0.08] cursor-pointer active:scale-95"
+            aria-label="Ubah Tema"
+            title={`Tema: ${appearance}`}
+          >
+            {appearance === "dark" ? (
+              <Sun className="w-4 h-4 text-amber-400" />
+            ) : (
+              <Moon className="w-4 h-4 text-zinc-700 dark:text-zinc-300" />
+            )}
+          </button>
+
+          {/* Notification Button */}
           <button
             onClick={() => setHasNotifAlert(!hasNotifAlert)}
-            className="relative w-8 h-8 rounded-xl bg-neutral-800/60 hover:bg-neutral-800 text-neutral-300 hover:text-white flex items-center justify-center transition cursor-pointer"
+            className="relative w-8.5 h-8.5 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 dark:bg-zinc-800/60 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 flex items-center justify-center transition-all duration-150 border border-zinc-200/80 dark:border-white/[0.08] cursor-pointer active:scale-95"
             aria-label="Notifikasi"
             title="Pembaruan & Status Sistem"
           >
             <Bell className="w-4 h-4" />
-            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-[#ffe600] rounded-full" />
+            <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-amber-500 rounded-full" />
           </button>
 
-          {/* User profile avatar pill (Green 'C' / 'F' avatar from screenshot) */}
+          {/* User Profile Avatar Pill */}
           <button
             onClick={onOpenSettings}
-            className="w-8 h-8 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center transition cursor-pointer shadow-sm border border-emerald-400/30 active:scale-95"
-            aria-label="Pengaturan Profil"
+            className="w-8.5 h-8.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs flex items-center justify-center transition-all duration-150 cursor-pointer shadow-xs border border-emerald-400/30 active:scale-95"
+            aria-label="Pengaturan"
             title="Pengaturan Fixio"
           >
             F
