@@ -1,10 +1,17 @@
-import React, { useState } from "react";
-import { Settings as SettingsIcon, Download, ArrowRight, Sun, Moon, Monitor, Zap } from "lucide-react";
-import { Logo } from "./Logo";
-import { TypewriterText } from "./TypewriterText";
+import React from "react";
+import { 
+  Zap, 
+  ArrowRight, 
+  Sparkles, 
+  Download, 
+  Sliders, 
+  Share2, 
+  ShieldCheck, 
+  Activity,
+  Layers
+} from "lucide-react";
 import { AppSettings } from "../services/useAppSettings";
 import { PWAState } from "../services/usePWA";
-import { InstallGuideModal } from "./InstallGuideModal";
 
 interface InitialLandingProps {
   onOpenApp: () => void;
@@ -19,121 +26,142 @@ export const InitialLanding: React.FC<InitialLandingProps> = ({
   settings,
   pwa,
 }) => {
-  const { t, language, appearance, toggleAppearance } = settings;
-  const [showInstallGuide, setShowInstallGuide] = useState(false);
-
-  const handleInstallClick = async () => {
-    if (pwa.isInstalled) return;
-    if (pwa.isInstallable) {
-      const accepted = await pwa.install();
-      if (!accepted) {
-        setShowInstallGuide(true);
-      }
-    } else {
-      setShowInstallGuide(true);
-    }
-  };
+  const { t } = settings;
 
   return (
-    <div className="min-h-screen flex flex-col justify-between items-center px-4 sm:px-6 py-8 sm:py-12 max-w-xl mx-auto select-none">
-      {/* Top controls bar */}
-      <div className="w-full flex items-center justify-between">
-        {/* Brutalist Badge */}
-        <div className="flex items-center gap-1.5 px-3 py-1 bg-[#ffe600] text-black border-2 border-[#0a0a0a] shadow-[2px_2px_0px_0px_#0a0a0a] text-xs font-black uppercase tracking-wider">
-          <Zap className="w-3.5 h-3.5 fill-black" />
-          <span>Fixio Hub v{pwa.appVersion}</span>
-        </div>
+    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-5 animate-in fade-in duration-300">
+      {/* Top Warning/Alert Banner (Matching Screenshot_20261108-051355_7dae6052.jpg top card) */}
+      <div className="bg-[#141418] border border-amber-500/40 rounded-2xl p-4 sm:p-5 shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+        
+        <div className="flex items-start gap-3.5">
+          <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
+            <Zap className="w-5 h-5 fill-amber-400" />
+          </div>
 
-        <div className="flex items-center gap-2">
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleAppearance}
-            className="bru-btn p-2.5 border-2 border-[#0a0a0a] dark:border-[#f5f5f0] bg-white dark:bg-[#17171a] shadow-[2px_2px_0px_0px_#0a0a0a] dark:shadow-[2px_2px_0px_0px_#ffe600] hover:bg-[#ffe600] hover:text-black active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
-            aria-label={t("appearance")}
-            title={`${t("appearance")}: ${appearance}`}
-          >
-            {appearance === "dark" ? (
-              <Sun className="w-4 h-4 text-amber-400 fill-amber-400" />
-            ) : appearance === "light" ? (
-              <Moon className="w-4 h-4 text-indigo-600 fill-indigo-600" />
-            ) : (
-              <Monitor className="w-4 h-4 text-black dark:text-white" />
-            )}
-          </button>
+          <div className="space-y-1.5 flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-sm sm:text-base font-extrabold text-white tracking-tight">
+                Fixio Multi-Utility Engine
+              </h2>
+              <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                v{pwa.appVersion} • Ready
+              </span>
+            </div>
 
-          {/* Settings */}
-          <button
-            onClick={onOpenSettings}
-            className="bru-btn p-2.5 border-2 border-[#0a0a0a] dark:border-[#f5f5f0] bg-white dark:bg-[#17171a] shadow-[2px_2px_0px_0px_#0a0a0a] dark:shadow-[2px_2px_0px_0px_#ffe600] hover:bg-[#ffe600] hover:text-black active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
-            aria-label={t("settings")}
-            title={t("settings")}
-          >
-            <SettingsIcon className="w-4 h-4 text-black dark:text-white" />
-          </button>
+            <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed">
+              Semua alat praktis dalam satu tempat: TikTok & IG Downloader tanpa watermark, Remini & Wink HD AI, stalker akun Free Fire & Roblox, generator quotes WhatsApp, hingga info gempa BMKG real-time.
+            </p>
+
+            <div className="pt-2 flex items-center gap-2.5 flex-wrap">
+              <button
+                onClick={onOpenApp}
+                className="px-4 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black text-xs font-bold transition flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+              >
+                <span>Buka Dashboard Alat</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+
+              {pwa.isInstallable && (
+                <button
+                  onClick={() => pwa.install()}
+                  className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold transition flex items-center gap-1.5 border border-neutral-700/80 active:scale-95 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Pasang Aplikasi</span>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Main Brutalist Center Card */}
-      <div className="w-full my-auto py-8">
-        <div className="bg-white dark:bg-[#17171a] border-3 border-[#0a0a0a] dark:border-[#f5f5f0] shadow-[6px_6px_0px_0px_#0a0a0a] dark:shadow-[6px_6px_0px_0px_#ffe600] p-6 sm:p-8 flex flex-col items-center text-center space-y-6">
-          <div className="flex flex-col items-center space-y-4 w-full">
-            {/* Transparent Logo */}
-            <Logo size="xl" animate />
+      {/* Hero Presentation Card */}
+      <div className="bg-[#121215] border border-neutral-800/80 rounded-2xl p-5 sm:p-7 space-y-5">
+        <div className="flex items-center justify-between border-b border-neutral-800/80 pb-4">
+          <div>
+            <h1 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
+              Pusat Layanan & Utilitas Digital
+            </h1>
+            <p className="text-xs text-neutral-400 mt-0.5">
+              Pilih layanan untuk langsung memproses file, link, atau data tanpa login
+            </p>
+          </div>
 
-            <h1 className="sr-only">Fixio Multi-Utility Engine</h1>
+          <button
+            onClick={onOpenSettings}
+            className="p-2 rounded-xl bg-neutral-800/60 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-700/60 transition cursor-pointer"
+            title="Pengaturan"
+          >
+            <Sliders className="w-4 h-4" />
+          </button>
+        </div>
 
-            <div className="bg-[#f4f4f0] dark:bg-[#222226] border-2 border-[#0a0a0a] dark:border-[#f5f5f0] p-4 w-full text-center">
-              <p className="text-sm sm:text-base text-[#0a0a0a] dark:text-[#f5f5f0] font-bold tracking-tight min-h-[2.5em] flex items-center justify-center leading-relaxed">
-                <TypewriterText key={language} text={t("landingDescription")} />
-              </p>
+        {/* Feature Highlights (Mini 3-card preview) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div 
+            onClick={onOpenApp}
+            className="bg-[#18181d] hover:bg-[#202026] p-3.5 rounded-xl border border-neutral-800/80 transition cursor-pointer space-y-2 group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center">
+              <Share2 className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-xs font-bold text-white block group-hover:text-pink-300 transition">
+                Social Media Downloader
+              </span>
+              <span className="text-[11px] text-neutral-400 block mt-0.5">
+                TikTok No-WM, IG Video & Story, Spotify MP3
+              </span>
             </div>
           </div>
 
-          {/* Brutalist Action Buttons */}
-          <div className="flex flex-col sm:flex-row items-center gap-3 pt-2 w-full">
-            {/* Open App */}
-            <button
-              onClick={onOpenApp}
-              className="w-full py-3.5 px-6 bg-[#ffe600] text-black border-2 border-[#0a0a0a] dark:border-[#0a0a0a] text-sm font-black uppercase tracking-wider shadow-[4px_4px_0px_0px_#0a0a0a] dark:shadow-[4px_4px_0px_0px_#f5f5f0] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0a0a0a] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0a0a0a] transition-all cursor-pointer flex items-center justify-center gap-2"
-            >
-              <span>{t("openApp")}</span>
-              <ArrowRight className="w-4 h-4 stroke-[3]" />
-            </button>
+          <div 
+            onClick={onOpenApp}
+            className="bg-[#18181d] hover:bg-[#202026] p-3.5 rounded-xl border border-neutral-800/80 transition cursor-pointer space-y-2 group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-xs font-bold text-white block group-hover:text-purple-300 transition">
+                AI Photo Enhancement
+              </span>
+              <span className="text-[11px] text-neutral-400 block mt-0.5">
+                Remini Enhancer, Wink HD, Hapus Background
+              </span>
+            </div>
+          </div>
 
-            {/* Install App (if not installed) */}
-            {!pwa.isInstalled && (
-              <button
-                onClick={handleInstallClick}
-                className="w-full py-3.5 px-6 bg-white dark:bg-[#222226] text-black dark:text-white border-2 border-[#0a0a0a] dark:border-[#f5f5f0] text-sm font-black uppercase tracking-wider shadow-[4px_4px_0px_0px_#0a0a0a] dark:shadow-[4px_4px_0px_0px_#ffe600] hover:bg-[#ffe600] hover:text-black hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer flex items-center justify-center gap-2"
-              >
-                <Download className="w-4 h-4 stroke-[3]" />
-                <span>{t("installApp")}</span>
-              </button>
-            )}
+          <div 
+            onClick={onOpenApp}
+            className="bg-[#18181d] hover:bg-[#202026] p-3.5 rounded-xl border border-neutral-800/80 transition cursor-pointer space-y-2 group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center">
+              <Activity className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-xs font-bold text-white block group-hover:text-rose-300 transition">
+                Stalker & Info Gempa
+              </span>
+              <span className="text-[11px] text-neutral-400 block mt-0.5">
+                Free Fire, Roblox, dan Sensor Gempa BMKG
+              </span>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Bottom Footer */}
-      <div className="w-full flex items-center justify-between text-xs font-bold text-[#555550] dark:text-[#9e9e98] pt-4 border-t-2 border-[#0a0a0a]/20 dark:border-[#f5f5f0]/20">
-        <span className="uppercase">FIXIO CORE UTILITIES</span>
-        <button
-          onClick={onOpenSettings}
-          className="hover:text-black dark:hover:text-[#ffe600] underline underline-offset-4 cursor-pointer"
-        >
-          {t("settings")}
-        </button>
+        {/* Quick Launch Button */}
+        <div className="pt-2">
+          <button
+            onClick={onOpenApp}
+            className="w-full py-3 rounded-xl bg-[#ffe600] hover:bg-[#ebd300] text-black font-extrabold text-xs sm:text-sm uppercase tracking-wider transition shadow-md active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <span>Mulai Gunakan Fixio Sekarang</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
-
-      {/* Universal PWA Install Guide Modal */}
-      <InstallGuideModal
-        isOpen={showInstallGuide}
-        onClose={() => setShowInstallGuide(false)}
-        language={language}
-        isIOS={pwa.isIOS}
-        isInstallable={pwa.isInstallable}
-        onNativeInstall={pwa.install}
-      />
     </div>
   );
 };

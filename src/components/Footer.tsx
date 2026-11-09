@@ -1,5 +1,4 @@
 import React from "react";
-import { Logo } from "./Logo";
 
 interface FooterProps {
   onOpenSettings?: () => void;
@@ -8,19 +7,22 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ onOpenSettings, language = "en" }) => {
   return (
-    <footer className="mt-auto py-6 px-4 bg-[#f4f4f0] dark:bg-[#0d0d0f] border-t-3 border-[#0a0a0a] dark:border-[#f5f5f0] text-center text-xs font-bold text-[#0a0a0a] dark:text-[#f5f5f0]">
-      <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+    <footer className="mt-auto py-5 px-4 bg-[#0d0d10] border-t border-neutral-850 text-xs text-neutral-400">
+      <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
         <div className="flex items-center gap-2">
-          <Logo size="sm" className="h-5" />
-          <span>•</span>
-          <span className="uppercase tracking-wider">Crafted by Nexa Engine</span>
+          <div className="w-5 h-5 rounded bg-[#ffe600] text-black font-black flex items-center justify-center text-[10px]">
+            Fx
+          </div>
+          <span className="font-semibold text-neutral-300">Fixio Engine</span>
+          <span className="text-neutral-600">•</span>
+          <span className="text-neutral-500">28+ Tools Ready</span>
         </div>
 
-        <div className="flex items-center gap-4 text-xs font-extrabold uppercase">
+        <div className="flex items-center gap-4 text-neutral-400">
           {onOpenSettings && (
             <button
               onClick={onOpenSettings}
-              className="hover:bg-[#ffe600] hover:text-black px-2 py-1 border border-[#0a0a0a] dark:border-[#f5f5f0] transition-colors cursor-pointer"
+              className="hover:text-white transition cursor-pointer"
             >
               {language === "id" ? "Pengaturan" : "Settings"}
             </button>
@@ -29,7 +31,7 @@ export const Footer: React.FC<FooterProps> = ({ onOpenSettings, language = "en" 
             href="https://api.nexadev.my.id"
             target="_blank"
             rel="noreferrer"
-            className="hover:bg-[#ffe600] hover:text-black px-2 py-1 border border-[#0a0a0a] dark:border-[#f5f5f0] transition-colors"
+            className="hover:text-white transition"
           >
             API Docs
           </a>

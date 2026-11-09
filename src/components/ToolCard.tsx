@@ -16,14 +16,15 @@ import {
   MessageSquareQuote, 
   Activity, 
   UploadCloud, 
-  ChevronRight,
-  Download,
-  FileVideo,
-  DownloadCloud,
-  Music2,
-  Gamepad2,
-  QrCode,
-  Wand2
+  Download, 
+  FileVideo, 
+  DownloadCloud, 
+  Music2, 
+  Gamepad2, 
+  QrCode, 
+  Wand2,
+  Shapes,
+  Share2
 } from "lucide-react";
 
 const ICON_MAP: Record<string, any> = {
@@ -49,7 +50,51 @@ const ICON_MAP: Record<string, any> = {
   Gamepad2,
   QrCode,
   Wand2,
+  Shapes,
+  Share2
 };
+
+// Distinctive brand color styling matching Screenshot_20261108-051355_7dae6052.jpg
+function getToolStyle(id: string, category: string): { bg: string; text: string; status: string } {
+  switch (id) {
+    case "tiktok-dl":
+    case "tiktok-dl-v2":
+    case "tiktok-stalker":
+      return { bg: "bg-neutral-900 border border-neutral-700", text: "text-cyan-400", status: "Tersedia" };
+    case "ig-dl":
+    case "ig-dl-v2":
+    case "ig-stalker":
+      return { bg: "bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600", text: "text-white", status: "Tersedia" };
+    case "spotify-dl":
+    case "yt-play":
+      return { bg: "bg-emerald-600/20 border border-emerald-500/40", text: "text-emerald-400", status: "Tersedia" };
+    case "qcwa":
+      return { bg: "bg-emerald-600 text-white", text: "text-white", status: "Tersedia" };
+    case "ff-stalker":
+    case "fake-ff":
+      return { bg: "bg-amber-500/20 border border-amber-500/40", text: "text-amber-400", status: "Aktif" };
+    case "roblox-stalker":
+      return { bg: "bg-rose-600/20 border border-rose-500/40", text: "text-rose-400", status: "Aktif" };
+    case "remini":
+    case "wink-hd":
+      return { bg: "bg-purple-600/20 border border-purple-500/40", text: "text-purple-400", status: "AI HD" };
+    case "remove-bg":
+      return { bg: "bg-blue-600/20 border border-blue-500/40", text: "text-blue-400", status: "Transparan" };
+    case "info-gempa":
+      return { bg: "bg-rose-600 text-white", text: "text-white", status: "Live BMKG" };
+    case "ss-web":
+      return { bg: "bg-sky-600/20 border border-sky-500/40", text: "text-sky-400", status: "Multi-View" };
+    case "to-qr":
+      return { bg: "bg-neutral-800 text-neutral-100", text: "text-neutral-200", status: "Instant" };
+    case "auto-trace":
+      return { bg: "bg-indigo-600/20 border border-indigo-500/40", text: "text-indigo-400", status: "Vector" };
+    default:
+      if (category === "social") return { bg: "bg-pink-600/20 border border-pink-500/40", text: "text-pink-400", status: "Tersedia" };
+      if (category === "image") return { bg: "bg-purple-600/20 border border-purple-500/40", text: "text-purple-400", status: "Tersedia" };
+      if (category === "info") return { bg: "bg-amber-600/20 border border-amber-500/40", text: "text-amber-400", status: "Tersedia" };
+      return { bg: "bg-neutral-800 border border-neutral-700", text: "text-[#ffe600]", status: "Tersedia" };
+  }
+}
 
 interface ToolCardProps {
   tool: ToolDefinition;
@@ -58,37 +103,36 @@ interface ToolCardProps {
 
 export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelect }) => {
   const Icon = ICON_MAP[tool.iconName] || Sparkles;
+  const style = getToolStyle(tool.id, tool.category);
 
   return (
     <div
       onClick={() => onSelect(tool.id)}
-      className="group bg-white dark:bg-[#17171a] p-4 sm:p-5 border-2 border-[#0a0a0a] dark:border-[#f5f5f0] shadow-[3px_3px_0px_0px_#0a0a0a] dark:shadow-[3px_3px_0px_0px_#ffe600] hover:bg-[#fffde6] dark:hover:bg-[#1f1f24] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_0px_#0a0a0a] dark:hover:shadow-[5px_5px_0px_0px_#ffe600] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0a0a0a] transition-all duration-100 cursor-pointer flex items-center justify-between gap-4 select-none"
+      className="group tool-card-interactive bg-[#151519] hover:bg-[#1c1c22] border border-neutral-800/80 hover:border-neutral-700/80 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl cursor-pointer flex items-center justify-between gap-2.5 sm:gap-3 select-none w-full max-w-full overflow-hidden"
     >
-      <div className="flex items-center gap-3.5 min-w-0">
-        <div className="w-10 h-10 bg-[#ffe600] text-black border-2 border-[#0a0a0a] dark:border-[#0a0a0a] flex items-center justify-center shrink-0 shadow-[2px_2px_0px_0px_#0a0a0a] group-hover:scale-105 transition-transform">
-          <Icon className="w-5 h-5 stroke-[2.5]" />
+      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+        {/* Rounded square icon container (like in screenshot) */}
+        <div className={`w-10 h-10 rounded-xl ${style.bg} ${style.text} flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-105`}>
+          <Icon className="w-5 h-5" />
         </div>
 
+        {/* Clean, un-cluttered typography */}
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-extrabold text-[#0a0a0a] dark:text-[#f5f5f0] tracking-tight truncate uppercase">
-              {tool.title}
-            </h3>
-            {tool.badge && (
-              <span className="text-[10px] font-black uppercase text-black bg-[#ffe600] border border-[#0a0a0a] px-1.5 py-0.5 shrink-0">
-                {tool.badge}
-              </span>
-            )}
-          </div>
-          <p className="text-xs font-medium text-[#555550] dark:text-[#9e9e98] line-clamp-1 mt-0.5">
-            {tool.description}
+          <h3 className="text-xs sm:text-sm font-bold text-white tracking-tight truncate group-hover:text-neutral-100">
+            {tool.title}
+          </h3>
+          <p className="text-[11px] font-medium text-neutral-400 truncate mt-0.5">
+            {style.status}
           </p>
         </div>
       </div>
 
-      <div className="w-7 h-7 bg-white dark:bg-[#222226] border-2 border-[#0a0a0a] dark:border-[#f5f5f0] flex items-center justify-center shrink-0 group-hover:bg-[#ffe600] group-hover:text-black transition-colors">
-        <ChevronRight className="w-4 h-4 text-black dark:text-white group-hover:text-black group-hover:translate-x-0.5 transition-transform stroke-[3]" />
-      </div>
+      {/* Mini badge / chevron indicator */}
+      {tool.badge && (
+        <span className="hidden xs:inline-block text-[10px] font-semibold text-neutral-400 bg-neutral-800/60 px-1.5 py-0.5 rounded border border-neutral-700/40 shrink-0">
+          {tool.badge}
+        </span>
+      )}
     </div>
   );
 };

@@ -6,6 +6,7 @@ import { CategoryFilter } from "./components/CategoryFilter";
 import { ToolCard } from "./components/ToolCard";
 import { InitialLanding } from "./components/InitialLanding";
 import { SettingsModal } from "./components/SettingsModal";
+import { SidebarDrawer } from "./components/SidebarDrawer";
 import { TOOLS_LIST } from "./data/tools";
 import { ToolCategory } from "./types";
 import { usePWA } from "./services/usePWA";
@@ -45,31 +46,32 @@ import { AmPresetTool } from "./components/tools/AmPresetTool";
 import { 
   ChevronLeft, 
   Search, 
-  WifiOff
+  WifiOff, 
+  LayoutGrid, 
+  Zap, 
+  AlertTriangle,
+  ArrowRight
 } from "lucide-react";
 
 export default function App() {
-  // Navigation states: 'landing' (pristine initial screen), 'tools' (clean tool catalog), or direct tool id
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
-  const [hasEnteredApp, setHasEnteredApp] = useState<boolean>(false);
+  const [hasEnteredApp, setHasEnteredApp] = useState<boolean>(true); // Default direct to modern dashboard view
   const [selectedCategory, setSelectedCategory] = useState<ToolCategory>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [ytPlayerMounted, setYtPlayerMounted] = useState<boolean>(false);
 
-  // Automatically mount persistent background player when user opens yt-play
   useEffect(() => {
     if (activeToolId === "yt-play") {
       setYtPlayerMounted(true);
     }
   }, [activeToolId]);
 
-  // Custom Hooks for PWA and Settings
   const pwa = usePWA();
   const settings = useAppSettings();
   const { t, language } = settings;
 
-  // Category counts
   const categoryCounts = useMemo(() => {
     const counts: Record<ToolCategory, number> = {
       all: TOOLS_LIST.length,
@@ -88,7 +90,6 @@ export default function App() {
     return counts;
   }, []);
 
-  // Filtered tools
   const filteredTools = useMemo(() => {
     return TOOLS_LIST.filter((tool) => {
       const matchesCategory = selectedCategory === "all" || tool.category === selectedCategory;
@@ -106,7 +107,6 @@ export default function App() {
     return TOOLS_LIST.find((t) => t.id === activeToolId) || null;
   }, [activeToolId]);
 
-  // Scroll to top when changing tool or view
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [activeToolId, hasEnteredApp]);
@@ -176,16 +176,36 @@ export default function App() {
     }
   };
 
-  // Unified Layout (Landing Screen or Main App View)
   const isLandingView = !hasEnteredApp && !activeToolId;
 
   return (
-    <div className="min-h-screen flex flex-col text-[#0a0a0a] dark:text-[#f5f5f0] transition-colors duration-200">
+    <div className="min-h-screen flex flex-col text-neutral-100 bg-[#09090b] transition-colors duration-200 overflow-x-hidden max-w-full">
       <AmbientBackground />
 
+      {/* Modern Slide-over Sidebar Drawer */}
+      <SidebarDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        activeCategory={selectedCategory}
+        onSelectCategory={(cat) => {
+          setSelectedCategory(cat);
+          setActiveToolId(null);
+        }}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onGoHome={() => {
+          setActiveToolId(null);
+          setSelectedCategory("all");
+          setSearchQuery("");
+        }}
+        onOpenYtPlayer={() => {
+          setHasEnteredApp(true);
+          setActiveToolId("yt-play");
+        }}
+        settings={settings}
+      />
+
       {isLandingView ? (
-        /* 1. Initial Pristine Landing Screen */
-        <div className="relative z-10 flex-1">
+        <div className="relative z-10 flex-1 flex flex-col justify-center">
           <InitialLanding
             onOpenApp={() => setHasEnteredApp(true)}
             onOpenSettings={() => setIsSettingsOpen(true)}
@@ -194,51 +214,89 @@ export default function App() {
           />
         </div>
       ) : (
-        /* 2. Main App Screen (Tools Catalog or Active Tool) */
         <>
-          {/* Neo-Brutalist Navbar */}
+          {/* Top Modern Dashboard Navbar */}
           <Navbar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onHomeClick={() => {
               setActiveToolId(null);
-              setHasEnteredApp(false);
+              setSelectedCategory("all");
             }}
             onOpenSettings={() => setIsSettingsOpen(true)}
+            onToggleDrawer={() => setIsDrawerOpen(true)}
             settings={settings}
             pwa={pwa}
           />
 
-          {/* Content sits in its own stacking context above the grid backdrop */}
-          <div className="relative z-10 flex flex-col flex-1">
-            <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6">
+          <div className="relative z-10 flex flex-col flex-1 max-w-full overflow-x-hidden">
+            <main className="flex-1 max-w-5xl w-full mx-auto px-3.5 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-5">
               {activeTool ? (
-                /* Active Tool Screen */
-                <div className="space-y-4 animate-ios-fade">
-                  {/* Brutalist Back Navigation */}
-                  <div className="flex items-center justify-between">
+                /* Active Tool View */
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  {/* Top Bar with Back Navigation */}
+                  <div className="flex items-center justify-between gap-3">
                     <button
                       onClick={() => setActiveToolId(null)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-[#17171a] border-2 border-[#0a0a0a] dark:border-[#f5f5f0] text-xs font-black uppercase text-[#0a0a0a] dark:text-[#f5f5f0] shadow-[2px_2px_0px_0px_#0a0a0a] dark:shadow-[2px_2px_0px_0px_#ffe600] hover:bg-[#ffe600] hover:text-black transition cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#141418] hover:bg-[#1a1a20] border border-neutral-800 rounded-xl text-xs font-bold text-neutral-200 hover:text-white transition cursor-pointer active:scale-95 shadow-sm"
                     >
-                      <ChevronLeft className="w-4 h-4 stroke-[3]" />
+                      <ChevronLeft className="w-4 h-4" />
                       <span>{t("allTools")}</span>
                     </button>
 
-                    <span className="text-xs text-black dark:text-black bg-[#ffe600] border-2 border-[#0a0a0a] px-2 py-0.5 font-black uppercase tracking-wider">
-                      {activeTool.category}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-neutral-400 bg-[#18181d] px-2.5 py-1 rounded-lg border border-neutral-800">
+                        {activeTool.title}
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Tool Container */}
-                  <div className="bg-white dark:bg-[#17171a] p-5 sm:p-7 border-3 border-[#0a0a0a] dark:border-[#f5f5f0] shadow-[6px_6px_0px_0px_#0a0a0a] dark:shadow-[6px_6px_0px_0px_#ffe600]">
+                  {/* Tool Surface (Rounded, clean border, no horizontal overflow) */}
+                  <div className="bg-[#121215] p-4 sm:p-6 rounded-2xl border border-neutral-800/80 shadow-xl overflow-hidden w-full max-w-full">
                     {renderActiveToolComponent()}
                   </div>
                 </div>
               ) : (
-                /* Tools Catalog Grid */
-                <div className="space-y-6 animate-ios-fade">
-                  {/* Neo-Brutalist Category Tabs */}
+                /* Main Tools Dashboard View */
+                <div className="space-y-4 sm:space-y-5 animate-in fade-in duration-200">
+                  {/* Alert/Status Banner matching Screenshot_20261108-051355_7dae6052.jpg */}
+                  <div className="bg-[#141418] border border-amber-500/35 rounded-2xl p-4 sm:p-4.5 shadow-sm relative overflow-hidden">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                        <Zap className="w-4 h-4 fill-amber-400" />
+                      </div>
+
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <h2 className="text-xs sm:text-sm font-bold text-white tracking-tight">
+                            Fixio Multi-Utility Engine • 28+ Alat
+                          </h2>
+                          <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                            Aktif
+                          </span>
+                        </div>
+                        <p className="text-[11px] sm:text-xs text-neutral-400 leading-relaxed">
+                          Download media, AI enhance foto, cek akun game, dan sensor gempa BMKG langsung tanpa antre.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section Title with Icon (like Layanan Populer in screenshot) */}
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center gap-2">
+                      <LayoutGrid className="w-4 h-4 text-[#ffe600]" />
+                      <h2 className="text-sm font-extrabold text-white tracking-tight">
+                        {selectedCategory === "all" ? "Layanan Populer" : `Kategori: ${selectedCategory.toUpperCase()}`}
+                      </h2>
+                    </div>
+
+                    <span className="text-xs font-semibold text-neutral-400">
+                      {filteredTools.length} Layanan
+                    </span>
+                  </div>
+
+                  {/* Horizontal Category Pill Filter Bar */}
                   <CategoryFilter
                     activeCategory={selectedCategory}
                     onSelectCategory={setSelectedCategory}
@@ -246,9 +304,9 @@ export default function App() {
                     settings={settings}
                   />
 
-                  {/* Tools Grid (2 columns on tablet/desktop, 1 on mobile) */}
+                  {/* 2-Column Responsive Tool Grid (Exact match for Screenshot_20261108-051355_7dae6052.jpg) */}
                   {filteredTools.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3.5 w-full max-w-full">
                       {filteredTools.map((tool) => (
                         <ToolCard
                           key={tool.id}
@@ -258,12 +316,12 @@ export default function App() {
                       ))}
                     </div>
                   ) : (
-                    /* Brutalist Empty State */
-                    <div className="bg-white dark:bg-[#17171a] border-3 border-[#0a0a0a] dark:border-[#f5f5f0] shadow-[4px_4px_0px_0px_#0a0a0a] dark:shadow-[4px_4px_0px_0px_#ffe600] p-10 text-center space-y-4">
-                      <div className="w-12 h-12 bg-[#ffe600] text-black border-2 border-black flex items-center justify-center mx-auto shadow-[2px_2px_0px_0px_#000]">
-                        <Search className="w-6 h-6 stroke-[3]" />
+                    /* Clean Empty State */
+                    <div className="bg-[#141418] rounded-2xl border border-neutral-800 p-8 sm:p-10 text-center space-y-3">
+                      <div className="w-10 h-10 bg-neutral-800 text-neutral-400 rounded-full flex items-center justify-center mx-auto">
+                        <Search className="w-5 h-5" />
                       </div>
-                      <p className="text-sm font-extrabold uppercase tracking-wide text-[#0a0a0a] dark:text-[#f5f5f0]">
+                      <p className="text-xs sm:text-sm font-semibold text-white">
                         {language === "id" ? "Tidak ada alat yang cocok" : "No utilities found"}
                       </p>
                       <button
@@ -271,9 +329,9 @@ export default function App() {
                           setSearchQuery("");
                           setSelectedCategory("all");
                         }}
-                        className="inline-block px-4 py-2 bg-[#ffe600] text-black border-2 border-black text-xs font-black uppercase shadow-[2px_2px_0px_0px_#000] hover:translate-x-[-1px] hover:translate-y-[-1px] cursor-pointer"
+                        className="px-3.5 py-1.5 rounded-xl bg-white text-black text-xs font-bold hover:bg-neutral-200 cursor-pointer transition"
                       >
-                        {language === "id" ? "Tampilkan Semua Alat" : "Show All Tools"}
+                        {language === "id" ? "Reset Pencarian" : "Reset Search"}
                       </button>
                     </div>
                   )}
@@ -281,7 +339,7 @@ export default function App() {
               )}
             </main>
 
-            {/* Brutalist Footer */}
+            {/* Footer */}
             <Footer
               onOpenSettings={() => setIsSettingsOpen(true)}
               language={language}
@@ -314,13 +372,13 @@ export default function App() {
         pwa={pwa}
       />
 
-      {/* No-Internet Toast */}
+      {/* Offline Toast */}
       {!pwa.isOnline && (
         <div
-          className="fixed bottom-4 inset-x-4 sm:inset-x-0 sm:mx-auto sm:w-fit z-50 flex items-center gap-2 px-4 py-2.5 bg-[#ffe600] text-black border-2 border-black text-xs font-black uppercase shadow-[3px_3px_0px_0px_#000]"
+          className="fixed bottom-4 inset-x-4 sm:inset-x-0 sm:mx-auto sm:w-fit z-50 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#27272a] text-white text-xs font-medium shadow-lg border border-neutral-700"
           title={t("noInternetDesc")}
         >
-          <WifiOff className="w-4 h-4 stroke-[3] shrink-0" />
+          <WifiOff className="w-4 h-4 text-amber-400 shrink-0" />
           <span>{t("noInternetTitle")}</span>
         </div>
       )}

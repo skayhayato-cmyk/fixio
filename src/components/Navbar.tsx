@@ -1,15 +1,21 @@
 import React, { useState } from "react";
-import { Search, Settings as SettingsIcon, Download, X, Sun, Moon, Monitor } from "lucide-react";
-import { Logo } from "./Logo";
+import { 
+  Menu, 
+  Bell, 
+  Search, 
+  X, 
+  SlidersHorizontal,
+  Sparkles
+} from "lucide-react";
 import { AppSettings } from "../services/useAppSettings";
 import { PWAState } from "../services/usePWA";
-import { InstallGuideModal } from "./InstallGuideModal";
 
 interface NavbarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onHomeClick: () => void;
   onOpenSettings: () => void;
+  onToggleDrawer: () => void;
   settings: AppSettings;
   pwa: PWAState;
 }
@@ -19,46 +25,54 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSearchChange,
   onHomeClick,
   onOpenSettings,
+  onToggleDrawer,
   settings,
-  pwa,
 }) => {
-  const { t, language, appearance, toggleAppearance } = settings;
-  const [showInstallGuide, setShowInstallGuide] = useState(false);
-
-  const handleInstallClick = async () => {
-    if (pwa.isInstalled) return;
-    if (pwa.isInstallable) {
-      const accepted = await pwa.install();
-      if (!accepted) {
-        setShowInstallGuide(true);
-      }
-    } else {
-      setShowInstallGuide(true);
-    }
-  };
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [hasNotifAlert, setHasNotifAlert] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 bg-[#f4f4f0] dark:bg-[#0d0d0f] border-b-3 border-[#0a0a0a] dark:border-[#f5f5f0] transition-colors">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-        {/* Brand */}
-        <Logo size="sm" onClick={onHomeClick} />
+    <header className="sticky top-0 z-40 bg-[#0d0d10]/95 dark:bg-[#09090b]/95 backdrop-blur-md border-b border-neutral-800/80 transition-colors">
+      <div className="max-w-5xl mx-auto px-3.5 sm:px-6 h-14 flex items-center justify-between gap-3">
+        {/* Left: Hamburger menu toggle button */}
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={onToggleDrawer}
+            className="w-9 h-9 rounded-xl bg-neutral-800/80 hover:bg-neutral-700/80 text-white flex items-center justify-center transition border border-neutral-700/50 cursor-pointer active:scale-95"
+            aria-label="Buka Menu Samping"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
 
-        {/* Brutalist Search Field */}
-        <div className="flex-1 max-w-xs sm:max-w-sm mx-2">
+          <button
+            onClick={onHomeClick}
+            className="flex items-center gap-2 select-none cursor-pointer"
+          >
+            <div className="w-7 h-7 rounded-lg bg-[#ffe600] text-black font-black flex items-center justify-center text-xs shadow-sm">
+              Fx
+            </div>
+            <span className="text-sm sm:text-base font-extrabold text-white tracking-tight">
+              Fixio
+            </span>
+          </button>
+        </div>
+
+        {/* Center: Search Field (Compact on Mobile, Clean on Desktop) */}
+        <div className="flex-1 max-w-xs sm:max-w-md mx-1">
           <div className="relative flex items-center">
-            <Search className="w-4 h-4 text-black dark:text-white absolute left-3 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 pointer-events-none" />
             <input
               type="text"
-              placeholder={t("searchPlaceholder")}
+              placeholder="Cari alat (TikTok, Remini, Gempa)..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 bg-white dark:bg-[#17171a] border-2 border-[#0a0a0a] dark:border-[#f5f5f0] rounded-none text-xs font-bold text-[#0a0a0a] dark:text-[#f5f5f0] placeholder-[#555550] dark:placeholder-[#9e9e98] shadow-[2px_2px_0px_0px_#0a0a0a] dark:shadow-[2px_2px_0px_0px_#ffe600] focus:outline-none focus:translate-x-0.5 focus:translate-y-0.5"
+              className="w-full pl-8 pr-8 py-1.5 bg-[#17171c] border border-neutral-800 focus:border-neutral-700 rounded-xl text-xs font-medium text-white placeholder-neutral-500 focus:outline-none transition-colors"
             />
             {searchQuery && (
               <button
                 onClick={() => onSearchChange("")}
-                className="absolute right-2.5 text-black dark:text-white hover:bg-[#ffe600] hover:text-black p-0.5 border border-black dark:border-white"
-                aria-label="Clear search"
+                className="absolute right-2.5 text-neutral-400 hover:text-white"
+                aria-label="Hapus Pencarian"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -66,56 +80,30 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2">
-          {/* Theme Toggle Button */}
+        {/* Right: Actions (Notification & Avatar pill matching Screenshot_20261108-051355_7dae6052.jpg) */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Notification bell icon button */}
           <button
-            onClick={toggleAppearance}
-            className="bru-btn p-2 border-2 border-black dark:border-white bg-white dark:bg-[#17171a] shadow-[2px_2px_0px_0px_#0a0a0a] dark:shadow-[2px_2px_0px_0px_#ffe600] hover:bg-[#ffe600] hover:text-black active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
-            aria-label={t("appearance")}
-            title={`${t("appearance")}: ${appearance}`}
+            onClick={() => setHasNotifAlert(!hasNotifAlert)}
+            className="relative w-8 h-8 rounded-xl bg-neutral-800/60 hover:bg-neutral-800 text-neutral-300 hover:text-white flex items-center justify-center transition cursor-pointer"
+            aria-label="Notifikasi"
+            title="Pembaruan & Status Sistem"
           >
-            {appearance === "dark" ? (
-              <Sun className="w-4 h-4 text-amber-400 fill-amber-400" />
-            ) : appearance === "light" ? (
-              <Moon className="w-4 h-4 text-indigo-600 fill-indigo-600" />
-            ) : (
-              <Monitor className="w-4 h-4 text-black dark:text-white" />
-            )}
+            <Bell className="w-4 h-4" />
+            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-[#ffe600] rounded-full" />
           </button>
 
-          {/* Install Button if not yet installed */}
-          {!pwa.isInstalled && (
-            <button
-              onClick={handleInstallClick}
-              className="bru-btn-accent px-3 py-1.5 text-xs font-black uppercase text-black bg-[#ffe600] border-2 border-black shadow-[2px_2px_0px_0px_#0a0a0a] dark:shadow-[2px_2px_0px_0px_#f5f5f0] hover:translate-x-[-2px] hover:translate-y-[-2px] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer flex items-center gap-1.5"
-            >
-              <Download className="w-3.5 h-3.5 stroke-[3]" />
-              <span className="hidden md:inline">{t("installApp")}</span>
-            </button>
-          )}
-
-          {/* Settings Button */}
+          {/* User profile avatar pill (Green 'C' / 'F' avatar from screenshot) */}
           <button
             onClick={onOpenSettings}
-            className="bru-btn p-2 border-2 border-black dark:border-white bg-white dark:bg-[#17171a] shadow-[2px_2px_0px_0px_#0a0a0a] dark:shadow-[2px_2px_0px_0px_#ffe600] hover:bg-[#ffe600] hover:text-black active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
-            aria-label={t("settings")}
-            title={t("settings")}
+            className="w-8 h-8 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center transition cursor-pointer shadow-sm border border-emerald-400/30 active:scale-95"
+            aria-label="Pengaturan Profil"
+            title="Pengaturan Fixio"
           >
-            <SettingsIcon className="w-4 h-4 text-black dark:text-white" />
+            F
           </button>
         </div>
       </div>
-
-      {/* Universal PWA Install Guide Modal */}
-      <InstallGuideModal
-        isOpen={showInstallGuide}
-        onClose={() => setShowInstallGuide(false)}
-        language={language}
-        isIOS={pwa.isIOS}
-        isInstallable={pwa.isInstallable}
-        onNativeInstall={pwa.install}
-      />
     </header>
   );
 };
