@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Search, Settings as SettingsIcon, Download, X, Sun, Moon, Monitor, Sparkles, Layers } from "lucide-react";
+import { Search, Settings as SettingsIcon, Download, X, Sun, Moon, Monitor } from "lucide-react";
 import { Logo } from "./Logo";
 import { AppSettings } from "../services/useAppSettings";
 import { PWAState } from "../services/usePWA";
@@ -22,7 +22,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   settings,
   pwa,
 }) => {
-  const { t, language, appearance, toggleAppearance, iosUIUX, glassStyle, cycleGlassStyle } = settings;
+  const { t, language, appearance, toggleAppearance } = settings;
   const [showInstallGuide, setShowInstallGuide] = useState(false);
 
   const handleInstallClick = async () => {
@@ -38,62 +38,49 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 ios-navbar-glass border-b border-black/5 dark:border-white/10 transition-colors">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-2.5 sm:gap-3">
+    <header className="sticky top-0 z-40 bg-[#f4f4f0] dark:bg-[#0d0d0f] border-b-3 border-[#0a0a0a] dark:border-[#f5f5f0] transition-colors">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
         {/* Brand */}
         <Logo size="sm" onClick={onHomeClick} />
 
-        {/* Minimal iOS Search Field */}
-        <div className="flex-1 max-w-xs sm:max-w-sm mx-1 sm:mx-2">
+        {/* Brutalist Search Field */}
+        <div className="flex-1 max-w-xs sm:max-w-sm mx-2">
           <div className="relative flex items-center">
-            <Search className="w-3.5 h-3.5 text-[#8e8e93] dark:text-[#98989d] absolute left-3 pointer-events-none" />
+            <Search className="w-4 h-4 text-black dark:text-white absolute left-3 pointer-events-none" />
             <input
               type="text"
               placeholder={t("searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full pl-8 pr-8 py-1.5 bg-[#767680]/12 dark:bg-[#767680]/24 border-0 rounded-xl text-xs font-normal text-black dark:text-white placeholder-[#8e8e93] focus:outline-none focus:ring-1 focus:ring-[#007aff] transition-colors"
+              className="w-full pl-9 pr-8 py-2 bg-white dark:bg-[#17171a] border-2 border-[#0a0a0a] dark:border-[#f5f5f0] rounded-none text-xs font-bold text-[#0a0a0a] dark:text-[#f5f5f0] placeholder-[#555550] dark:placeholder-[#9e9e98] shadow-[2px_2px_0px_0px_#0a0a0a] dark:shadow-[2px_2px_0px_0px_#ffe600] focus:outline-none focus:translate-x-0.5 focus:translate-y-0.5"
             />
             {searchQuery && (
               <button
                 onClick={() => onSearchChange("")}
-                className="absolute right-2.5 text-[#8e8e93] hover:text-black dark:hover:text-white"
+                className="absolute right-2.5 text-black dark:text-white hover:bg-[#ffe600] hover:text-black p-0.5 border border-black dark:border-white"
                 aria-label="Clear search"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Quick Glass Style Switcher (Clear -> Frosted -> Blur -> Flat) */}
-          <button
-            onClick={cycleGlassStyle}
-            className="ios-btn-glass px-2.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 active:scale-95 cursor-pointer text-black/80 dark:text-white/80 transition-all border border-black/5 dark:border-white/10"
-            aria-label="Glassmorphism Style"
-            title={`Glass Style: ${glassStyle.toUpperCase()}`}
-          >
-            <Layers className="w-3.5 h-3.5 text-[#007aff] dark:text-[#0a84ff]" />
-            <span className="hidden sm:inline text-[11px] font-semibold capitalize">
-              {glassStyle}
-            </span>
-          </button>
-
-          {/* Quick Theme Toggle Button */}
+        <div className="flex items-center gap-2">
+          {/* Theme Toggle Button */}
           <button
             onClick={toggleAppearance}
-            className="ios-btn-glass p-2 rounded-full text-black/80 dark:text-white/80 hover:text-black dark:hover:text-white active:scale-95 cursor-pointer border border-black/5 dark:border-white/10"
+            className="bru-btn p-2 border-2 border-black dark:border-white bg-white dark:bg-[#17171a] shadow-[2px_2px_0px_0px_#0a0a0a] dark:shadow-[2px_2px_0px_0px_#ffe600] hover:bg-[#ffe600] hover:text-black active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
             aria-label={t("appearance")}
             title={`${t("appearance")}: ${appearance}`}
           >
             {appearance === "dark" ? (
-              <Sun className="w-4 h-4 text-amber-500" />
+              <Sun className="w-4 h-4 text-amber-400 fill-amber-400" />
             ) : appearance === "light" ? (
-              <Moon className="w-4 h-4 text-indigo-500" />
+              <Moon className="w-4 h-4 text-indigo-600 fill-indigo-600" />
             ) : (
-              <Monitor className="w-4 h-4 text-[#8e8e93] dark:text-[#98989d]" />
+              <Monitor className="w-4 h-4 text-black dark:text-white" />
             )}
           </button>
 
@@ -101,9 +88,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           {!pwa.isInstalled && (
             <button
               onClick={handleInstallClick}
-              className="ios-btn-glass px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold text-[#007aff] dark:text-[#0a84ff] flex items-center gap-1.5 active:scale-95 cursor-pointer border border-black/5 dark:border-white/10"
+              className="bru-btn-accent px-3 py-1.5 text-xs font-black uppercase text-black bg-[#ffe600] border-2 border-black shadow-[2px_2px_0px_0px_#0a0a0a] dark:shadow-[2px_2px_0px_0px_#f5f5f0] hover:translate-x-[-2px] hover:translate-y-[-2px] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer flex items-center gap-1.5"
             >
-              <Download className="w-3 h-3" />
+              <Download className="w-3.5 h-3.5 stroke-[3]" />
               <span className="hidden md:inline">{t("installApp")}</span>
             </button>
           )}
@@ -111,11 +98,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Settings Button */}
           <button
             onClick={onOpenSettings}
-            className="ios-btn-glass p-2 rounded-full text-black/80 dark:text-white/80 hover:text-black dark:hover:text-white active:scale-95 cursor-pointer border border-black/5 dark:border-white/10"
+            className="bru-btn p-2 border-2 border-black dark:border-white bg-white dark:bg-[#17171a] shadow-[2px_2px_0px_0px_#0a0a0a] dark:shadow-[2px_2px_0px_0px_#ffe600] hover:bg-[#ffe600] hover:text-black active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
             aria-label={t("settings")}
             title={t("settings")}
           >
-            <SettingsIcon className="w-4 h-4" />
+            <SettingsIcon className="w-4 h-4 text-black dark:text-white" />
           </button>
         </div>
       </div>

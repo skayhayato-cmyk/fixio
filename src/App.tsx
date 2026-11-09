@@ -180,7 +180,7 @@ export default function App() {
   const isLandingView = !hasEnteredApp && !activeToolId;
 
   return (
-    <div className="min-h-screen flex flex-col text-black dark:text-white transition-colors duration-200">
+    <div className="min-h-screen flex flex-col text-[#0a0a0a] dark:text-[#f5f5f0] transition-colors duration-200">
       <AmbientBackground />
 
       {isLandingView ? (
@@ -196,7 +196,7 @@ export default function App() {
       ) : (
         /* 2. Main App Screen (Tools Catalog or Active Tool) */
         <>
-          {/* iOS Minimal Navbar */}
+          {/* Neo-Brutalist Navbar */}
           <Navbar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -209,36 +209,36 @@ export default function App() {
             pwa={pwa}
           />
 
-          {/* Content sits in its own stacking context above the fixed ambient backdrop */}
+          {/* Content sits in its own stacking context above the grid backdrop */}
           <div className="relative z-10 flex flex-col flex-1">
-            <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6">
+            <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6">
               {activeTool ? (
                 /* Active Tool Screen */
                 <div className="space-y-4 animate-ios-fade">
-                  {/* Minimal iOS Back Navigation */}
+                  {/* Brutalist Back Navigation */}
                   <div className="flex items-center justify-between">
                     <button
                       onClick={() => setActiveToolId(null)}
-                      className="inline-flex items-center gap-1 text-sm font-semibold text-[#007aff] dark:text-[#0a84ff] hover:opacity-80 transition cursor-pointer active:scale-95"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-[#17171a] border-2 border-[#0a0a0a] dark:border-[#f5f5f0] text-xs font-black uppercase text-[#0a0a0a] dark:text-[#f5f5f0] shadow-[2px_2px_0px_0px_#0a0a0a] dark:shadow-[2px_2px_0px_0px_#ffe600] hover:bg-[#ffe600] hover:text-black transition cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
                     >
-                      <ChevronLeft className="w-4 h-4" />
+                      <ChevronLeft className="w-4 h-4 stroke-[3]" />
                       <span>{t("allTools")}</span>
                     </button>
 
-                    <span className="text-xs text-[#8e8e93] dark:text-[#98989d] uppercase font-semibold tracking-wider">
+                    <span className="text-xs text-black dark:text-black bg-[#ffe600] border-2 border-[#0a0a0a] px-2 py-0.5 font-black uppercase tracking-wider">
                       {activeTool.category}
                     </span>
                   </div>
 
                   {/* Tool Container */}
-                  <div className="bg-white dark:bg-[#1c1c1e] p-5 sm:p-7 rounded-2xl border border-black/5 dark:border-white/10 shadow-xs">
+                  <div className="bg-white dark:bg-[#17171a] p-5 sm:p-7 border-3 border-[#0a0a0a] dark:border-[#f5f5f0] shadow-[6px_6px_0px_0px_#0a0a0a] dark:shadow-[6px_6px_0px_0px_#ffe600]">
                     {renderActiveToolComponent()}
                   </div>
                 </div>
               ) : (
                 /* Tools Catalog Grid */
                 <div className="space-y-6 animate-ios-fade">
-                  {/* Minimal Segmented Category Tabs */}
+                  {/* Neo-Brutalist Category Tabs */}
                   <CategoryFilter
                     activeCategory={selectedCategory}
                     onSelectCategory={setSelectedCategory}
@@ -248,7 +248,7 @@ export default function App() {
 
                   {/* Tools Grid (2 columns on tablet/desktop, 1 on mobile) */}
                   {filteredTools.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                       {filteredTools.map((tool) => (
                         <ToolCard
                           key={tool.id}
@@ -258,12 +258,12 @@ export default function App() {
                       ))}
                     </div>
                   ) : (
-                    /* Minimal Empty State */
-                    <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 p-10 text-center space-y-3">
-                      <div className="w-10 h-10 bg-[#f2f2f7] dark:bg-[#2c2c2e] text-[#8e8e93] rounded-full flex items-center justify-center mx-auto">
-                        <Search className="w-5 h-5" />
+                    /* Brutalist Empty State */
+                    <div className="bg-white dark:bg-[#17171a] border-3 border-[#0a0a0a] dark:border-[#f5f5f0] shadow-[4px_4px_0px_0px_#0a0a0a] dark:shadow-[4px_4px_0px_0px_#ffe600] p-10 text-center space-y-4">
+                      <div className="w-12 h-12 bg-[#ffe600] text-black border-2 border-black flex items-center justify-center mx-auto shadow-[2px_2px_0px_0px_#000]">
+                        <Search className="w-6 h-6 stroke-[3]" />
                       </div>
-                      <p className="text-sm font-medium text-black dark:text-white">
+                      <p className="text-sm font-extrabold uppercase tracking-wide text-[#0a0a0a] dark:text-[#f5f5f0]">
                         {language === "id" ? "Tidak ada alat yang cocok" : "No utilities found"}
                       </p>
                       <button
@@ -271,7 +271,7 @@ export default function App() {
                           setSearchQuery("");
                           setSelectedCategory("all");
                         }}
-                        className="text-xs text-[#007aff] dark:text-[#0a84ff] font-semibold hover:underline cursor-pointer"
+                        className="inline-block px-4 py-2 bg-[#ffe600] text-black border-2 border-black text-xs font-black uppercase shadow-[2px_2px_0px_0px_#000] hover:translate-x-[-1px] hover:translate-y-[-1px] cursor-pointer"
                       >
                         {language === "id" ? "Tampilkan Semua Alat" : "Show All Tools"}
                       </button>
@@ -281,7 +281,7 @@ export default function App() {
               )}
             </main>
 
-            {/* Minimal iOS Footer */}
+            {/* Brutalist Footer */}
             <Footer
               onOpenSettings={() => setIsSettingsOpen(true)}
               language={language}
@@ -290,7 +290,7 @@ export default function App() {
         </>
       )}
 
-      {/* SINGLE Persistent YtPlay Background Player (Never unmounts or resets across navigation) */}
+      {/* SINGLE Persistent YtPlay Background Player */}
       {ytPlayerMounted && (
         <YtPlayTool
           onBack={() => setActiveToolId(null)}
@@ -317,10 +317,10 @@ export default function App() {
       {/* No-Internet Toast */}
       {!pwa.isOnline && (
         <div
-          className="fixed bottom-4 inset-x-4 sm:inset-x-0 sm:mx-auto sm:w-fit z-50 flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#3a3a3c] text-white text-xs font-medium shadow-md"
+          className="fixed bottom-4 inset-x-4 sm:inset-x-0 sm:mx-auto sm:w-fit z-50 flex items-center gap-2 px-4 py-2.5 bg-[#ffe600] text-black border-2 border-black text-xs font-black uppercase shadow-[3px_3px_0px_0px_#000]"
           title={t("noInternetDesc")}
         >
-          <WifiOff className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          <WifiOff className="w-4 h-4 stroke-[3] shrink-0" />
           <span>{t("noInternetTitle")}</span>
         </div>
       )}

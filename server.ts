@@ -1309,7 +1309,7 @@ app.get("/api/audio-proxy", async (req, res) => {
 });
 
 // 404 handler for API routes
-app.use("/api/*", (req, res) => {
+app.use((req, res) => {
   res.status(404).json({
     ok: false,
     status: false,

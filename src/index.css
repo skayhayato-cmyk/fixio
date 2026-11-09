@@ -2,394 +2,258 @@
 
 @custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
 
+/* ============================================================
+   FIXIO — NEO-BRUTALISM DESIGN CONSTITUTION
+   High contrast solid 2px borders, hard offset unblurred shadows,
+   sharp geometry, bold typography, Signal Yellow accent (#ffe600).
+   ============================================================ */
 @layer base {
   :root,
   :root.light,
   .light,
   [data-theme="light"] {
-    --ios-bg: #f2f2f7;
-    --ios-card: #ffffff;
-    --ios-card-glass: rgba(255, 255, 255, 0.75);
-    --ios-card-secondary: #f8f8fa;
-    --ios-label: #000000;
-    --ios-label-secondary: #8e8e93;
-    --ios-separator: rgba(60, 60, 67, 0.12);
-    --ios-glass-border: rgba(255, 255, 255, 0.7);
-    --ios-glass-blur: 20px;
-    --ios-shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-    --ios-shadow-card: 0 2px 8px -2px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-    --ios-shadow-float: 0 8px 24px -6px rgba(0, 0, 0, 0.06);
+    --bru-bg: #f4f4f0;
+    --bru-surface: #ffffff;
+    --bru-ink: #0a0a0a;
+    --bru-muted: #555550;
+    --bru-line: #0a0a0a;
+    --bru-accent: #ffe600;
+    --bru-accent-ink: #0a0a0a;
+    --bru-shadow: 4px 4px 0px 0px #0a0a0a;
+    --bru-shadow-sm: 2px 2px 0px 0px #0a0a0a;
+    --bru-shadow-lg: 6px 6px 0px 0px #0a0a0a;
+
+    --ios-bg: var(--bru-bg);
+    --ios-card: var(--bru-surface);
+    --ios-card-glass: var(--bru-surface);
+    --ios-card-secondary: #eaeaea;
+    --ios-label: var(--bru-ink);
+    --ios-label-secondary: var(--bru-muted);
+    --ios-separator: var(--bru-line);
+    --ios-glass-border: var(--bru-line);
     color-scheme: light;
   }
 
   :root.dark,
   .dark,
   [data-theme="dark"] {
-    --ios-bg: #000000;
-    --ios-card: #121214;
-    --ios-card-glass: rgba(20, 20, 24, 0.75);
-    --ios-card-secondary: #1c1c1e;
-    --ios-label: #ffffff;
-    --ios-label-secondary: #98989d;
-    --ios-separator: rgba(255, 255, 255, 0.1);
-    --ios-glass-border: rgba(255, 255, 255, 0.14);
-    --ios-glass-blur: 24px;
-    --ios-shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.7);
-    --ios-shadow-card: 0 2px 10px rgba(0, 0, 0, 0.8);
-    --ios-shadow-float: 0 12px 32px rgba(0, 0, 0, 0.9);
+    --bru-bg: #0d0d0f;
+    --bru-surface: #17171a;
+    --bru-ink: #f5f5f0;
+    --bru-muted: #9e9e98;
+    --bru-line: #f5f5f0;
+    --bru-accent: #ffe600;
+    --bru-accent-ink: #0a0a0a;
+    --bru-shadow: 4px 4px 0px 0px #ffe600;
+    --bru-shadow-sm: 2px 2px 0px 0px #ffe600;
+    --bru-shadow-lg: 6px 6px 0px 0px #ffe600;
+
+    --ios-bg: var(--bru-bg);
+    --ios-card: var(--bru-surface);
+    --ios-card-glass: var(--bru-surface);
+    --ios-card-secondary: #222226;
+    --ios-label: var(--bru-ink);
+    --ios-label-secondary: var(--bru-muted);
+    --ios-separator: var(--bru-line);
+    --ios-glass-border: var(--bru-line);
     color-scheme: dark;
   }
 
-  /* Display Scale / Density Modes */
-  :root[data-display-scale="standard"] {
-    font-size: 16px;
-  }
-
-  :root[data-display-scale="medium"] {
-    font-size: 17px;
-  }
-
-  :root[data-display-scale="high"] {
-    font-size: 18.25px;
-  }
-
-  /* Glassmorphism Styles (as in reference image) */
-  /* 1. Clear (iOS): Crystal clear refraction & specular highlight */
-  :root[data-glass-style="clear"] {
-    --glass-bg-light: rgba(255, 255, 255, 0.48);
-    --glass-bg-dark: rgba(22, 22, 26, 0.55);
-    --glass-blur: 20px;
-    --glass-saturate: 180%;
-    --glass-border-light: rgba(255, 255, 255, 0.65);
-    --glass-border-dark: rgba(255, 255, 255, 0.16);
-    --glass-shadow-light: 0 8px 30px rgba(0, 0, 0, 0.05);
-    --glass-shadow-dark: 0 8px 32px rgba(0, 0, 0, 0.75);
-  }
-
-  /* 2. Frosted (Concept): Silky frosted heavy blur & satin rim */
-  :root[data-glass-style="frosted"] {
-    --glass-bg-light: rgba(255, 255, 255, 0.74);
-    --glass-bg-dark: rgba(28, 28, 34, 0.72);
-    --glass-blur: 38px;
-    --glass-saturate: 150%;
-    --glass-border-light: rgba(255, 255, 255, 0.85);
-    --glass-border-dark: rgba(255, 255, 255, 0.22);
-    --glass-shadow-light: inset 0 0 0 1px rgba(255, 255, 255, 0.4), 0 10px 35px rgba(0, 0, 0, 0.06);
-    --glass-shadow-dark: inset 0 0 0 1px rgba(255, 255, 255, 0.1), 0 12px 40px rgba(0, 0, 0, 0.85);
-  }
-
-  /* 3. Blur (One UI): Atmospheric diffuse gaussian blur */
-  :root[data-glass-style="blur"] {
-    --glass-bg-light: rgba(245, 245, 247, 0.84);
-    --glass-bg-dark: rgba(18, 18, 22, 0.85);
-    --glass-blur: 50px;
-    --glass-saturate: 130%;
-    --glass-border-light: rgba(210, 210, 220, 0.45);
-    --glass-border-dark: rgba(255, 255, 255, 0.09);
-    --glass-shadow-light: 0 6px 24px rgba(0, 0, 0, 0.05);
-    --glass-shadow-dark: 0 8px 30px rgba(0, 0, 0, 0.8);
-  }
-
-  /* 4. Solid Flat */
-  :root[data-glass-style="flat"] {
-    --glass-bg-light: #ffffff;
-    --glass-bg-dark: #141416;
-    --glass-blur: 0px;
-    --glass-saturate: 100%;
-    --glass-border-light: rgba(0, 0, 0, 0.08);
-    --glass-border-dark: rgba(255, 255, 255, 0.08);
-    --glass-shadow-light: 0 1px 3px rgba(0, 0, 0, 0.04);
-    --glass-shadow-dark: 0 2px 8px rgba(0, 0, 0, 0.6);
-  }
+  :root[data-display-scale="standard"] { font-size: 16px; }
+  :root[data-display-scale="medium"] { font-size: 17px; }
+  :root[data-display-scale="high"] { font-size: 18.25px; }
 
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif;
-    background-color: var(--ios-bg);
-    color: var(--ios-label);
+    font-family: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: var(--bru-bg);
+    color: var(--bru-ink);
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
-    letter-spacing: -0.011em;
+    letter-spacing: -0.01em;
     min-height: 100vh;
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  ::selection {
+    background: var(--bru-accent);
+    color: var(--bru-accent-ink);
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--bru-accent);
+    outline-offset: 2px;
   }
 }
 
-/* Hide scrollbar for clean horizontal tab navigation */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ------------------------------------------------------------
+   NEO-BRUTALISM UTILITIES & CORE CLASSES
+   ------------------------------------------------------------ */
+
+/* Hard Brutalist Card */
+.bru-card,
+.ios-card,
+.ios-glass-surface,
+.glass-panel,
+.glass-clean {
+  background: var(--bru-surface);
+  border: 2px solid var(--bru-line);
+  box-shadow: var(--bru-shadow-sm);
+  border-radius: 4px;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
 
-/* Dynamic Glass Card Class */
-.ios-glass-surface {
-  background: var(--glass-bg-light, rgba(255, 255, 255, 0.65));
-  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(var(--glass-saturate, 180%));
-  -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(var(--glass-saturate, 180%));
-  border: 1px solid var(--glass-border-light, rgba(255, 255, 255, 0.6));
-  box-shadow: var(--glass-shadow-light, 0 4px 20px rgba(0, 0, 0, 0.04));
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+/* Interactive Card Hover & Active Physics */
+.bru-card-interactive,
+.ios-card-interactive {
+  cursor: pointer;
 }
-.dark .ios-glass-surface,
-[data-theme="dark"] .ios-glass-surface {
-  background: var(--glass-bg-dark, rgba(20, 20, 24, 0.7));
-  border: 1px solid var(--glass-border-dark, rgba(255, 255, 255, 0.14));
-  box-shadow: var(--glass-shadow-dark, 0 8px 32px rgba(0, 0, 0, 0.8));
-}
-
-/* 3D Smooth Button & Interactive Controls */
-:root[data-smooth-3d="true"] .btn-3d,
-:root[data-smooth-3d="true"] .ios-btn-primary,
-:root[data-smooth-3d="true"] .ios-btn-solid,
-:root[data-smooth-3d="true"] .ios-btn-glass,
-:root[data-smooth-3d="true"] .glass-picker-card {
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease, filter 0.18s ease;
-  will-change: transform, box-shadow;
-}
-
-:root[data-smooth-3d="true"] .ios-btn-primary {
-  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.35), 0 2px 0 rgba(0, 80, 180, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-:root[data-smooth-3d="true"] .ios-btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(0, 122, 255, 0.45), 0 3px 0 rgba(0, 80, 180, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.45);
-}
-:root[data-smooth-3d="true"] .ios-btn-primary:active {
-  transform: translateY(2px) scale(0.985);
-  box-shadow: 0 1px 3px rgba(0, 122, 255, 0.25), 0 0px 0 rgba(0, 80, 180, 0.8), inset 0 1px 2px rgba(0, 0, 0, 0.2);
-}
-
-:root[data-smooth-3d="true"] .ios-btn-solid {
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15), 0 2px 0 rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-}
-:root[data-smooth-3d="true"] .ios-btn-solid:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22), 0 3px 0 rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-:root[data-smooth-3d="true"] .ios-btn-solid:active {
-  transform: translateY(2px) scale(0.985);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 0px 0 transparent;
-}
-:root[data-smooth-3d="true"].dark .ios-btn-solid,
-:root[data-smooth-3d="true"][data-theme="dark"] .ios-btn-solid {
-  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.12), 0 2px 0 rgba(200, 200, 200, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.8);
-}
-:root[data-smooth-3d="true"].dark .ios-btn-solid:hover,
-:root[data-smooth-3d="true"][data-theme="dark"] .ios-btn-solid:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 255, 255, 0.18), 0 3px 0 rgba(200, 200, 200, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-:root[data-smooth-3d="true"].dark .ios-btn-solid:active,
-:root[data-smooth-3d="true"][data-theme="dark"] .ios-btn-solid:active {
-  transform: translateY(2px) scale(0.985);
-  box-shadow: 0 1px 4px rgba(255, 255, 255, 0.1), 0 0px 0 transparent;
-}
-
-:root[data-smooth-3d="true"] .ios-btn-glass {
-  box-shadow: var(--glass-shadow-light, 0 3px 8px rgba(0, 0, 0, 0.06)), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-}
-:root[data-smooth-3d="true"] .ios-btn-glass:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--glass-shadow-light, 0 6px 16px rgba(0, 0, 0, 0.09)), inset 0 1px 0 rgba(255, 255, 255, 0.8);
-}
-:root[data-smooth-3d="true"] .ios-btn-glass:active {
-  transform: translateY(1.5px) scale(0.98);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), inset 0 1px 2px rgba(0, 0, 0, 0.06);
-}
-
-:root[data-smooth-3d="true"].dark .ios-btn-glass,
-:root[data-smooth-3d="true"][data-theme="dark"] .ios-btn-glass {
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.14);
-}
-:root[data-smooth-3d="true"].dark .ios-btn-glass:hover,
-:root[data-smooth-3d="true"][data-theme="dark"] .ios-btn-glass:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.22);
-}
-:root[data-smooth-3d="true"].dark .ios-btn-glass:active,
-:root[data-smooth-3d="true"][data-theme="dark"] .ios-btn-glass:active {
-  transform: translateY(1.5px) scale(0.98);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), inset 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-/* 3D Glass Picker Card Hover/Active Physics */
-:root[data-smooth-3d="true"] .glass-picker-card:hover {
-  transform: translateY(-3px) scale(1.01);
-}
-:root[data-smooth-3d="true"] .glass-picker-card:active {
-  transform: translateY(2px) scale(0.98);
-}
-
-/* Premium iOS Glassmorphism Button */
-.ios-btn-glass {
-  background: var(--glass-bg-light, rgba(255, 255, 255, 0.65));
-  backdrop-filter: blur(var(--glass-blur, 16px));
-  -webkit-backdrop-filter: blur(var(--glass-blur, 16px));
-  border: 1px solid var(--glass-border-light, rgba(255, 255, 255, 0.5));
-  box-shadow: var(--glass-shadow-light, 0 1px 3px rgba(0, 0, 0, 0.04));
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.dark .ios-btn-glass,
-[data-theme="dark"] .ios-btn-glass {
-  background: var(--glass-bg-dark, rgba(255, 255, 255, 0.08));
-  border: 1px solid var(--glass-border-dark, rgba(255, 255, 255, 0.14));
-  box-shadow: var(--glass-shadow-dark, 0 1px 4px rgba(0, 0, 0, 0.7));
-}
-.ios-btn-glass:hover {
-  filter: brightness(1.04);
-}
-.dark .ios-btn-glass:hover,
-[data-theme="dark"] .ios-btn-glass:hover {
-  filter: brightness(1.2);
-}
-.ios-btn-glass:active {
-  transform: scale(0.97);
-}
-
-/* Flat UI mode override when iOS UI/UX is turned off */
-[data-ios-uiux="false"] .ios-btn-glass,
-[data-glass-style="flat"] .ios-btn-glass {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  background: #e5e5ea;
-  border: 1px solid #d1d1d6;
-}
-[data-ios-uiux="false"].dark .ios-btn-glass,
-[data-ios-uiux="false"][data-theme="dark"] .ios-btn-glass,
-[data-glass-style="flat"].dark .ios-btn-glass,
-[data-glass-style="flat"][data-theme="dark"] .ios-btn-glass {
-  background: #1c1c1e;
-  border: 1px solid #2c2c2e;
-}
-
-/* iOS Primary Pill Button */
-.ios-btn-primary {
-  background: #007aff;
-  color: #ffffff;
-  border-radius: 9999px;
-  box-shadow: 0 2px 6px rgba(0, 122, 255, 0.25);
-  transition: all 0.18s ease;
-}
-.ios-btn-primary:hover {
-  background: #0066d6;
-}
-.ios-btn-primary:active {
-  transform: scale(0.97);
-}
-
-/* iOS Dark Button */
-.ios-btn-solid {
-  background: #1c1c1e;
-  color: #ffffff;
-  border-radius: 9999px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-  transition: all 0.18s ease;
-}
-.dark .ios-btn-solid,
-[data-theme="dark"] .ios-btn-solid {
-  background: #ffffff;
-  color: #000000;
-}
-.ios-btn-solid:active {
-  transform: scale(0.97);
-}
-
-/* Soft iOS Card Surface */
-.ios-card {
-  background-color: var(--ios-card);
-  border: 1px solid var(--ios-separator);
-  border-radius: 1.25rem;
-  box-shadow: var(--ios-shadow-card);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
+.bru-card-interactive:hover,
 .ios-card-interactive:hover {
-  border-color: rgba(0, 122, 255, 0.35);
-  box-shadow: var(--ios-shadow-float);
-  transform: translateY(-2px);
+  transform: translate(-2px, -2px);
+  box-shadow: var(--bru-shadow);
 }
+.bru-card-interactive:active,
 .ios-card-interactive:active {
-  transform: scale(0.985);
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px 0px transparent;
 }
 
-/* Minimal subtle typography text reveal */
-@keyframes ios-fade-slide {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* Hard Brutalist Buttons */
+.bru-btn,
+.ios-btn-glass,
+.ios-btn-solid {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--bru-surface);
+  color: var(--bru-ink);
+  border: 2px solid var(--bru-line);
+  box-shadow: var(--bru-shadow-sm);
+  border-radius: 4px;
+  font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.08s ease, color 0.08s ease;
+}
+.bru-btn:hover,
+.ios-btn-glass:hover,
+.ios-btn-solid:hover {
+  background: var(--bru-accent);
+  color: var(--bru-accent-ink);
+  transform: translate(-2px, -2px);
+  box-shadow: var(--bru-shadow);
+}
+.bru-btn:active,
+.ios-btn-glass:active,
+.ios-btn-solid:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px 0px transparent;
 }
 
-.animate-ios-fade {
-  animation: ios-fade-slide 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+/* Primary Signal Accent Button */
+.bru-btn-accent,
+.ios-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--bru-accent);
+  color: var(--bru-accent-ink);
+  border: 2px solid #0a0a0a;
+  box-shadow: 3px 3px 0px 0px #0a0a0a;
+  border-radius: 4px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.08s ease;
+}
+.dark .bru-btn-accent,
+.dark .ios-btn-primary {
+  border-color: #f5f5f0;
+  box-shadow: 3px 3px 0px 0px #f5f5f0;
+}
+.bru-btn-accent:hover,
+.ios-btn-primary:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0px 0px #0a0a0a;
+  filter: brightness(1.05);
+}
+.dark .bru-btn-accent:hover,
+.dark .ios-btn-primary:hover {
+  box-shadow: 5px 5px 0px 0px #f5f5f0;
+}
+.bru-btn-accent:active,
+.ios-btn-primary:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px 0px transparent;
 }
 
-/* ============================================================
-   Ambient Refraction Backdrop
-   Real glassmorphism only reads as "different" when there is
-   colorful content behind the glass to blur/saturate. This fixed
-   layer gives every glass surface (navbar, buttons, cards) real
-   contrast between Clear / Frosted / Blur / Flat.
-   ============================================================ */
+/* Brutalist Chip / Segmented Tab */
+.bru-chip,
+.glass-pill {
+  border: 2px solid var(--bru-line);
+  background: var(--bru-surface);
+  color: var(--bru-ink);
+  font-weight: 700;
+  border-radius: 4px;
+  transition: background 0.08s ease, transform 0.08s ease;
+}
+.bru-chip[data-active="true"],
+.bru-chip.active {
+  background: var(--bru-accent);
+  color: var(--bru-accent-ink);
+  box-shadow: var(--bru-shadow-sm);
+}
+
+/* Brutalist Icon Container */
+.bru-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bru-accent);
+  color: var(--bru-accent-ink);
+  border: 2px solid #0a0a0a;
+  border-radius: 4px;
+}
+.dark .bru-icon {
+  border-color: #f5f5f0;
+}
+
+/* Neo-Brutalist Technical Grid Background */
+.bru-grid-bg,
 .fixio-ambient-bg {
   position: fixed;
   inset: 0;
   z-index: 0;
-  overflow: hidden;
   pointer-events: none;
-  background: var(--ios-bg);
-}
-.fixio-ambient-bg .blob {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(70px);
-  opacity: 0.55;
-  animation: ambient-float 22s ease-in-out infinite;
-}
-.fixio-ambient-bg .blob-1 { top: -10%; left: -8%; width: 42vw; height: 42vw; background: #ff9f43; animation-delay: 0s; }
-.fixio-ambient-bg .blob-2 { top: 10%; right: -12%; width: 46vw; height: 46vw; background: #007aff; animation-delay: -6s; }
-.fixio-ambient-bg .blob-3 { bottom: -14%; left: 12%; width: 40vw; height: 40vw; background: #34c759; animation-delay: -12s; }
-.fixio-ambient-bg .blob-4 { bottom: -8%; right: 8%; width: 34vw; height: 34vw; background: #af52de; animation-delay: -18s; }
-
-.dark .fixio-ambient-bg .blob,
-[data-theme="dark"] .fixio-ambient-bg .blob {
-  opacity: 0.35;
-  filter: blur(90px);
+  background-color: var(--bru-bg);
+  background-image: 
+    linear-gradient(to right, color-mix(in srgb, var(--bru-ink) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--bru-ink) 8%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
-@keyframes ambient-float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(4%, -4%) scale(1.12); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fixio-ambient-bg .blob { animation: none; }
-}
-
-/* Sticky navbar now reads live glass-style variables instead of a
-   fixed blur value, so switching Clear/Frosted/Blur is visible here too */
+/* Header bar */
+.bru-header,
 .ios-navbar-glass {
-  background: var(--glass-bg-light, rgba(255, 255, 255, 0.75));
-  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(var(--glass-saturate, 180%));
-  -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(var(--glass-saturate, 180%));
-}
-.dark .ios-navbar-glass,
-[data-theme="dark"] .ios-navbar-glass {
-  background: var(--glass-bg-dark, rgba(0, 0, 0, 0.8));
+  background: var(--bru-bg);
+  border-bottom: 3px solid var(--bru-line);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
-/* Typewriter animation for landing tagline */
+/* Typewriter Caret */
 .typewriter-caret {
   display: inline-block;
-  width: 2px;
+  width: 3px;
   margin-left: 2px;
-  background: currentColor;
+  background: var(--bru-accent);
   animation: caret-blink 0.85s steps(1) infinite;
 }
 @keyframes caret-blink {
@@ -397,27 +261,28 @@
   50%, 100% { opacity: 0; }
 }
 
-/* Backward compatibility classes mapped to clean styles */
-.glass-panel {
-  background-color: var(--ios-card);
-  border: 1px solid var(--ios-separator);
-  border-radius: 1.25rem;
-  box-shadow: var(--ios-shadow-card);
+/* Form Controls Brutalist Overrides */
+input[type="text"],
+input[type="search"],
+input[type="number"],
+input[type="password"],
+textarea,
+select {
+  border: 2px solid var(--bru-line) !important;
+  border-radius: 4px !important;
+  background-color: var(--bru-surface) !important;
+  color: var(--bru-ink) !important;
+  box-shadow: var(--bru-shadow-sm) !important;
+  font-weight: 500 !important;
+  transition: transform 0.08s ease, box-shadow 0.08s ease !important;
 }
-.glass-clean {
-  background-color: var(--ios-card);
-  border: 1px solid var(--ios-separator);
-  border-radius: 1.25rem;
-  box-shadow: var(--ios-shadow-subtle);
-}
-.glass-pill {
-  background: var(--glass-bg-light, rgba(255, 255, 255, 0.6));
-  backdrop-filter: blur(var(--glass-blur, 12px));
-  -webkit-backdrop-filter: blur(var(--glass-blur, 12px));
-  border: 1px solid var(--ios-separator);
-  border-radius: 9999px;
-}
-.dark .glass-pill,
-[data-theme="dark"] .glass-pill {
-  background: var(--glass-bg-dark, rgba(255, 255, 255, 0.08));
+input[type="text"]:focus,
+input[type="search"]:focus,
+input[type="number"]:focus,
+input[type="password"]:focus,
+textarea:focus,
+select:focus {
+  outline: none !important;
+  box-shadow: var(--bru-shadow) !important;
+  background-color: var(--bru-surface) !important;
 }
