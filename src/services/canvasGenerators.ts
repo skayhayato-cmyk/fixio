@@ -4,6 +4,8 @@
  * when external generator APIs encounter downtime or HTTP 503.
  */
 
+import { getProxiedImageUrl } from "./api";
+
 // Helper to load image cleanly
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -636,7 +638,10 @@ function drawFallbackAvatar(
 }
 
 // 7. Free Fire Stalker Card Generator
-export async function renderFFStalkerCard(profile: import("../types").FFProfile): Promise<string> {
+export async function renderFFStalkerCard(
+  profile: import("../types").FFProfile,
+  outputFormat: "png" | "jpg" = "png"
+): Promise<string> {
   const canvas = document.createElement("canvas");
   canvas.width = 1200;
   canvas.height = 675;
@@ -692,13 +697,13 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
   ctx.font = "900 22px 'Space Grotesk', sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.fillText("🔥 FREE FIRE PLAYER PROFILE", 65, 60);
+  ctx.fillText("FREE FIRE PLAYER PROFILE", 65, 60);
 
   ctx.textAlign = "right";
   ctx.font = "700 14px sans-serif";
   ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
   const regionTag = profile.server || profile.region || "INDONESIA (ID)";
-  ctx.fillText(`SERVER: ${regionTag} • ${profile.releaseVersion || "OB54"}`, 1135, 60);
+  ctx.fillText(`SERVER: ${regionTag} • ${profile.releaseVersion || "OB55"}`, 1135, 60);
 
   // Left Card: Main Profile & Avatar
   ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
@@ -713,7 +718,7 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
   let avatarLoaded = false;
   if (avatarUrl) {
     try {
-      const proxied = `/api/proxy-image?url=${encodeURIComponent(avatarUrl)}`;
+      const proxied = getProxiedImageUrl(avatarUrl);
       const img = await loadImage(proxied);
       ctx.save();
       ctx.beginPath();
@@ -832,7 +837,7 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
   const brRankUrl = profile.assets?.brRankImage || profile.ranks?.br?.imageUrl;
   if (brRankUrl) {
     try {
-      const proxied = `/api/proxy-image?url=${encodeURIComponent(brRankUrl)}`;
+      const proxied = getProxiedImageUrl(brRankUrl);
       const brImg = await loadImage(proxied);
       ctx.drawImage(brImg, 755, 125, 65, 65);
     } catch {}
@@ -840,12 +845,13 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "900 28px 'Space Grotesk', sans-serif";
-  ctx.fillText(profile.ranks?.br?.tier || "Bronze I", 570, 190);
+  const brTierLabel = profile.ranks?.br?.tier || (profile.ranks?.br?.rankId ? `Rank #${profile.ranks.br.rankId}` : "Unranked");
+  ctx.fillText(brTierLabel, 570, 190);
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
   ctx.font = "600 14px sans-serif";
-  ctx.fillText(`Points: ${profile.ranks?.br?.pointsText || profile.ranks?.br?.points || "1.000"} pts`, 570, 225);
-  ctx.fillText(`Max Rank ID: ${profile.ranks?.br?.maxRank || 301}`, 570, 255);
+  ctx.fillText(`Points: ${profile.ranks?.br?.pointsText || profile.ranks?.br?.points || 0} pts`, 570, 225);
+  ctx.fillText(`Max Rank ID: ${profile.ranks?.br?.maxRank || "-"}`, 570, 255);
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
   roundRect(ctx, 570, 280, 240, 45, 10);
@@ -864,13 +870,13 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
   ctx.fillStyle = "#c084fc";
   ctx.font = "800 14px 'Space Grotesk', sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText("⚔️ CLASH SQUAD (CS)", 880, 145);
+  ctx.fillText("CLASH SQUAD (CS)", 880, 145);
 
   // Attempt to draw actual CS Rank PNG badge
   const csRankUrl = profile.assets?.csRankImage || profile.ranks?.cs?.imageUrl;
   if (csRankUrl) {
     try {
-      const proxied = `/api/proxy-image?url=${encodeURIComponent(csRankUrl)}`;
+      const proxied = getProxiedImageUrl(csRankUrl);
       const csImg = await loadImage(proxied);
       ctx.drawImage(csImg, 1080, 125, 65, 65);
     } catch {}
@@ -878,19 +884,20 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "900 28px 'Space Grotesk', sans-serif";
-  ctx.fillText(profile.ranks?.cs?.tier || "Platinum", 880, 190);
+  const csTierLabel = profile.ranks?.cs?.tier || (profile.ranks?.cs?.rankId ? `Rank #${profile.ranks.cs.rankId}` : "Unranked");
+  ctx.fillText(csTierLabel, 880, 190);
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
   ctx.font = "600 14px sans-serif";
-  ctx.fillText(`Bintang: ⭐ ${profile.ranks?.cs?.star || 2} Star`, 880, 225);
-  ctx.fillText(`Points: ${profile.ranks?.cs?.points || 38} pts`, 880, 255);
+  ctx.fillText(`Bintang: ${profile.ranks?.cs?.star ?? 0} Star`, 880, 225);
+  ctx.fillText(`Points: ${profile.ranks?.cs?.points ?? 0} pts`, 880, 255);
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
   roundRect(ctx, 880, 280, 255, 45, 10);
   ctx.fill();
   ctx.fillStyle = "#e9d5ff";
   ctx.font = "700 13px sans-serif";
-  ctx.fillText(`Pet: ${profile.pet?.name || "Tidak ada"} (Lv.${profile.pet?.level || 1})`, 895, 308);
+  ctx.fillText(`Pet: ${profile.pet?.name || "Tidak ada"} (Lv.${profile.pet?.level ?? 1})`, 895, 308);
 
   // Right Side Bottom: Account Value & Inventory summary
   ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
@@ -902,7 +909,7 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
   ctx.fillStyle = "#fbbf24";
   ctx.font = "800 16px 'Space Grotesk', sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText("💎 INFORMASI VALUASI & AKTIVITAS AKUN", 575, 405);
+  ctx.fillText("INFORMASI VALUASI & AKTIVITAS AKUN", 575, 405);
 
   // Valuation details
   ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
@@ -910,16 +917,16 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
   ctx.fillText("Estimasi Nilai Akun:", 575, 442);
   ctx.fillStyle = "#4ade80";
   ctx.font = "900 24px 'Space Grotesk', sans-serif";
-  ctx.fillText(profile.estimate?.text || "Rp 600.000", 575, 474);
+  ctx.fillText(profile.estimate?.text || "Rp 0", 575, 474);
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
   ctx.font = "600 13px sans-serif";
-  ctx.fillText(`Equivalent: ~${profile.estimate?.diamonds || 390} Diamonds • $${profile.estimate?.usd || "34.22"} USD`, 575, 504);
+  ctx.fillText(`Equivalent: ~${profile.estimate?.diamonds || 0} Diamonds • $${profile.estimate?.usd || "0"} USD`, 575, 504);
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
   ctx.font = "600 13px sans-serif";
-  ctx.fillText(`Dibuat: ${profile.dates?.createdAtText || "Rabu, 12 April 2023"}`, 575, 542);
-  ctx.fillText(`Login Terakhir: ${profile.dates?.lastLoginAtText || "Baru-baru ini"}`, 575, 572);
+  ctx.fillText(`Dibuat: ${profile.dates?.createdAtText || "-"}`, 575, 542);
+  ctx.fillText(`Login Terakhir: ${profile.dates?.lastLoginAtText || "-"}`, 575, 572);
 
   // Outfit & Weapon preview panel inside card
   ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
@@ -931,7 +938,7 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
   ctx.fillStyle = "#f59e0b";
   ctx.font = "800 12px sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText("👕 OUTFIT & WEAPONS (PNG)", 905, 445);
+  ctx.fillText("OUTFIT & WEAPONS", 905, 445);
 
   const previewItems = [
     ...(profile.assets?.clothes || []).slice(0, 3).map((c) => ({ url: c.url })),
@@ -943,7 +950,7 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
     for (let i = 0; i < previewItems.length; i++) {
       const it = previewItems[i];
       try {
-        const proxied = `/api/proxy-image?url=${encodeURIComponent(it.url)}`;
+        const proxied = getProxiedImageUrl(it.url);
         const img = await loadImage(proxied);
         ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
         roundRect(ctx, xOffset, 465, 52, 52, 8);
@@ -958,8 +965,8 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
     }
     ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
     ctx.font = "600 11px sans-serif";
-    ctx.fillText(`${(profile.assets?.clothes?.length || 0) + (profile.assets?.weaponSkins?.length || 0)} Total Aset PNG`, 905, 545);
-    ctx.fillText("Tersedia untuk diunduh di Fixio", 905, 565);
+    ctx.fillText(`${(profile.assets?.clothes?.length || 0) + (profile.assets?.weaponSkins?.length || 0)} Total Aset Gambar`, 905, 545);
+    ctx.fillText("Siap ekspor PNG & JPG di Fixio", 905, 565);
   } else {
     ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
     ctx.font = "500 11px sans-serif";
@@ -972,7 +979,7 @@ export async function renderFFStalkerCard(profile: import("../types").FFProfile)
   ctx.font = "700 12px sans-serif";
   ctx.fillText("FIXIO • STALKER FF ENGINE", 1130, 610);
 
-  return canvas.toDataURL("image/png");
+  return outputFormat === "jpg" ? canvas.toDataURL("image/jpeg", 0.95) : canvas.toDataURL("image/png");
 }
 
 // 8. Roblox Stalker Card Generator

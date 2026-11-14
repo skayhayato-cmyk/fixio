@@ -582,6 +582,81 @@ app.get("/api/proxy-json", async (req, res) => {
   }
 });
 
+const FF_UPSTREAM_HOST = ["adenpedia", "my", "id"].join(".");
+const FF_UPSTREAM_ORIGIN = `https://${FF_UPSTREAM_HOST}`;
+const FF_HOST_REGEX = new RegExp(`https?:\\/\\/(?:www\\.)?${FF_UPSTREAM_HOST.replace(/\./g, "\\.")}\\/([^\\s"'<>]+)`, "gi");
+const FF_TEXT_HOST_REGEX = new RegExp(`(?:www\\.)?${FF_UPSTREAM_HOST.replace(/\./g, "\\.")}`, "gi");
+
+function sanitizeFFPayload<T>(input: T): T {
+  if (typeof input === "string") {
+    let out = input
+      .replace(FF_HOST_REGEX, (_match, relPath: string) => `/api/ff/media?p=${encodeURIComponent(relPath)}`)
+      .replace(/NOTIF\s+ADENPEDIA\s+CEK\s+FF/gi, "NOTIF FIXIO CEK FF")
+      .replace(/ADENPEDIA/gi, "FIXIO")
+      .replace(FF_TEXT_HOST_REGEX, "api.nexadev.my.id");
+    return out as unknown as T;
+  }
+  if (Array.isArray(input)) {
+    return input.map((item) => sanitizeFFPayload(item)) as unknown as T;
+  }
+  if (input && typeof input === "object") {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(input as Record<string, any>)) {
+      out[k] = sanitizeFFPayload(v);
+    }
+    return out as T;
+  }
+  return input;
+}
+
+// Proxy Free Fire media assets cleanly without exposing upstream asset host
+app.get("/api/ff/media", async (req, res) => {
+  try {
+    const rawPath = (req.query.p as string) || "";
+    const cleanPath = rawPath.replace(/^\/+/, "").trim();
+    if (!cleanPath || cleanPath.includes("..") || !/^[a-zA-Z0-9/_\-.]+$/.test(cleanPath)) {
+      return res.status(400).json({ ok: false, message: "Path aset tidak valid." });
+    }
+
+    const upstreamUrl = `${FF_UPSTREAM_ORIGIN}/${cleanPath}`;
+    const response = await axios.get(upstreamUrl, {
+      responseType: "arraybuffer",
+      timeout: 25000,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        Accept: "image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8",
+      },
+    });
+
+    let contentType = (response.headers["content-type"] as string) || "image/png";
+    if (contentType.includes("text/html") || contentType.includes("application/json")) {
+      return res.status(404).json({ ok: false, message: "Aset gambar tidak tersedia di server." });
+    }
+    if (contentType.includes("octet-stream")) {
+      contentType = cleanPath.toLowerCase().endsWith(".jpg") || cleanPath.toLowerCase().endsWith(".jpeg") ? "image/jpeg" : "image/png";
+    }
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    if (req.query.download === "true") {
+      const safeName = ((req.query.filename as string) || path.basename(cleanPath) || `ff_asset_${Date.now()}.png`).replace(/[^a-zA-Z0-9._-]/g, "_");
+      res.setHeader("Content-Disposition", `attachment; filename="${safeName}"`);
+    }
+    return res.send(response.data);
+  } catch (error: any) {
+    const status = error?.response?.status;
+    if (status === 404) {
+      return res.status(404).json({ ok: false, message: "Aset gambar tidak ditemukan (404)." });
+    }
+    console.warn("FF media proxy error:", error?.message);
+    return res.status(status && status >= 400 && status < 600 ? status : 502).json({
+      ok: false,
+      message: "Gagal memuat aset gambar Free Fire.",
+    });
+  }
+});
+
 // Stalker Free Fire Endpoint
 app.get("/api/stalker/ff", async (req, res) => {
   try {
@@ -590,33 +665,33 @@ app.get("/api/stalker/ff", async (req, res) => {
       return res.status(400).json({ ok: false, message: "Parameter UID Free Fire 'id' diperlukan." });
     }
     const apiUrl = `https://api.nexadev.my.id/api/ff?id=${encodeURIComponent(id)}`;
-    const response = await axios.get(apiUrl, {
-      timeout: 25000,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Fixio/1.0",
-        Accept: "application/json, text/plain, */*",
-      },
-    });
 
-    const data = response.data;
-    // Sanitize branding in Discord embeds and notifications
-    if (data?.discord?.embeds && Array.isArray(data.discord.embeds)) {
-      data.discord.embeds.forEach((emb: any) => {
-        if (emb.author?.name) {
-          emb.author.name = emb.author.name
-            .replace(/NOTIF ADENPEDIA CEK FF/gi, "NOTIF FIXIO CEK FF")
-            .replace(/ADENPEDIA/gi, "FIXIO");
-        }
-        if (emb.footer?.text) {
-          emb.footer.text = emb.footer.text.replace(/adenpedia\.my\.id/gi, "api.nexadev.my.id");
-        }
-        if (emb.title) {
-          emb.title = emb.title.replace(/ADENPEDIA/gi, "FIXIO");
-        }
-      });
+    let response: any = null;
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        if (attempt > 0) await delay(1000 * attempt);
+        response = await axios.get(apiUrl, {
+          timeout: 25000,
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Fixio/1.0",
+            Accept: "application/json, text/plain, */*",
+          },
+        });
+        if (response?.data) break;
+      } catch (err: any) {
+        lastError = err;
+        const status = err?.response?.status;
+        if (status && status >= 400 && status < 500 && status !== 429) break;
+      }
     }
 
-    return res.json(data);
+    if (!response?.data) {
+      throw lastError || new Error("Upstream tidak merespons");
+    }
+
+    const sanitizedData = sanitizeFFPayload(response.data);
+    return res.json(sanitizedData);
   } catch (error: any) {
     console.error("FF Stalker server error:", error?.message);
     const status = error?.response?.status || 502;

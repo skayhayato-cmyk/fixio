@@ -229,9 +229,9 @@ export interface SpotifyDownloadResponse {
 
 export interface FFRankBr {
   points?: number;
-  tier?: string;
-  image?: string;
-  imageUrl?: string;
+  tier?: string | null;
+  image?: string | null;
+  imageUrl?: string | null;
   pointsText?: string;
   rankId?: number;
   maxRank?: number;
@@ -239,10 +239,10 @@ export interface FFRankBr {
 }
 
 export interface FFRankCs {
-  tier?: string;
+  tier?: string | null;
   star?: number;
-  image?: string;
-  imageUrl?: string;
+  image?: string | null;
+  imageUrl?: string | null;
   points?: number;
   rankId?: number;
   maxRank?: number;
@@ -340,8 +340,8 @@ export interface FFProfile {
       url?: string;
     };
     verifiedBadge?: any;
-    brRankImage?: string;
-    csRankImage?: string;
+    brRankImage?: string | null;
+    csRankImage?: string | null;
     pet?: {
       id?: number;
       url?: string;

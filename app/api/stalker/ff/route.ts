@@ -3,6 +3,40 @@ import axios from "axios";
 
 export const dynamic = "force-dynamic";
 
+const FF_UPSTREAM_HOST = ["adenpedia", "my", "id"].join(".");
+const FF_HOST_REGEX = new RegExp(
+  `https?:\\/\\/(?:www\\.)?${FF_UPSTREAM_HOST.replace(/\./g, "\\.")}\\/([^\\s"'<>]+)`,
+  "gi"
+);
+const FF_TEXT_HOST_REGEX = new RegExp(
+  `(?:www\\.)?${FF_UPSTREAM_HOST.replace(/\./g, "\\.")}`,
+  "gi"
+);
+
+function sanitizeFFPayload<T>(input: T): T {
+  if (typeof input === "string") {
+    const out = input
+      .replace(FF_HOST_REGEX, (_match, relPath: string) => `/api/ff/media?p=${encodeURIComponent(relPath)}`)
+      .replace(/NOTIF\s+ADENPEDIA\s+CEK\s+FF/gi, "NOTIF FIXIO CEK FF")
+      .replace(/ADENPEDIA/gi, "FIXIO")
+      .replace(FF_TEXT_HOST_REGEX, "api.nexadev.my.id");
+    return out as unknown as T;
+  }
+  if (Array.isArray(input)) {
+    return input.map((item) => sanitizeFFPayload(item)) as unknown as T;
+  }
+  if (input && typeof input === "object") {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(input as Record<string, any>)) {
+      out[k] = sanitizeFFPayload(v);
+    }
+    return out as T;
+  }
+  return input;
+}
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function GET(req: NextRequest) {
   try {
     const id = req.nextUrl.searchParams.get("id")?.trim();
@@ -15,23 +49,34 @@ export async function GET(req: NextRequest) {
 
     const apiUrl = `https://api.nexadev.my.id/api/ff?id=${encodeURIComponent(id)}`;
 
-    const response = await axios.get(apiUrl, {
-      timeout: 25000,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Fixio/1.0",
-        Accept: "application/json, text/plain, */*",
-      },
-    });
-
-    const data = response.data;
-    if (!data) {
-      return NextResponse.json(
-        { ok: false, message: "Tidak ada respons dari server Free Fire." },
-        { status: 502 }
-      );
+    let response: any = null;
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        if (attempt > 0) await delay(800 * attempt);
+        response = await axios.get(apiUrl, {
+          timeout: 25000,
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Fixio/1.0",
+            Accept: "application/json, text/plain, */*",
+          },
+        });
+        if (response?.data) break;
+      } catch (err: any) {
+        lastError = err;
+        const status = err?.response?.status;
+        if (status && status >= 400 && status < 500 && status !== 429) break;
+      }
     }
 
-    return NextResponse.json(data, {
+    const data = response?.data;
+    if (!data) {
+      throw lastError || new Error("Tidak ada respons dari server Free Fire.");
+    }
+
+    const sanitizedData = sanitizeFFPayload(data);
+
+    return NextResponse.json(sanitizedData, {
       status: 200,
       headers: {
         "Access-Control-Allow-Origin": "*",
